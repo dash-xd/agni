@@ -1,0 +1,7 @@
+ref: mycorp:custom/coreos/x86_64/stable
+include: manifests/fedora-coreos.yaml
+
+packages:
+  - firewalld
+  - python3-firewall
+  - ipset
