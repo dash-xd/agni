@@ -1,34 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_NAME=mycorp/coreos-repo
+# Pull latest FCOS config
+echo "[+] Pulling latest Fedora CoreOS config..."
+podman run --privileged --rm -v $(pwd):/srv quay.io/coreos-assembler/coreos-assembler:latest init https://github.com/coreos/fedora-coreos-config
 
-echo "[+] Initializing build environment..."
-mkdir -p _build
-cd _build
+# Build updated tree
+echo "[+] Building updated OSTree tree..."
+podman run --privileged --rm -v $(pwd):/srv quay.io/coreos-assembler/coreos-assembler:latest build
 
-if [ ! -d fedora-coreos-config ]; then
-  podman run --privileged --rm -v "$(pwd)":/srv \
-    quay.io/coreos-assembler/coreos-assembler:latest \
-    init https://github.com/coreos/fedora-coreos-config
-fi
-
-echo "[+] Copying overrides..."
-mkdir -p overrides
-cp -r ../overrides overrides/
-
-echo "[+] Building tree..."
-podman run --privileged --rm -v "$(pwd)":/srv \
-  quay.io/coreos-assembler/coreos-assembler:latest build
-
-echo "[+] Building minimal repo container..."
-cp -r builds/latest/x86_64/repo ../repo
-cd ..
-podman build -t "${REPO_NAME}:latest" .
-
-echo "[+] Running local repo container..."
+# Build minimal container serving repo
+echo "[+] Building OSTree repo container..."
 podman stop coreos-repo || true
 podman rm coreos-repo || true
-podman run -d --name coreos-repo -p 8080:8080 "${REPO_NAME}:latest"
+podman build -t mycorp/coreos-repo .
 
-echo "[✓] Repo available at http://localhost:8080/repo"
+# Run container
+podman run -d --name coreos-repo -p 8080:8080 mycorp/coreos-repo
+echo "[✓] OSTree repo available at http://localhost:8080/repo"
