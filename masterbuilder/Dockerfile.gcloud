@@ -18,3 +18,6 @@ ENV HOME=/home/${USERNAME}
 
 RUN curl -L https://nixos.org/nix/install | sh -s -- --no-daemon && \
     echo ". ~/.nix-profile/etc/profile.d/nix.sh" >> ~/.bashrc
+
+ENV PATH="/home/${USERNAME}/.nix-profile/bin:${PATH}"
+. ~/.nix-profile/etc/profile.d/nix.sh
