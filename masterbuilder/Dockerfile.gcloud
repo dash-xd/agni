@@ -2,15 +2,19 @@ FROM google/cloud-sdk:527.0.0-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+ARG USERNAME=cloudsdk
+
 RUN apt-get update && apt-get install -y \
     curl xz-utils ca-certificates sudo passwd \
     lsb-release debian-archive-keyring \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -m 0755 /nix && \
-    chown -R cloudsdk:cloudsdk /nix
+    chown -R ${USERNAME}:${USERNAME} /nix
 
-USER cloudsdk
-ENV USER=cloudsdk
+USER ${USERNAME}
+ENV USER=${USERNAME}
+ENV HOME=/home/${USERNAME}
+
 RUN curl -L https://nixos.org/nix/install | sh -s -- --no-daemon && \
     echo ". ~/.nix-profile/etc/profile.d/nix.sh" >> ~/.bashrc
