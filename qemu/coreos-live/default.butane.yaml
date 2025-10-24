@@ -1,0 +1,10 @@
+variant: fcos
+version: 1.6.0
+
+passwd:
+  users:
+    - name: core
+      groups: ["wheel"]
+      shell: /bin/bash
+      ssh_authorized_keys:
+        - ""
