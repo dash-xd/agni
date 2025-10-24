@@ -1,0 +1,27 @@
+version: "3.9"
+services:
+  qemu:
+    image: docker.io/qemux/qemu:latest
+    container_name: coreos-live
+    privileged: true
+    environment:
+      BOOT: "https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/42.20250914.3.0/x86_64/fedora-coreos-42.20250914.3.0-live-iso.x86_64.iso"
+      RAM_SIZE: "2G"
+      CPU_CORES: "1"
+      ARGUMENTS: >
+        -fw_cfg name=opt/com.coreos/config,file=/ignition/config.ign
+        -enable-kvm
+        -nic user,model=virtio-net-pci,hostfwd=tcp::22-:22
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "8006:8006"
+      - "2222:22"  
+    volumes:
+      - ./config.ign:/ignition/config.ign:ro
+    restart: always
+    stop_grace_period: 2m
+
