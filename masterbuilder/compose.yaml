@@ -12,7 +12,7 @@ services:
       - .env
     volumes:
       - ./config/gcloud-service-account.json.json:/config/gcloud-service-account.json
-      - ./config/nix.conf:${WORKING_DIR}/.config/nix/nix.conf
+      - ./nix/nix.conf:${WORKING_DIR}/.config/nix/nix.conf
       - ./entrypoint/:${WORKING_DIR}/entrypoint/
       - ./nix/:${WORKING_DIR}/nix/
       - ./images:/images
