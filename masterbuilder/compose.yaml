@@ -11,7 +11,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./config/gcloud-service-account.json.json:/config/gcloud-service-account.json
+      - ./../config/gcloud-service-account.json:/config/gcloud-service-account.json
       - ./nix/nix.conf:${WORKING_DIR}/.config/nix/nix.conf
       - ./entrypoint/:${WORKING_DIR}/entrypoint/
       - ./nix/:${WORKING_DIR}/nix/
