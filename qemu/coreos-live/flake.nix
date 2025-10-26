@@ -11,7 +11,6 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        # Try to load the local lockfile, fallback to null
         fcosLock =
           let lockPath = ./fcos-lock.json;
           in if builtins.pathExists lockPath
@@ -20,7 +19,6 @@
 
         fcosFetcher = import ./fcos-fetch.nix { inherit pkgs; };
 
-        # FCOS ISO derivation (auto-fetched or pinned)
         fcosIso = fcosFetcher {
           version = fcosLock.version or "latest";
           stream = "stable";
@@ -51,12 +49,11 @@
                 quay.io/coreos/coreos-installer:release iso customize \
                 --live-karg-append=coreos.liveiso.fromram \
                 --live-ignition=./config.ign \
-                -o customized.iso ${fcosIso}
+                -o ignited.iso ${fcosIso}
             '';
           };
         };
 
-        # Nix-native updater
         apps.update = flake-utils.lib.mkApp {
           drv = pkgs.writeShellApplication {
             name = "update-fcos";
