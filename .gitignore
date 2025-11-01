@@ -16,6 +16,9 @@ node_modules/              # Node modules if using nix-shell for JS dev
 dist/                      # build outputs
 result-*                   # result symlinks for multiple builds
 
+*.env
+*.priv
+
 # --- Temporary / OS-specific files ---
 *.swp                      # vim swap
 *~                         # backup files
