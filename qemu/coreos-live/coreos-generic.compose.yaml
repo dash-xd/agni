@@ -1,0 +1,24 @@
+version: "3.9"
+services:
+  qemu:
+    image: docker.io/qemux/qemu:latest
+    container_name: ${CONTAINER_NAME}
+    privileged: ${CONTAINER_NAME}
+    environment:
+      RAM_SIZE: "${RAM_SIZE}"
+      CPU_CORES: "${CPU_CORES}"
+      DISK_SIZE: "${DISK_SIZE}"
+      ARGUMENTS: "${ARGUMENTS}"
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "${PORT_SSH}:22"
+      - "${PORT_UI}:8006"
+    volumes:
+      - "./${ISO_NAME}:/boot.iso:ro"
+      - "./${SHARE_DIR}:/storage/hostshare"
+    restart: ${RESTART_POLICY}
+    stop_grace_period: ${STOP_GRACE_PERIOD}
