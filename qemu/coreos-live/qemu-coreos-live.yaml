@@ -6,7 +6,7 @@ services:
     privileged: true
     environment:
       BOOT: "https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/42.20250914.3.0/x86_64/fedora-coreos-42.20250914.3.0-live-iso.x86_64.iso"
-      RAM_SIZE: "2G"
+      RAM_SIZE: "4G"
       CPU_CORES: "1"
       ARGUMENTS: >
         -fw_cfg name=opt/com.coreos/config,file=/ignition/config.ign
