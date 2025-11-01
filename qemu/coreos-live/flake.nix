@@ -10,9 +10,10 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        BASE_ISO = "./iso/fedora-coreos-42.20250914.3.0-live-iso.x86_64.iso";
 
         defaultEnv = {
-          BOOT = "fcos";
+          CONTAINER_NAME = "coreos-default";
           RAM_SIZE = "4G";
           CPU_CORES = "2";
           DISK_SIZE = "0G";
@@ -25,7 +26,6 @@
           STOP_GRACE_PERIOD = "2m";
         };
 
-        # Converts defaultEnv attrset → "KEY=value" lines
         envFile = pkgs.writeText "default.env"
           (builtins.concatStringsSep "\n"
             (map (k: "${k}=${defaultEnv.${k}}") (builtins.attrNames defaultEnv)));
@@ -62,8 +62,8 @@
               quay.io/coreos/coreos-installer:release iso customize \
               --live-karg-append=coreos.liveiso.fromram \
               --live-ignition=./config.ign \
-              -o ./iso/lit.iso fedora-coreos-42.20250914.3.0-live-iso.x86_64.iso
-            echo "✅ Custom ISO created: ./iso/lit.iso"
+              -o ${defaultEnv.ISO_PATH} ${BASE_ISO}
+            echo "✅ Custom ISO created: ${defaultEnv.ISO_PATH}"
           '';
         };
 
