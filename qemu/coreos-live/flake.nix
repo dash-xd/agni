@@ -119,9 +119,7 @@
               -v $PWD:/data -w /data \
               quay.io/coreos/coreos-installer:release iso customize \
               --live-karg-append=coreos.liveiso.fromram \
-              --live-ignition=${
-                ignitions
-              }/*.ign \
+              --live-ignition=${ignitions}/*.ign \
               -o ${defaultEnv.ISO_PATH} ${coreosIso}/$(basename ${coreosIso})
             echo "✅ Custom ISO created: ${defaultEnv.ISO_PATH}"
           '';
