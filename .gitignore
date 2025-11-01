@@ -1,0 +1,63 @@
+# --- Nix build artifacts ---
+result                     # symlink created by `nix-build`
+*.drv                      # derivation files
+*.nar                      # Nix archive files
+*.lock                     # nixpkgs or flake lock files
+.nix-channels              # nix-channel files
+.nix-profile               # nix profile symlinks
+.nix-defexpr               # nix store definitions
+.nix-gcroots               # garbage collection roots
+nix-*.tmp                  # temporary nix files
+
+# --- Nix flake / development ---
+flake.lock                 # flake lock files
+.venv/                      # Python venv inside nix-shell
+node_modules/              # Node modules if using nix-shell for JS dev
+dist/                      # build outputs
+result-*                   # result symlinks for multiple builds
+
+# --- Temporary / OS-specific files ---
+*.swp                      # vim swap
+*~                         # backup files
+.DS_Store                  # macOS
+Thumbs.db                  # Windows
+*.log                      # log files
+*.tmp                      # temporary files
+*.bak                      # backup files
+
+# --- IDEs / Editors ---
+.idea/                     # JetBrains IDEs
+.vscode/                    # VSCode
+*.sublime-project
+*.sublime-workspace
+
+# --- Python specific (if using nix-shell python) ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Haskell / GHC (if using nix-shell for Haskell) ---
+dist-newstyle/
+cabal.project.local
+*.hi
+*.o
+*.hs-boot
+*.stack-work/
+
+# --- Rust / Cargo (if using nix-shell for Rust) ---
+target/
+Cargo.lock
+
+# --- NodeJS / JavaScript (if using nix-shell for JS/TS) ---
+npm-debug.log*
+yarn-error.log*
+.pnp.*
+.eslintcache
+
+# --- Go (if using nix-shell for Go) ---
+bin/
+pkg/
+
+# --- Generic nix-shell temporary files ---
+shell.nix.lock
