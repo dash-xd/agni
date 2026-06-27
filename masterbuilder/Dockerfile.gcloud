@@ -1,4 +1,4 @@
-FROM google/cloud-sdk:527.0.0-slim
+FROM google/cloud-sdk:574.0.0-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
