@@ -37,6 +37,13 @@ locals {
 resource "random_id" "suffix" {
   for_each    = local.slots
   byte_length = 4
+
+  keepers = {
+    deployment_metadata = jsonencode(merge(
+      var.member_metadata,
+      lookup(var.member_metadata_by_slot, each.key, {})
+    ))
+  }
 }
 
 resource "google_compute_subnetwork" "coreos" {
