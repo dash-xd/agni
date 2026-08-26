@@ -5,7 +5,7 @@ variable "template_name" {
 }
 
 variable "instance_name_prefix" {
-  description = "Prefix for the generated CoreOS instance name"
+  description = "Prefix for generated CoreOS instance names"
   type        = string
   default     = "coreos"
 }
@@ -17,7 +17,7 @@ variable "region" {
 }
 
 variable "zone" {
-  description = "Zone for the instance"
+  description = "Zone for the instances"
   type        = string
   default     = "us-west1-b"
 }
@@ -34,12 +34,12 @@ variable "network" {
 }
 
 variable "subnetwork_name" {
-  description = "Name for the /28 CoreOS subnetwork block"
+  description = "Name for this 16-address CoreOS block"
   type        = string
 }
 
 variable "subnetwork_ipv4_cidr" {
-  description = "IPv4 /28 containing 16 total addresses and 12 GCP-usable VM addresses"
+  description = "IPv4 /28: 16 total addresses, 12 GCP-usable VM addresses"
   type        = string
 
   validation {
@@ -48,19 +48,21 @@ variable "subnetwork_ipv4_cidr" {
   }
 }
 
-variable "vm_slot" {
-  description = "Stable CoreOS slot 0-11. Slot N maps to Redis DB N and IPv4 host N+2 in the /28."
-  type        = number
-  default     = 0
+variable "vm_slots" {
+  description = "CoreOS slots to deploy. Slots 0-11 map 1:1 to Redis DBs 0-11 and IPv4 hosts 2-13. Redis DBs 12-15 remain uncoupled."
+  type        = set(number)
+  default     = [0]
 
   validation {
-    condition     = var.vm_slot >= 0 && var.vm_slot <= 11 && floor(var.vm_slot) == var.vm_slot
-    error_message = "vm_slot must be an integer from 0 through 11."
+    condition = alltrue([
+      for slot in var.vm_slots : slot >= 0 && slot <= 11 && floor(slot) == slot
+    ])
+    error_message = "Every vm_slots entry must be an integer from 0 through 11."
   }
 }
 
 variable "enable_ipv6" {
-  description = "Create the subnet as dual-stack and attach IPv6 to the VM"
+  description = "Create the subnet as dual-stack and attach IPv6 to each VM"
   type        = bool
   default     = true
 }
@@ -77,7 +79,7 @@ variable "ipv6_access_type" {
 }
 
 variable "service_account_email" {
-  description = "Optional service account email to attach to the instance"
+  description = "Optional service account email to attach to each instance"
   type        = string
   default     = "dev-builder@dashxd.iam.gserviceaccount.com"
 }
