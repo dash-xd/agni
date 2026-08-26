@@ -27,6 +27,19 @@ resource "random_id" "suffix" {
 
 locals {
   instance_name = "${var.instance_name_prefix}-${random_id.suffix.hex}"
+  internal_ip   = cidrhost(var.subnetwork_ipv4_cidr, var.vm_slot + 2)
+}
+
+resource "google_compute_subnetwork" "coreos" {
+  name                     = var.subnetwork_name
+  project                  = var.project
+  region                   = var.region
+  network                  = var.network
+  ip_cidr_range            = var.subnetwork_ipv4_cidr
+  private_ip_google_access = true
+
+  stack_type       = var.enable_ipv6 ? "IPV4_IPV6" : "IPV4_ONLY"
+  ipv6_access_type = var.enable_ipv6 ? var.ipv6_access_type : null
 }
 
 resource "google_compute_instance_from_template" "vm" {
@@ -43,9 +56,16 @@ resource "google_compute_instance_from_template" "vm" {
   tags = distinct(concat(["squid-client"], var.network_tags))
 
   network_interface {
-    network    = var.subnetwork == "" ? var.network : null
-    subnetwork = var.subnetwork != "" ? var.subnetwork : null
-    network_ip = var.internal_ip != "" ? var.internal_ip : null
+    subnetwork = google_compute_subnetwork.coreos.id
+    network_ip = local.internal_ip
+    stack_type = var.enable_ipv6 ? "IPV4_IPV6" : "IPV4_ONLY"
+
+    dynamic "ipv6_access_config" {
+      for_each = var.enable_ipv6 && var.ipv6_access_type == "EXTERNAL" ? [1] : []
+      content {
+        network_tier = "PREMIUM"
+      }
+    }
   }
 
   dynamic "service_account" {
