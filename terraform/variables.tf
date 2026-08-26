@@ -1,31 +1,26 @@
 variable "template_name" {
-  description = "Existing Compute Engine instance template name"
-  type        = string
-  default     = "ec2-micro-coreos-stable-42-20250623-3-1-usw1-02"
+  type    = string
+  default = "ec2-micro-coreos-stable-42-20250623-3-1-usw1-02"
 }
 
 variable "instance_name_prefix" {
-  description = "Prefix for generated CoreOS instance names"
-  type        = string
-  default     = "coreos"
+  type    = string
+  default = "coreos"
 }
 
 variable "region" {
-  description = "GCP region containing the instance template"
-  type        = string
-  default     = "us-west1"
+  type    = string
+  default = "us-west1"
 }
 
 variable "zone" {
-  description = "Zone for the instances"
-  type        = string
-  default     = "us-west1-b"
+  type    = string
+  default = "us-west1-b"
 }
 
 variable "project" {
-  description = "GCP project ID"
-  type        = string
-  default     = "dashxd"
+  type    = string
+  default = "dashxd"
 }
 
 variable "network" {
@@ -49,80 +44,40 @@ variable "subnetwork_ipv4_cidr" {
 }
 
 variable "vm_slots" {
-  description = "CoreOS slots to deploy. Slots 0-11 map 1:1 to Redis DBs 0-11 and IPv4 hosts 2-13. Redis DBs 12-15 remain uncoupled."
+  description = "CoreOS slots 0-11; each maps to the same-numbered Redis DB. Redis DBs 12-15 remain uncoupled."
   type        = set(number)
   default     = [0]
 
   validation {
-    condition = alltrue([
-      for slot in var.vm_slots : slot >= 0 && slot <= 11 && floor(slot) == slot
-    ])
+    condition     = alltrue([for slot in var.vm_slots : slot >= 0 && slot <= 11 && floor(slot) == slot])
     error_message = "Every vm_slots entry must be an integer from 0 through 11."
   }
 }
 
-variable "leader_slot" {
-  description = "VM slot that acts as the block leader, Squid egress proxy, and Nginx entry reverse proxy"
-  type        = number
-  default     = 0
-
-  validation {
-    condition     = var.leader_slot >= 0 && var.leader_slot <= 11 && floor(var.leader_slot) == var.leader_slot
-    error_message = "leader_slot must be an integer from 0 through 11."
-  }
+variable "egress_proxy_ip" {
+  description = "Internal IPv4 of the single Agni leader/Squid proxy"
+  type        = string
 }
 
-variable "allocate_leader_public_ipv4" {
-  description = "Reserve and attach a regional external IPv4 address to the leader"
-  type        = bool
-  default     = true
-}
-
-variable "leader_public_ports" {
-  description = "Fallback TCP ports exposed publicly when Cloudflare HTTPS is disabled"
-  type        = list(string)
-  default     = ["80"]
-}
-
-variable "nginx_upstream_port" {
-  description = "Port on member CoreOS instances to which the leader Nginx proxy forwards requests"
+variable "member_service_port" {
+  description = "Application port exposed by members to the global leader Nginx"
   type        = number
   default     = 8080
 
   validation {
-    condition     = var.nginx_upstream_port >= 1 && var.nginx_upstream_port <= 65535
-    error_message = "nginx_upstream_port must be between 1 and 65535."
+    condition     = var.member_service_port >= 1 && var.member_service_port <= 65535
+    error_message = "member_service_port must be between 1 and 65535."
   }
 }
 
-variable "enable_cloudflare_https" {
-  description = "Create a proxied Cloudflare DNS record and 7-day Origin CA certificate for the leader"
-  type        = bool
-  default     = false
-}
-
-variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID containing cloudflare_hostname"
-  type        = string
-  default     = ""
-}
-
-variable "cloudflare_hostname" {
-  description = "Fully qualified hostname proxied through Cloudflare to the leader public IPv4"
-  type        = string
-  default     = ""
-}
-
 variable "enable_ipv6" {
-  description = "Create the subnet as dual-stack and attach IPv6 to each VM"
-  type        = bool
-  default     = true
+  type    = bool
+  default = true
 }
 
 variable "ipv6_access_type" {
-  description = "IPv6 access type for the dual-stack subnet"
-  type        = string
-  default     = "INTERNAL"
+  type    = string
+  default = "INTERNAL"
 
   validation {
     condition     = contains(["EXTERNAL", "INTERNAL"], var.ipv6_access_type)
@@ -131,19 +86,16 @@ variable "ipv6_access_type" {
 }
 
 variable "service_account_email" {
-  description = "Optional service account email to attach to each instance"
-  type        = string
-  default     = "dev-builder@dashxd.iam.gserviceaccount.com"
+  type    = string
+  default = "dev-builder@dashxd.iam.gserviceaccount.com"
 }
 
 variable "ssh_public_key_file" {
-  description = "Path to the SSH public key used for the core user"
-  type        = string
-  default     = "coreos-jumphost.pub"
+  type    = string
+  default = "coreos-jumphost.pub"
 }
 
 variable "network_tags" {
-  description = "Additional network tags"
-  type        = list(string)
-  default     = []
+  type    = list(string)
+  default = []
 }
