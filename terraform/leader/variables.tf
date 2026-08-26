@@ -36,6 +36,17 @@ variable "member_upstream_port" {
   default = 8080
 }
 
+variable "member_upstream_scheme" {
+  description = "Protocol used by the Agni leader when reverse-proxying to members."
+  type        = string
+  default     = "http"
+
+  validation {
+    condition     = contains(["http", "https"], var.member_upstream_scheme)
+    error_message = "member_upstream_scheme must be http or https."
+  }
+}
+
 variable "enable_ipv6" {
   type    = bool
   default = true
