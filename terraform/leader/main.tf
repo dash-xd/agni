@@ -39,8 +39,8 @@ data "http" "cloudflare_ipv4" {
 }
 
 locals {
-  leader_ip              = cidrhost(var.subnetwork_ipv4_cidr, 2)
-  cloudflare_ipv4_cidrs  = compact(split("\n", trimspace(data.http.cloudflare_ipv4.response_body)))
+  leader_ip             = cidrhost(var.subnetwork_ipv4_cidr, 2)
+  cloudflare_ipv4_cidrs = compact(split("\n", trimspace(data.http.cloudflare_ipv4.response_body)))
 }
 
 resource "random_id" "suffix" {
@@ -112,6 +112,7 @@ resource "google_compute_instance_from_template" "leader" {
     agni-subnet-cidr            = var.subnetwork_ipv4_cidr
     agni-client-cidrs           = join(",", var.member_source_ranges)
     agni-nginx-upstream-port    = tostring(var.member_upstream_port)
+    agni-nginx-upstream-scheme  = var.member_upstream_scheme
     agni-redis-db               = ""
     agni-cloudflare-https       = "true"
     agni-cloudflare-hostname    = var.cloudflare_hostname
