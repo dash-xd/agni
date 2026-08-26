@@ -1,0 +1,18 @@
+[Unit]
+Description=Agni Nginx entry reverse proxy
+After=network-online.target agni-bootstrap.service
+Wants=network-online.target
+Requires=agni-bootstrap.service
+ConditionPathExists=/etc/agni/leader
+
+[Container]
+Image=docker.io/library/nginx:alpine
+ContainerName=agni-nginx
+Network=host
+Volume=/var/lib/agni/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro,Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
