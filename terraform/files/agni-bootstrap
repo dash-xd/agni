@@ -10,6 +10,7 @@ metadata() {
 role="$(metadata agni-role)"
 leader_ip="$(metadata agni-leader-ip)"
 subnet_cidr="$(metadata agni-subnet-cidr)"
+client_cidrs="$(metadata agni-client-cidrs || true)"
 member_ips="$(metadata agni-member-ips || true)"
 upstream_port="$(metadata agni-nginx-upstream-port)"
 cloudflare_https="$(metadata agni-cloudflare-https || echo false)"
@@ -24,10 +25,18 @@ NO_PROXY=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.googl
 no_proxy=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal,${leader_ip}
 EOF
 
-  cat > /var/lib/agni/squid/squid.conf <<EOF
-http_port 0.0.0.0:3128
-
-acl agni_clients src ${subnet_cidr}
+  {
+    echo 'http_port 0.0.0.0:3128'
+    echo
+    if [[ -n "$client_cidrs" ]]; then
+      IFS=',' read -r -a cidrs <<< "$client_cidrs"
+      for cidr in "${cidrs[@]}"; do
+        [[ -n "$cidr" ]] && printf 'acl agni_clients src %s\n' "$cidr"
+      done
+    else
+      printf 'acl agni_clients src %s\n' "$subnet_cidr"
+    fi
+    cat <<'EOF'
 acl localhost src 127.0.0.1/32
 acl SSL_ports port 443
 acl Safe_ports port 80
@@ -42,6 +51,7 @@ http_access deny all
 
 access_log stdio:/var/log/squid/access.log
 EOF
+  } > /var/lib/agni/squid/squid.conf
 
   {
     echo 'upstream agni_members {'
@@ -87,18 +97,7 @@ server {
     listen 80 default_server;
     server_name _;
 
-    location = /healthz {
-        access_log off;
-        return 200 'ok\n';
-        add_header Content-Type text/plain;
-    }
-
     location / {
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_pass http://agni_members;
     }
 }
@@ -111,8 +110,6 @@ EOF
     metadata agni-origin-private-key-b64 | base64 --decode > /var/lib/agni/nginx/tls/origin.key
     chmod 0644 /var/lib/agni/nginx/tls/origin.crt
     chmod 0600 /var/lib/agni/nginx/tls/origin.key
-  else
-    rm -f /var/lib/agni/nginx/tls/origin.crt /var/lib/agni/nginx/tls/origin.key
   fi
 else
   rm -f /etc/agni/leader
