@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+metadata() {
+  curl --fail --silent --show-error \
+    -H 'Metadata-Flavor: Google' \
+    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/$1"
+}
+
+role="$(metadata agni-role)"
+leader_ip="$(metadata agni-leader-ip)"
+subnet_cidr="$(metadata agni-subnet-cidr)"
+member_ips="$(metadata agni-member-ips || true)"
+upstream_port="$(metadata agni-nginx-upstream-port)"
+
+install -d -m 0755 /etc/agni /var/lib/agni/squid /var/lib/agni/nginx
+
+if [[ "$role" == "leader" ]]; then
+  touch /etc/agni/leader
+  cat > /etc/default/proxy <<EOF
+NO_PROXY=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal,${leader_ip}
+no_proxy=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal,${leader_ip}
+EOF
+
+  cat > /var/lib/agni/squid/squid.conf <<EOF
+http_port 0.0.0.0:3128
+
+acl agni_clients src ${subnet_cidr}
+acl localhost src 127.0.0.1/32
+acl SSL_ports port 443
+acl Safe_ports port 80
+acl Safe_ports port 443
+acl CONNECT method CONNECT
+
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+http_access allow localhost
+http_access allow agni_clients
+http_access deny all
+
+access_log stdio:/var/log/squid/access.log
+EOF
+
+  {
+    echo 'upstream agni_members {'
+    if [[ -n "$member_ips" ]]; then
+      IFS=',' read -r -a members <<< "$member_ips"
+      for ip in "${members[@]}"; do
+        [[ -n "$ip" ]] && printf '    server %s:%s;\n' "$ip" "$upstream_port"
+      done
+    else
+      echo '    server 127.0.0.1:65535;'
+    fi
+    echo '}'
+    cat <<'EOF'
+server {
+    listen 80 default_server;
+    server_name _;
+
+    location = /healthz {
+        access_log off;
+        return 200 'ok\n';
+        add_header Content-Type text/plain;
+    }
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://agni_members;
+    }
+}
+EOF
+  } > /var/lib/agni/nginx/default.conf
+else
+  rm -f /etc/agni/leader
+  cat > /etc/default/proxy <<EOF
+HTTP_PROXY=http://${leader_ip}:3128
+HTTPS_PROXY=http://${leader_ip}:3128
+NO_PROXY=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal,${leader_ip}
+http_proxy=http://${leader_ip}:3128
+https_proxy=http://${leader_ip}:3128
+no_proxy=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal,${leader_ip}
+EOF
+fi
+
+chmod 0644 /etc/default/proxy
+systemctl daemon-reload
