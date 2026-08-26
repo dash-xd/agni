@@ -1,0 +1,100 @@
+variant: fcos
+version: 1.6.0
+
+passwd:
+  users:
+    - name: core
+      groups: ["wheel"]
+      shell: /bin/bash
+
+storage:
+  files:
+    - path: /etc/hostname
+      mode: 0644
+      contents:
+        inline: agni-coreos
+
+    - path: /etc/default/proxy
+      mode: 0644
+      contents:
+        inline: |
+          HTTP_PROXY=http://10.138.0.9:3128
+          HTTPS_PROXY=http://10.138.0.9:3128
+          NO_PROXY=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal
+          http_proxy=http://10.138.0.9:3128
+          https_proxy=http://10.138.0.9:3128
+          no_proxy=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal
+
+    - path: /etc/default/axiom
+      mode: 0600
+      contents:
+        inline: |
+          AXIOM_TOKEN=
+          AXIOM_DATASET=
+          AXIOM_DOMAIN=api.axiom.co
+
+    - path: /etc/profile.d/systemd-pager.sh
+      mode: 0644
+      contents:
+        inline: |
+          export SYSTEMD_PAGER=cat
+
+    - path: /etc/profile.d/proxy.sh
+      mode: 0644
+      contents:
+        inline: |
+          [ -f /etc/default/proxy ] && source /etc/default/proxy
+
+    - path: /usr/local/bin/send-journal-to-axiom
+      mode: 0755
+      contents:
+        local: send-journal-to-axiom
+
+    - path: /etc/systemd/system/send-journal-to-axiom.service
+      mode: 0644
+      contents:
+        inline: |
+          [Unit]
+          Description=Send journal logs to Axiom in NDJSON format
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=oneshot
+          EnvironmentFile=/etc/default/proxy
+          EnvironmentFile=/etc/default/axiom
+          ExecStart=/usr/local/bin/send-journal-to-axiom
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - path: /home/core/.config/systemd/user/podman.socket.d/10-proxy.conf
+      mode: 0644
+      contents:
+        inline: |
+          [Service]
+          EnvironmentFile=/etc/default/proxy
+
+systemd:
+  units:
+    - name: serial-getty@ttyS0.service
+      dropins:
+        - name: autologin-core.conf
+          contents: |
+            [Service]
+            ExecStart=
+            ExecStart=-/usr/sbin/agetty --autologin core --noclear %I $TERM
+            TTYVTDisallocate=no
+
+    - name: sshd.service
+      enabled: true
+
+    - name: rpm-ostreed.service
+      dropins:
+        - name: 10-proxy.conf
+          contents: |
+            [Service]
+            EnvironmentFile=/etc/default/proxy
+
+    - name: send-journal-to-axiom.service
+      enabled: true
