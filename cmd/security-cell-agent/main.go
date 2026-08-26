@@ -20,11 +20,11 @@ import (
 )
 
 const (
-	configPath  = "/etc/agni/security-cell.json"
-	quadletDir  = "/etc/containers/systemd"
-	runtimeDir  = "/run/agni-security-cell"
+	configPath   = "/etc/agni/security-cell.json"
+	quadletDir   = "/etc/containers/systemd"
+	runtimeDir   = "/run/agni-security-cell"
 	registryPath = runtimeDir + "/atman-registry.json"
-	unitsPath   = "/var/lib/agni/security-cell.units"
+	unitsPath    = "/var/lib/agni/security-cell.units"
 )
 
 type cellConfig struct {
@@ -34,12 +34,13 @@ type cellConfig struct {
 		Mode string `json:"mode"`
 	} `json:"isolation"`
 	Runtime struct {
-		ArtifactRepositoryLocation string `json:"artifact_repository_location"`
-		ArtifactRepositoryName     string `json:"artifact_repository_name"`
-		AtmanImage                 string `json:"atman_image"`
-		MaraiImage                 string `json:"marai_image"`
-		TLSCertificateSecret       string `json:"tls_certificate_secret"`
-		TLSPrivateKeySecret        string `json:"tls_private_key_secret"`
+		ServiceAccountEmail           string `json:"service_account_email"`
+		ArtifactRepositoryLocation   string `json:"artifact_repository_location"`
+		ArtifactRepositoryName       string `json:"artifact_repository_name"`
+		AtmanImage                   string `json:"atman_image"`
+		MaraiImage                   string `json:"marai_image"`
+		TLSCertificateSecret         string `json:"tls_certificate_secret"`
+		TLSPrivateKeySecret          string `json:"tls_private_key_secret"`
 	} `json:"runtime"`
 	Tenants []tenantConfig `json:"tenants"`
 }
@@ -140,18 +141,22 @@ func run(ctx context.Context) error {
 	}
 
 	reg := registry{Tenants: make(map[string]registryTenant)}
-	unitNames := make([]string, 0, len(cfg.Tenants)+1)
+	unitNames := make([]string, 0, len(cfg.Tenants)*2+1)
 	usedNames := make(map[string]string)
-	maraiUnits := make([]string, 0, len(cfg.Tenants))
+	maraiServices := make([]string, 0, len(cfg.Tenants))
 	for _, tenant := range cfg.Tenants {
 		if !kmsEnabled(tenant) {
 			continue
 		}
 		safe := safeName(tenant.ID)
+		if safe == "" {
+			return fmt.Errorf("tenant %q has no usable runtime name", tenant.ID)
+		}
 		if previous, ok := usedNames[safe]; ok && previous != tenant.ID {
 			return fmt.Errorf("tenant names %q and %q normalize to the same runtime name", previous, tenant.ID)
 		}
 		usedNames[safe] = tenant.ID
+
 		adminPassword, err := randomPassword()
 		if err != nil {
 			return err
@@ -178,7 +183,7 @@ func run(ctx context.Context) error {
 			return err
 		}
 		unitNames = append(unitNames, volumeFile, containerFile)
-		maraiUnits = append(maraiUnits, containerFile)
+		maraiServices = append(maraiServices, "agni-marai-"+safe+".service")
 		reg.Tenants[tenant.ID] = registryTenant{
 			Audiences: tenant.Identity.Audiences,
 			Callers:   tenant.Identity.CallerServiceAccounts,
@@ -192,6 +197,7 @@ func run(ctx context.Context) error {
 	if len(reg.Tenants) == 0 {
 		return errors.New("security cell has no enabled KMS tenants")
 	}
+
 	registryBytes, err := json.MarshalIndent(reg, "", "  ")
 	if err != nil {
 		return err
@@ -200,8 +206,9 @@ func run(ctx context.Context) error {
 	if err := os.WriteFile(registryPath, registryBytes, 0644); err != nil {
 		return err
 	}
+
 	atmanFile := "agni-security-atman.container"
-	if err := writeQuadlet(atmanFile, renderAtman(cfg.Runtime.AtmanImage, maraiUnits, reg)); err != nil {
+	if err := writeQuadlet(atmanFile, renderAtman(cfg.Runtime.AtmanImage, maraiServices, reg)); err != nil {
 		return err
 	}
 	unitNames = append(unitNames, atmanFile)
@@ -235,8 +242,8 @@ func validate(cfg *cellConfig) error {
 	if len(cfg.Tenants) == 0 {
 		return errors.New("cell has no tenants")
 	}
-	if cfg.Runtime.AtmanImage == "" || cfg.Runtime.MaraiImage == "" || cfg.Runtime.TLSCertificateSecret == "" || cfg.Runtime.TLSPrivateKeySecret == "" {
-		return errors.New("runtime images and TLS secrets are required")
+	if cfg.Runtime.ServiceAccountEmail == "" || cfg.Runtime.AtmanImage == "" || cfg.Runtime.MaraiImage == "" || cfg.Runtime.TLSCertificateSecret == "" || cfg.Runtime.TLSPrivateKeySecret == "" {
+		return errors.New("runtime service account, images, and TLS secrets are required")
 	}
 	seen := make(map[string]string)
 	for _, tenant := range cfg.Tenants {
@@ -300,8 +307,7 @@ func replaceSecret(ctx context.Context, name string, value []byte) error {
 }
 
 func writeQuadlet(name, content string) error {
-	path := filepath.Join(quadletDir, name)
-	return os.WriteFile(path, []byte(content), 0644)
+	return os.WriteFile(filepath.Join(quadletDir, name), []byte(content), 0644)
 }
 
 func renderVolume(safe string) string {
@@ -337,11 +343,11 @@ RestartSec=2
 `, safe, image, safe, safe, adminSecret, appSecret)
 }
 
-func renderAtman(image string, maraiUnits []string, reg registry) string {
+func renderAtman(image string, maraiServices []string, reg registry) string {
 	var unit strings.Builder
 	unit.WriteString("[Unit]\nDescription=Atman regional security gateway\nAfter=network-online.target\nWants=network-online.target\n")
-	for _, name := range maraiUnits {
-		unit.WriteString("After=" + name + "\nRequires=" + name + "\n")
+	for _, service := range maraiServices {
+		unit.WriteString("After=" + service + "\nRequires=" + service + "\n")
 	}
 	unit.WriteString("\n[Container]\n")
 	unit.WriteString("Image=" + image + "\nContainerName=agni-security-atman\nNetwork=host\n")
