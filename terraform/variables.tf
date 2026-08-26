@@ -105,3 +105,14 @@ variable "network_tags" {
   type    = list(string)
   default = []
 }
+
+variable "member_metadata" {
+  description = "Additional deployment-controlled metadata merged into every member. Reserved agni-* keys cannot be overridden."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for key in keys(var.member_metadata) : !startswith(key, "agni-")])
+    error_message = "member_metadata may not override reserved agni-* metadata keys."
+  }
+}
