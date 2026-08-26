@@ -39,6 +39,11 @@ storage:
       contents:
         local: agni-bootstrap
 
+    - path: /usr/local/bin/agni-security-cell-agent
+      mode: 0755
+      contents:
+        local: agni-security-cell-agent
+
     - path: /usr/local/bin/send-journal-to-axiom
       mode: 0755
       contents:
@@ -62,11 +67,30 @@ storage:
           Description=Configure Agni leader/member networking
           Wants=network-online.target
           After=network-online.target
-          Before=rpm-ostreed.service send-journal-to-axiom.service
+          Before=rpm-ostreed.service send-journal-to-axiom.service agni-security-cell.service
 
           [Service]
           Type=oneshot
           ExecStart=/usr/local/bin/agni-bootstrap
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - path: /etc/systemd/system/agni-security-cell.service
+      mode: 0644
+      contents:
+        inline: |
+          [Unit]
+          Description=Reconcile Agni regional security cell runtime
+          Wants=network-online.target
+          After=network-online.target agni-bootstrap.service
+          Requires=agni-bootstrap.service
+
+          [Service]
+          Type=oneshot
+          EnvironmentFile=-/etc/default/proxy
+          ExecStart=/usr/local/bin/agni-security-cell-agent
           RemainAfterExit=yes
 
           [Install]
@@ -113,6 +137,9 @@ systemd:
       enabled: true
 
     - name: agni-bootstrap.service
+      enabled: true
+
+    - name: agni-security-cell.service
       enabled: true
 
     - name: rpm-ostreed.service
