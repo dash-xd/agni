@@ -20,8 +20,18 @@ provider "google" {
   zone    = var.zone
 }
 
+data "terraform_remote_state" "leader" {
+  backend = "gcs"
+
+  config = {
+    bucket = var.leader_state_bucket
+    prefix = var.leader_state_prefix
+  }
+}
+
 locals {
-  slots = { for slot in var.vm_slots : tostring(slot) => slot }
+  slots           = { for slot in var.vm_slots : tostring(slot) => slot }
+  egress_proxy_ip = data.terraform_remote_state.leader.outputs.leader_internal_ip
 }
 
 resource "random_id" "suffix" {
@@ -49,16 +59,16 @@ resource "google_compute_instance_from_template" "vm" {
   project                  = var.project
 
   metadata = {
-    ssh-keys                  = "core:${file(var.ssh_public_key_file)}"
-    user-data                 = file("${path.module}/config.ign")
-    agni-role                 = "member"
-    agni-leader-ip            = var.egress_proxy_ip
-    agni-member-ips           = ""
-    agni-subnet-cidr          = var.subnetwork_ipv4_cidr
-    agni-nginx-upstream-port  = tostring(var.member_service_port)
-    agni-redis-db             = tostring(each.value)
-    agni-cloudflare-https     = "false"
-    agni-cloudflare-hostname  = ""
+    ssh-keys                    = "core:${file(var.ssh_public_key_file)}"
+    user-data                   = file("${path.module}/config.ign")
+    agni-role                   = "member"
+    agni-leader-ip              = local.egress_proxy_ip
+    agni-member-ips             = ""
+    agni-subnet-cidr            = var.subnetwork_ipv4_cidr
+    agni-nginx-upstream-port    = tostring(var.member_service_port)
+    agni-redis-db               = tostring(each.value)
+    agni-cloudflare-https       = "false"
+    agni-cloudflare-hostname    = ""
     agni-origin-certificate-b64 = ""
     agni-origin-private-key-b64 = ""
   }
