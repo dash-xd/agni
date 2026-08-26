@@ -14,17 +14,6 @@ storage:
       contents:
         inline: agni-coreos
 
-    - path: /etc/default/proxy
-      mode: 0644
-      contents:
-        inline: |
-          HTTP_PROXY=http://10.138.0.9:3128
-          HTTPS_PROXY=http://10.138.0.9:3128
-          NO_PROXY=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal
-          http_proxy=http://10.138.0.9:3128
-          https_proxy=http://10.138.0.9:3128
-          no_proxy=localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal,.google.internal
-
     - path: /etc/default/axiom
       mode: 0600
       contents:
@@ -45,10 +34,43 @@ storage:
         inline: |
           [ -f /etc/default/proxy ] && source /etc/default/proxy
 
+    - path: /usr/local/bin/agni-bootstrap
+      mode: 0755
+      contents:
+        local: agni-bootstrap
+
     - path: /usr/local/bin/send-journal-to-axiom
       mode: 0755
       contents:
         local: send-journal-to-axiom
+
+    - path: /etc/containers/systemd/agni-squid.container
+      mode: 0644
+      contents:
+        local: agni-squid.container
+
+    - path: /etc/containers/systemd/agni-nginx.container
+      mode: 0644
+      contents:
+        local: agni-nginx.container
+
+    - path: /etc/systemd/system/agni-bootstrap.service
+      mode: 0644
+      contents:
+        inline: |
+          [Unit]
+          Description=Configure Agni leader/member networking
+          Wants=network-online.target
+          After=network-online.target
+          Before=rpm-ostreed.service send-journal-to-axiom.service
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/agni-bootstrap
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
 
     - path: /etc/systemd/system/send-journal-to-axiom.service
       mode: 0644
@@ -57,11 +79,12 @@ storage:
           [Unit]
           Description=Send journal logs to Axiom in NDJSON format
           Wants=network-online.target
-          After=network-online.target
+          After=network-online.target agni-bootstrap.service
+          Requires=agni-bootstrap.service
 
           [Service]
           Type=oneshot
-          EnvironmentFile=/etc/default/proxy
+          EnvironmentFile=-/etc/default/proxy
           EnvironmentFile=/etc/default/axiom
           ExecStart=/usr/local/bin/send-journal-to-axiom
 
@@ -73,7 +96,7 @@ storage:
       contents:
         inline: |
           [Service]
-          EnvironmentFile=/etc/default/proxy
+          EnvironmentFile=-/etc/default/proxy
 
 systemd:
   units:
@@ -89,12 +112,19 @@ systemd:
     - name: sshd.service
       enabled: true
 
+    - name: agni-bootstrap.service
+      enabled: true
+
     - name: rpm-ostreed.service
       dropins:
         - name: 10-proxy.conf
           contents: |
+            [Unit]
+            After=agni-bootstrap.service
+            Requires=agni-bootstrap.service
+
             [Service]
-            EnvironmentFile=/etc/default/proxy
+            EnvironmentFile=-/etc/default/proxy
 
     - name: send-journal-to-axiom.service
       enabled: true
