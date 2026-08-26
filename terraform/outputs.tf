@@ -13,17 +13,8 @@ output "subnetwork_ipv6_prefix" {
   ) : null
 }
 
-output "leader" {
-  value = {
-    slot                 = var.leader_slot
-    name                 = google_compute_instance_from_template.vm[tostring(var.leader_slot)].name
-    instance_id          = google_compute_instance_from_template.vm[tostring(var.leader_slot)].instance_id
-    internal_ip          = local.leader_ip
-    public_ipv4          = var.allocate_leader_public_ipv4 ? google_compute_address.leader[0].address : null
-    cloudflare_https     = var.enable_cloudflare_https
-    cloudflare_hostname  = var.enable_cloudflare_https ? var.cloudflare_hostname : null
-    origin_cert_expires  = var.enable_cloudflare_https ? cloudflare_origin_ca_certificate.leader[0].expires_on : null
-  }
+output "egress_proxy_ip" {
+  value = var.egress_proxy_ip
 }
 
 output "instances" {
@@ -33,8 +24,7 @@ output "instances" {
       instance_id = vm.instance_id
       zone        = vm.zone
       internal_ip = vm.network_interface[0].network_ip
-      ipv6        = try(vm.network_interface[0].ipv6_access_config[0].external_ipv6, null)
-      role        = tonumber(slot) == var.leader_slot ? "leader" : "member"
+      role        = "member"
       redis_db    = tonumber(slot)
     }
   }
