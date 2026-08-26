@@ -178,12 +178,12 @@ storage:
           [Container]
           Image=${ATMAN_IMAGE}
           ContainerName=atman
-          Network=host
+          PublishPort=127.0.0.1:8443:8443
           Volume=/run/agni-security-cell/atman/tenants.json:/run/atman/tenants.json:ro,z
           Volume=/run/agni-security-cell/logma:/run/marai/logma:ro,z
           Volume=/run/agni-security-cell/agni:/run/marai/agni:ro,z
           Environment=ATMAN_TENANT_REGISTRY_FILE=/run/atman/tenants.json
-          Environment=ATMAN_LISTEN=127.0.0.1:8443
+          Environment=ATMAN_LISTEN=:8443
           Environment=ATMAN_ALLOW_INSECURE_HTTP=1
           NoNewPrivileges=true
           DropCapability=all
