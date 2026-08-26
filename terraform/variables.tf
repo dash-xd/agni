@@ -116,3 +116,18 @@ variable "member_metadata" {
     error_message = "member_metadata may not override reserved agni-* metadata keys."
   }
 }
+
+variable "member_metadata_by_slot" {
+  description = "Additional deployment-controlled metadata for individual member slots. Keys are slot numbers encoded as strings."
+  type        = map(map(string))
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for slot, metadata in var.member_metadata_by_slot :
+      can(tonumber(slot)) && tonumber(slot) >= 0 && tonumber(slot) <= 11 && floor(tonumber(slot)) == tonumber(slot) &&
+      alltrue([for key in keys(metadata) : !startswith(key, "agni-")])
+    ])
+    error_message = "member_metadata_by_slot keys must be integer slots 0..11 and may not override reserved agni-* metadata keys."
+  }
+}
