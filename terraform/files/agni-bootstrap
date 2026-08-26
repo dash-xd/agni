@@ -12,8 +12,10 @@ leader_ip="$(metadata agni-leader-ip)"
 subnet_cidr="$(metadata agni-subnet-cidr)"
 member_ips="$(metadata agni-member-ips || true)"
 upstream_port="$(metadata agni-nginx-upstream-port)"
+cloudflare_https="$(metadata agni-cloudflare-https || echo false)"
+cloudflare_hostname="$(metadata agni-cloudflare-hostname || true)"
 
-install -d -m 0755 /etc/agni /var/lib/agni/squid /var/lib/agni/nginx
+install -d -m 0755 /etc/agni /var/lib/agni/squid /var/lib/agni/nginx /var/lib/agni/nginx/tls
 
 if [[ "$role" == "leader" ]]; then
   touch /etc/agni/leader
@@ -52,7 +54,35 @@ EOF
       echo '    server 127.0.0.1:65535;'
     fi
     echo '}'
-    cat <<'EOF'
+
+    if [[ "$cloudflare_https" == "true" ]]; then
+      cat <<EOF
+server {
+    listen 443 ssl default_server;
+    server_name ${cloudflare_hostname};
+
+    ssl_certificate     /etc/nginx/tls/origin.crt;
+    ssl_certificate_key /etc/nginx/tls/origin.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    location = /healthz {
+        access_log off;
+        return 200 'ok\n';
+        add_header Content-Type text/plain;
+    }
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_pass http://agni_members;
+    }
+}
+EOF
+    else
+      cat <<'EOF'
 server {
     listen 80 default_server;
     server_name _;
@@ -73,7 +103,17 @@ server {
     }
 }
 EOF
+    fi
   } > /var/lib/agni/nginx/default.conf
+
+  if [[ "$cloudflare_https" == "true" ]]; then
+    metadata agni-origin-certificate-b64 | base64 --decode > /var/lib/agni/nginx/tls/origin.crt
+    metadata agni-origin-private-key-b64 | base64 --decode > /var/lib/agni/nginx/tls/origin.key
+    chmod 0644 /var/lib/agni/nginx/tls/origin.crt
+    chmod 0600 /var/lib/agni/nginx/tls/origin.key
+  else
+    rm -f /var/lib/agni/nginx/tls/origin.crt /var/lib/agni/nginx/tls/origin.key
+  fi
 else
   rm -f /etc/agni/leader
   cat > /etc/default/proxy <<EOF
