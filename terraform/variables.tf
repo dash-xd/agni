@@ -96,6 +96,20 @@ variable "service_account_email" {
   default = "dev-builder@dashxd.iam.gserviceaccount.com"
 }
 
+variable "service_account_email_by_slot" {
+  description = "Optional per-slot service-account overrides. Keys are CoreOS slots encoded as strings."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for slot in keys(var.service_account_email_by_slot) :
+      can(tonumber(slot)) && tonumber(slot) >= 0 && tonumber(slot) <= 11 && floor(tonumber(slot)) == tonumber(slot)
+    ])
+    error_message = "service_account_email_by_slot keys must be integer slots 0..11."
+  }
+}
+
 variable "ssh_public_key_file" {
   type    = string
   default = "coreos-jumphost.pub"
@@ -133,7 +147,7 @@ variable "member_metadata_by_slot" {
 }
 
 variable "security_cell_secret_ids" {
-  description = "Secret Manager secret IDs readable by the Agni runtime service account for a hosted security cell."
+  description = "Secret Manager secret IDs readable by the hosted security cell runtime identity."
   type        = set(string)
   default     = []
 }
@@ -146,4 +160,10 @@ variable "security_cell_artifact_repository_location" {
 variable "security_cell_artifact_repository_name" {
   type    = string
   default = ""
+}
+
+variable "security_cell_runtime_service_account_email" {
+  description = "Dedicated runtime identity for a hosted security cell. IAM grants below are scoped only to this identity."
+  type        = string
+  default     = ""
 }
