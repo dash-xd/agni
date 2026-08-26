@@ -1,0 +1,18 @@
+[Unit]
+Description=Agni Squid egress proxy
+After=network-online.target agni-bootstrap.service
+Wants=network-online.target
+Requires=agni-bootstrap.service
+ConditionPathExists=/etc/agni/leader
+
+[Container]
+Image=docker.io/ubuntu/squid:latest
+ContainerName=agni-squid
+Network=host
+Volume=/var/lib/agni/squid/squid.conf:/etc/squid/squid.conf:ro,Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
