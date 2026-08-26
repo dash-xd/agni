@@ -61,6 +61,40 @@ variable "vm_slots" {
   }
 }
 
+variable "leader_slot" {
+  description = "VM slot that acts as the block leader, Squid egress proxy, and Nginx entry reverse proxy"
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.leader_slot >= 0 && var.leader_slot <= 11 && floor(var.leader_slot) == var.leader_slot
+    error_message = "leader_slot must be an integer from 0 through 11."
+  }
+}
+
+variable "allocate_leader_public_ipv4" {
+  description = "Reserve and attach a regional external IPv4 address to the leader"
+  type        = bool
+  default     = true
+}
+
+variable "leader_public_ports" {
+  description = "TCP ports exposed publicly on the leader. Port 80 serves the Nginx entry proxy by default."
+  type        = list(string)
+  default     = ["80"]
+}
+
+variable "nginx_upstream_port" {
+  description = "Port on member CoreOS instances to which the leader Nginx proxy forwards requests"
+  type        = number
+  default     = 8080
+
+  validation {
+    condition     = var.nginx_upstream_port >= 1 && var.nginx_upstream_port <= 65535
+    error_message = "nginx_upstream_port must be between 1 and 65535."
+  }
+}
+
 variable "enable_ipv6" {
   description = "Create the subnet as dual-stack and attach IPv6 to each VM"
   type        = bool
@@ -70,7 +104,7 @@ variable "enable_ipv6" {
 variable "ipv6_access_type" {
   description = "IPv6 access type for the dual-stack subnet"
   type        = string
-  default     = "EXTERNAL"
+  default     = "INTERNAL"
 
   validation {
     condition     = contains(["EXTERNAL", "INTERNAL"], var.ipv6_access_type)
@@ -91,7 +125,7 @@ variable "ssh_public_key_file" {
 }
 
 variable "network_tags" {
-  description = "Additional network tags. squid-client is always applied."
+  description = "Additional network tags"
   type        = list(string)
   default     = []
 }
