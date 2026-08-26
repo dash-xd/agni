@@ -58,7 +58,7 @@ resource "google_compute_instance_from_template" "vm" {
   source_instance_template = "projects/${var.project}/${var.region}/instanceTemplates/${var.template_name}"
   project                  = var.project
 
-  metadata = {
+  metadata = merge(var.member_metadata, {
     ssh-keys                    = "core:${file(var.ssh_public_key_file)}"
     user-data                   = file("${path.module}/config.ign")
     agni-role                   = "member"
@@ -71,7 +71,7 @@ resource "google_compute_instance_from_template" "vm" {
     agni-cloudflare-hostname    = ""
     agni-origin-certificate-b64 = ""
     agni-origin-private-key-b64 = ""
-  }
+  })
 
   tags = distinct(concat([
     "squid-client",
