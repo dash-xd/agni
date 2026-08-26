@@ -12,7 +12,7 @@ docker run \
   --volume "${repo_root}:/src" \
   --workdir /src \
   golang:1.25-alpine \
-  go build -trimpath -ldflags=-s -ldflags=-w -o terraform/files/agni-security-cell-agent ./cmd/security-cell-agent
+  go build -trimpath -ldflags="-s -w" -o terraform/files/agni-security-cell-agent ./cmd/security-cell-agent
 
 docker run \
   --interactive \
