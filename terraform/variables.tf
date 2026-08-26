@@ -29,21 +29,51 @@ variable "project" {
 }
 
 variable "network" {
-  description = "VPC network name"
+  description = "Custom-mode VPC network name or self link"
   type        = string
-  default     = "default"
 }
 
-variable "subnetwork" {
-  description = "Optional subnetwork name or self link"
+variable "subnetwork_name" {
+  description = "Name for the /28 CoreOS subnetwork block"
   type        = string
-  default     = ""
 }
 
-variable "internal_ip" {
-  description = "Optional static internal IP. Leave empty to let GCE allocate one from the subnet."
+variable "subnetwork_ipv4_cidr" {
+  description = "IPv4 /28 containing 16 total addresses and 12 GCP-usable VM addresses"
   type        = string
-  default     = ""
+
+  validation {
+    condition     = can(cidrhost(var.subnetwork_ipv4_cidr, 0)) && tonumber(split("/", var.subnetwork_ipv4_cidr)[1]) == 28
+    error_message = "subnetwork_ipv4_cidr must be a valid IPv4 /28 CIDR."
+  }
+}
+
+variable "vm_slot" {
+  description = "Stable CoreOS slot 0-11. Slot N maps to Redis DB N and IPv4 host N+2 in the /28."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.vm_slot >= 0 && var.vm_slot <= 11 && floor(var.vm_slot) == var.vm_slot
+    error_message = "vm_slot must be an integer from 0 through 11."
+  }
+}
+
+variable "enable_ipv6" {
+  description = "Create the subnet as dual-stack and attach IPv6 to the VM"
+  type        = bool
+  default     = true
+}
+
+variable "ipv6_access_type" {
+  description = "IPv6 access type for the dual-stack subnet"
+  type        = string
+  default     = "EXTERNAL"
+
+  validation {
+    condition     = contains(["EXTERNAL", "INTERNAL"], var.ipv6_access_type)
+    error_message = "ipv6_access_type must be EXTERNAL or INTERNAL."
+  }
 }
 
 variable "service_account_email" {
