@@ -21,13 +21,15 @@ provider "google" {
   zone    = var.zone
 }
 
-resource "random_id" "suffix" {
-  byte_length = 4
+locals {
+  slots = {
+    for slot in var.vm_slots : tostring(slot) => slot
+  }
 }
 
-locals {
-  instance_name = "${var.instance_name_prefix}-${random_id.suffix.hex}"
-  internal_ip   = cidrhost(var.subnetwork_ipv4_cidr, var.vm_slot + 2)
+resource "random_id" "suffix" {
+  for_each    = local.slots
+  byte_length = 4
 }
 
 resource "google_compute_subnetwork" "coreos" {
@@ -43,7 +45,9 @@ resource "google_compute_subnetwork" "coreos" {
 }
 
 resource "google_compute_instance_from_template" "vm" {
-  name                     = local.instance_name
+  for_each = local.slots
+
+  name                     = "${var.instance_name_prefix}-${format("%02d", each.value)}-${random_id.suffix[each.key].hex}"
   zone                     = var.zone
   source_instance_template = "projects/${var.project}/${var.region}/instanceTemplates/${var.template_name}"
   project                  = var.project
@@ -53,11 +57,11 @@ resource "google_compute_instance_from_template" "vm" {
     user-data = file("${path.module}/config.ign")
   }
 
-  tags = distinct(concat(["squid-client"], var.network_tags))
+  tags = distinct(concat(["squid-client", "redis-db-${each.value}"], var.network_tags))
 
   network_interface {
     subnetwork = google_compute_subnetwork.coreos.id
-    network_ip = local.internal_ip
+    network_ip = cidrhost(var.subnetwork_ipv4_cidr, each.value + 2)
     stack_type = var.enable_ipv6 ? "IPV4_IPV6" : "IPV4_ONLY"
 
     dynamic "ipv6_access_config" {
