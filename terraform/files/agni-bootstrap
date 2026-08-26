@@ -15,8 +15,16 @@ member_ips="$(metadata agni-member-ips || true)"
 upstream_port="$(metadata agni-nginx-upstream-port)"
 cloudflare_https="$(metadata agni-cloudflare-https || echo false)"
 cloudflare_hostname="$(metadata agni-cloudflare-hostname || true)"
+security_cell_b64="$(metadata security-cell-config-b64 || true)"
 
 install -d -m 0755 /etc/agni /var/lib/agni/squid /var/lib/agni/nginx /var/lib/agni/nginx/tls
+
+if [[ -n "$security_cell_b64" ]]; then
+  printf '%s' "$security_cell_b64" | base64 --decode > /etc/agni/security-cell.json
+  chmod 0600 /etc/agni/security-cell.json
+else
+  rm -f /etc/agni/security-cell.json
+fi
 
 if [[ "$role" == "leader" ]]; then
   touch /etc/agni/leader
