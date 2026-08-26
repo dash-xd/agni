@@ -43,6 +43,7 @@ resource "random_id" "suffix" {
       var.member_metadata,
       lookup(var.member_metadata_by_slot, each.key, {})
     ))
+    service_account = lookup(var.service_account_email_by_slot, each.key, var.service_account_email)
   }
 }
 
@@ -97,9 +98,9 @@ resource "google_compute_instance_from_template" "vm" {
   }
 
   dynamic "service_account" {
-    for_each = var.service_account_email != "" ? [1] : []
+    for_each = lookup(var.service_account_email_by_slot, each.key, var.service_account_email) != "" ? [lookup(var.service_account_email_by_slot, each.key, var.service_account_email)] : []
     content {
-      email  = var.service_account_email
+      email  = service_account.value
       scopes = ["https://www.googleapis.com/auth/cloud-platform"]
     }
   }
@@ -120,17 +121,17 @@ resource "google_compute_firewall" "leader_to_members" {
 }
 
 resource "google_secret_manager_secret_iam_member" "security_cell" {
-  for_each = var.service_account_email != "" ? var.security_cell_secret_ids : toset([])
+  for_each = var.security_cell_runtime_service_account_email != "" ? var.security_cell_secret_ids : toset([])
 
   project   = var.project
   secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${var.service_account_email}"
+  member    = "serviceAccount:${var.security_cell_runtime_service_account_email}"
 }
 
 resource "google_artifact_registry_repository_iam_member" "security_cell" {
   count = (
-    var.service_account_email != "" &&
+    var.security_cell_runtime_service_account_email != "" &&
     var.security_cell_artifact_repository_location != "" &&
     var.security_cell_artifact_repository_name != ""
   ) ? 1 : 0
@@ -139,5 +140,5 @@ resource "google_artifact_registry_repository_iam_member" "security_cell" {
   location   = var.security_cell_artifact_repository_location
   repository = var.security_cell_artifact_repository_name
   role       = "roles/artifactregistry.reader"
-  member     = "serviceAccount:${var.service_account_email}"
+  member     = "serviceAccount:${var.security_cell_runtime_service_account_email}"
 }
