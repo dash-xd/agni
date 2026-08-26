@@ -54,9 +54,15 @@ variable "vm_slots" {
   }
 }
 
-variable "egress_proxy_ip" {
-  description = "Internal IPv4 of the single Agni leader/Squid proxy"
+variable "leader_state_bucket" {
+  description = "GCS bucket containing the single Agni leader Terraform state"
   type        = string
+}
+
+variable "leader_state_prefix" {
+  description = "GCS Terraform backend prefix for the single Agni leader state"
+  type        = string
+  default     = "terraform/agni-leader"
 }
 
 variable "member_service_port" {
