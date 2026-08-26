@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -z "${AXIOM_TOKEN:-}" || -z "${AXIOM_DATASET:-}" ]]; then
+  echo "Axiom logging is not configured; skipping"
+  exit 0
+fi
+
+: "${AXIOM_DOMAIN:=api.axiom.co}"
+
+JQ_FIELDS='{
+  "EXIT_CODE": .EXIT_CODE,
+  "EXIT_STATUS": .EXIT_STATUS,
+  "IGNITION_CONFIG_REFERENCED": .IGNITION_CONFIG_REFERENCED,
+  "IGNITION_CONFIG_SRC": .IGNITION_CONFIG_SRC,
+  "IGNITION_CONFIG_TYPE": .IGNITION_CONFIG_TYPE,
+  "IGNITION_PATH": .IGNITION_PATH,
+  "IGNITION_USER_NAME": .IGNITION_USER_NAME,
+  "INITRD_USEC": .INITRD_USEC,
+  "INTERFACE": .INTERFACE,
+  "INVOCATION_ID": .INVOCATION_ID,
+  "JOB_ID": .JOB_ID,
+  "JOB_RESULT": .JOB_RESULT,
+  "JOB_TYPE": .JOB_TYPE,
+  "SYSLOG_FACILITY": .SYSLOG_FACILITY,
+  "SYSLOG_IDENTIFIER": .SYSLOG_IDENTIFIER,
+  "SYSLOG_PID": .SYSLOG_PID,
+  "SYSLOG_RAW": .SYSLOG_RAW,
+  "SYSLOG_TIMESTAMP": .SYSLOG_TIMESTAMP,
+  "TID": .TID,
+  "TIMESTAMP_BOOTTIME": .TIMESTAMP_BOOTTIME,
+  "TIMESTAMP_MONOTONIC": .TIMESTAMP_MONOTONIC,
+  "UNIT": .UNIT,
+  "UNIT_RESULT": .UNIT_RESULT,
+  "USERSPACE_USEC": .USERSPACE_USEC,
+  "USER_ID": .USER_ID,
+  "USER_INVOCATION_ID": .USER_INVOCATION_ID,
+  "USER_UNIT": .USER_UNIT,
+  "_HOSTNAME": ._HOSTNAME,
+  "_PID": ._PID,
+  "_BOOT_ID": ._BOOT_ID,
+  "_UID": ._UID,
+  "_GID": ._GID,
+  "_COMM": ._COMM,
+  "_MACHINE_ID": ._MACHINE_ID,
+  "_CMDLINE": ._CMDLINE,
+  "_PRIORITY": ._PRIORITY,
+  "MESSAGE_ID": .MESSAGE_ID,
+  "_INVOCATION_ID": ._INVOCATION_ID,
+  "_EXE": ._EXE,
+  "MESSAGE": .MESSAGE,
+  "PRIORITY": .PRIORITY,
+  "_SYSTEMD_UNIT": ._SYSTEMD_UNIT,
+  "_SYSTEMD_CGROUP": ._SYSTEMD_CGROUP,
+  "_SYSTEMD_OWNER_UID": ._SYSTEMD_OWNER_UID,
+  "_RUNTIME_SCOPE": ._RUNTIME_SCOPE,
+  "__REALTIME_TIMESTAMP": .__REALTIME_TIMESTAMP
+}'
+
+SINCE="${1:-}"
+if [[ -n "$SINCE" && "$SINCE" =~ ^[0-9]+$ ]]; then
+  TIME_STR="$(date --iso-8601=seconds --date="-$SINCE seconds")"
+  journalctl --since="$TIME_STR" --output=json
+else
+  journalctl -b --output=json
+fi | sed 's/\\n/ /g' \
+  | jq -c "$JQ_FIELDS" \
+  | curl --fail-with-body --silent --show-error \
+      -X POST "https://${AXIOM_DOMAIN}/v1/datasets/${AXIOM_DATASET}/ingest" \
+      -H "Authorization: Bearer ${AXIOM_TOKEN}" \
+      -H 'Content-Type: application/x-ndjson' \
+      --data-binary @-
