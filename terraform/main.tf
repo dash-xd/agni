@@ -118,3 +118,26 @@ resource "google_compute_firewall" "leader_to_members" {
     ports    = [tostring(var.member_service_port)]
   }
 }
+
+resource "google_secret_manager_secret_iam_member" "security_cell" {
+  for_each = var.service_account_email != "" ? var.security_cell_secret_ids : toset([])
+
+  project   = var.project
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${var.service_account_email}"
+}
+
+resource "google_artifact_registry_repository_iam_member" "security_cell" {
+  count = (
+    var.service_account_email != "" &&
+    var.security_cell_artifact_repository_location != "" &&
+    var.security_cell_artifact_repository_name != ""
+  ) ? 1 : 0
+
+  project    = var.project
+  location   = var.security_cell_artifact_repository_location
+  repository = var.security_cell_artifact_repository_name
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${var.service_account_email}"
+}
