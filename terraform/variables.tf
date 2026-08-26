@@ -79,7 +79,7 @@ variable "allocate_leader_public_ipv4" {
 }
 
 variable "leader_public_ports" {
-  description = "TCP ports exposed publicly on the leader. Port 80 serves the Nginx entry proxy by default."
+  description = "Fallback TCP ports exposed publicly when Cloudflare HTTPS is disabled"
   type        = list(string)
   default     = ["80"]
 }
@@ -93,6 +93,24 @@ variable "nginx_upstream_port" {
     condition     = var.nginx_upstream_port >= 1 && var.nginx_upstream_port <= 65535
     error_message = "nginx_upstream_port must be between 1 and 65535."
   }
+}
+
+variable "enable_cloudflare_https" {
+  description = "Create a proxied Cloudflare DNS record and 7-day Origin CA certificate for the leader"
+  type        = bool
+  default     = false
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare zone ID containing cloudflare_hostname"
+  type        = string
+  default     = ""
+}
+
+variable "cloudflare_hostname" {
+  description = "Fully qualified hostname proxied through Cloudflare to the leader public IPv4"
+  type        = string
+  default     = ""
 }
 
 variable "enable_ipv6" {
