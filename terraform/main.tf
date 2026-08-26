@@ -58,20 +58,24 @@ resource "google_compute_instance_from_template" "vm" {
   source_instance_template = "projects/${var.project}/${var.region}/instanceTemplates/${var.template_name}"
   project                  = var.project
 
-  metadata = merge(var.member_metadata, {
-    ssh-keys                    = "core:${file(var.ssh_public_key_file)}"
-    user-data                   = file("${path.module}/config.ign")
-    agni-role                   = "member"
-    agni-leader-ip              = local.egress_proxy_ip
-    agni-member-ips             = ""
-    agni-subnet-cidr            = var.subnetwork_ipv4_cidr
-    agni-nginx-upstream-port    = tostring(var.member_service_port)
-    agni-redis-db               = tostring(each.value)
-    agni-cloudflare-https       = "false"
-    agni-cloudflare-hostname    = ""
-    agni-origin-certificate-b64 = ""
-    agni-origin-private-key-b64 = ""
-  })
+  metadata = merge(
+    var.member_metadata,
+    lookup(var.member_metadata_by_slot, each.key, {}),
+    {
+      ssh-keys                    = "core:${file(var.ssh_public_key_file)}"
+      user-data                   = file("${path.module}/config.ign")
+      agni-role                   = "member"
+      agni-leader-ip              = local.egress_proxy_ip
+      agni-member-ips             = ""
+      agni-subnet-cidr            = var.subnetwork_ipv4_cidr
+      agni-nginx-upstream-port    = tostring(var.member_service_port)
+      agni-redis-db               = tostring(each.value)
+      agni-cloudflare-https       = "false"
+      agni-cloudflare-hostname    = ""
+      agni-origin-certificate-b64 = ""
+      agni-origin-private-key-b64 = ""
+    }
+  )
 
   tags = distinct(concat([
     "squid-client",
