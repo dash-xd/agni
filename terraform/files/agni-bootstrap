@@ -13,9 +13,15 @@ subnet_cidr="$(metadata agni-subnet-cidr)"
 client_cidrs="$(metadata agni-client-cidrs || true)"
 member_ips="$(metadata agni-member-ips || true)"
 upstream_port="$(metadata agni-nginx-upstream-port)"
+upstream_scheme="$(metadata agni-nginx-upstream-scheme || echo http)"
 cloudflare_https="$(metadata agni-cloudflare-https || echo false)"
 cloudflare_hostname="$(metadata agni-cloudflare-hostname || true)"
 security_cell_b64="$(metadata security-cell-config-b64 || true)"
+
+case "$upstream_scheme" in
+  http|https) ;;
+  *) echo "invalid agni-nginx-upstream-scheme: $upstream_scheme" >&2; exit 1 ;;
+esac
 
 install -d -m 0755 /etc/agni /var/lib/agni/squid /var/lib/agni/nginx /var/lib/agni/nginx/tls
 
@@ -95,18 +101,18 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_pass http://agni_members;
+        proxy_pass ${upstream_scheme}://agni_members;
     }
 }
 EOF
     else
-      cat <<'EOF'
+      cat <<EOF
 server {
     listen 80 default_server;
     server_name _;
 
     location / {
-        proxy_pass http://agni_members;
+        proxy_pass ${upstream_scheme}://agni_members;
     }
 }
 EOF
