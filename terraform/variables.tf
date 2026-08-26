@@ -131,3 +131,19 @@ variable "member_metadata_by_slot" {
     error_message = "member_metadata_by_slot keys must be integer slots 0..11 and may not override reserved agni-* metadata keys."
   }
 }
+
+variable "security_cell_secret_ids" {
+  description = "Secret Manager secret IDs readable by the Agni runtime service account for a hosted security cell."
+  type        = set(string)
+  default     = []
+}
+
+variable "security_cell_artifact_repository_location" {
+  type    = string
+  default = ""
+}
+
+variable "security_cell_artifact_repository_name" {
+  type    = string
+  default = ""
+}
