@@ -10,7 +10,16 @@ source "${ROOT}/config.env"
 rm -rf "${WORK}"
 mkdir -p "${WORK}"
 
-git clone --filter=blob:none "${FCOS_CONFIG_URL}" "${WORK}/src/config"
+# Let COSA establish its own workdir layout, repo/cache state, and config clone.
+# KVM is not needed for init; image-building targets validate KVM separately.
+podman run --rm --security-opt=label=disable \
+  --userns=keep-id:uid=1000,gid=1000 \
+  -v "${WORK}:/srv" \
+  --tmpfs=/tmp \
+  -v /var/tmp:/var/tmp \
+  "${COSA_IMAGE}" init --force "${FCOS_CONFIG_URL}"
+
+git -C "${WORK}/src/config" fetch --quiet origin "${FCOS_CONFIG_REF}"
 git -C "${WORK}/src/config" checkout --detach "${FCOS_CONFIG_REF}"
 
 while IFS= read -r item; do
