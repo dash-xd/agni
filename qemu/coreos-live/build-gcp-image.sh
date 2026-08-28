@@ -2,4 +2,4 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${ROOT}/production/build.sh" iso
+exec "${ROOT}/production/build.sh" gcp

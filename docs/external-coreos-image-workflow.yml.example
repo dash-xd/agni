@@ -1,0 +1,116 @@
+# Reference only. Copy/adapt this into the repository that owns GCP deployment.
+# Do not place this file under dash-xd/agni/.github/workflows.
+name: Publish Agni CoreOS image
+
+on:
+  workflow_dispatch:
+    inputs:
+      agni_ref:
+        description: dash-xd/agni commit, tag, or branch to build
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-publish:
+    # Must expose /dev/kvm and permit the privileged rootless Podman COSA container.
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout deployment repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Agni
+        uses: actions/checkout@v4
+        with:
+          repository: dash-xd/agni
+          ref: ${{ inputs.agni_ref }}
+          path: vendor/agni
+
+      - name: Resolve immutable Agni revision
+        id: agni
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git -C vendor/agni rev-parse HEAD)"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${sha:0:12}" >> "$GITHUB_OUTPUT"
+
+      - name: Build production CoreOS artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          test -c /dev/fuse
+          make -C vendor/agni/qemu/coreos-live production
+
+      - name: Authenticate to Google Cloud with WIF
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.TERRAFORM_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Upload immutable CoreOS build artifacts
+        id: upload
+        shell: bash
+        env:
+          AGNI_SHA: ${{ steps.agni.outputs.sha }}
+          COREOS_IMAGE_BUCKET: ${{ vars.COREOS_IMAGE_BUCKET }}
+        run: |
+          set -euo pipefail
+          dist=vendor/agni/qemu/coreos-live/production/dist
+          gcp_image="$(find "$dist" -maxdepth 1 -type f -name '*-gcp.*.tar.gz' -print -quit)"
+          live_iso="$(find "$dist" -maxdepth 1 -type f -name '*-live*.iso' -print -quit)"
+          test -n "$gcp_image"
+          test -n "$live_iso"
+
+          gcp_object="images/${AGNI_SHA}/$(basename "$gcp_image")"
+          iso_object="iso/${AGNI_SHA}/$(basename "$live_iso")"
+
+          gcloud storage cp "$gcp_image" "gs://${COREOS_IMAGE_BUCKET}/${gcp_object}"
+          gcloud storage cp "$live_iso" "gs://${COREOS_IMAGE_BUCKET}/${iso_object}"
+          gcloud storage cp "$dist/meta.json" "gs://${COREOS_IMAGE_BUCKET}/metadata/${AGNI_SHA}/meta.json"
+          gcloud storage cp "$dist/SHA256SUMS" "gs://${COREOS_IMAGE_BUCKET}/metadata/${AGNI_SHA}/SHA256SUMS"
+
+          echo "gcp_object=${gcp_object}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        shell: bash
+        working-directory: vendor/agni/terraform/coreos-image
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="prefix=terraform/agni-coreos-image"
+
+      - name: Publish Compute Engine image
+        shell: bash
+        working-directory: vendor/agni/terraform/coreos-image
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          COREOS_IMAGE_BUCKET: ${{ vars.COREOS_IMAGE_BUCKET }}
+          GCP_OBJECT: ${{ steps.upload.outputs.gcp_object }}
+          AGNI_SHA: ${{ steps.agni.outputs.sha }}
+          AGNI_SHORT_SHA: ${{ steps.agni.outputs.short_sha }}
+        run: |
+          terraform apply -auto-approve \
+            -var="project_id=${GCP_PROJECT_ID}" \
+            -var="staging_bucket_name=${COREOS_IMAGE_BUCKET}" \
+            -var="image_object=${GCP_OBJECT}" \
+            -var="image_name=agni-coreos-${AGNI_SHORT_SHA}" \
+            -var="labels={agni_commit=\"${AGNI_SHORT_SHA}\"}"
+
+      - name: Show published image
+        shell: bash
+        working-directory: vendor/agni/terraform/coreos-image
+        run: terraform output
