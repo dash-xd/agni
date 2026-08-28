@@ -26,6 +26,8 @@ require_devices() {
 }
 
 prepare() {
+  rm -rf "${DIST}"
+  mkdir -p "${DIST}"
   "${ROOT}/prepare-config.sh"
 }
 
