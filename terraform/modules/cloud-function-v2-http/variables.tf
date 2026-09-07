@@ -7,9 +7,8 @@ variable "source_archive_bucket" { type = string }
 variable "source_archive_object" { type = string }
 
 variable "ingress_settings" {
-  description = "Cloud Run functions ingress policy. ALLOW_INTERNAL_ONLY is appropriate for VPC-originated private invocation."
+  description = "Cloud Run functions ingress policy selected by the caller."
   type        = string
-  default     = "ALLOW_INTERNAL_ONLY"
 
   validation {
     condition     = contains(["ALLOW_ALL", "ALLOW_INTERNAL_ONLY", "ALLOW_INTERNAL_AND_GCLB"], var.ingress_settings)
