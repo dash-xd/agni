@@ -15,6 +15,15 @@ module "network" {
   private_ip_google_access = var.private_ip_google_access
 }
 
+module "internal_addresses" {
+  source = "../regional-internal-addresses"
+
+  project    = var.project
+  region     = var.region
+  subnetwork = module.network.self_link
+  addresses  = var.internal_addresses
+}
+
 module "nodes" {
   source = "../coreos-node"
 
@@ -28,4 +37,6 @@ module "nodes" {
   common_metadata          = var.common_metadata
   common_tags              = var.common_tags
   nodes                    = var.nodes
+
+  depends_on = [module.internal_addresses]
 }

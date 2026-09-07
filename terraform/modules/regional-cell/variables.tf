@@ -65,6 +65,16 @@ variable "common_tags" {
   default = []
 }
 
+variable "internal_addresses" {
+  description = "Static internal address reservations keyed by caller-owned semantic name."
+  type = map(object({
+    name        = string
+    address     = string
+    description = optional(string, "")
+  }))
+  default = {}
+}
+
 variable "nodes" {
   description = "Node definitions keyed by address slot. The caller assigns topology/workload semantics."
   type = map(object({
@@ -72,6 +82,10 @@ variable "nodes" {
     tags                  = optional(list(string), [])
     service_account_email = optional(string, "")
     user_data             = optional(string, "")
+    alias_ip_ranges = optional(list(object({
+      ip_cidr_range         = string
+      subnetwork_range_name = optional(string, "")
+    })), [])
   }))
 
   validation {

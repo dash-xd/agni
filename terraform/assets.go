@@ -21,6 +21,7 @@ var moduleNames = []string{
 	"cloud-function-v2-http",
 	"coreos-node",
 	"regional-cell",
+	"regional-internal-addresses",
 	"regional-network",
 }
 

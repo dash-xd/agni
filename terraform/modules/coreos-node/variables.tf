@@ -48,6 +48,10 @@ variable "nodes" {
     tags                  = optional(list(string), [])
     service_account_email = optional(string, "")
     user_data             = optional(string, "")
+    alias_ip_ranges = optional(list(object({
+      ip_cidr_range         = string
+      subnetwork_range_name = optional(string, "")
+    })), [])
   }))
 
   validation {

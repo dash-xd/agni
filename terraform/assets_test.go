@@ -8,7 +8,7 @@ import (
 )
 
 func TestModules(t *testing.T) {
-	want := []string{"cloud-function-v1-http", "cloud-function-v2-http", "coreos-node", "regional-cell", "regional-network"}
+	want := []string{"cloud-function-v1-http", "cloud-function-v2-http", "coreos-node", "regional-cell", "regional-internal-addresses", "regional-network"}
 	if got := Modules(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Modules() = %#v, want %#v", got, want)
 	}
@@ -36,6 +36,16 @@ func TestMaterializeModulesCanSelectServerlessModules(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dst, "modules", name, "main.tf")); err != nil {
 			t.Fatalf("selected module %s missing: %v", name, err)
 		}
+	}
+}
+
+func TestMaterializeModulesCanSelectInternalAddressModule(t *testing.T) {
+	dst := t.TempDir()
+	if err := MaterializeModules(dst, "regional-internal-addresses"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "modules", "regional-internal-addresses", "main.tf")); err != nil {
+		t.Fatalf("selected internal address module missing: %v", err)
 	}
 }
 

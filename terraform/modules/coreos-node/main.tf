@@ -9,8 +9,8 @@ terraform {
 }
 
 locals {
-  ipv4_prefix        = tonumber(split("/", var.ipv4_cidr)[1])
-  usable_ipv4_count  = pow(2, 32 - local.ipv4_prefix) - 4
+  ipv4_prefix       = tonumber(split("/", var.ipv4_cidr)[1])
+  usable_ipv4_count = pow(2, 32 - local.ipv4_prefix) - 4
   nodes = {
     for slot, node in var.nodes : tostring(tonumber(slot)) => node
   }
@@ -36,6 +36,18 @@ resource "google_compute_instance_from_template" "this" {
     subnetwork = var.subnetwork
     network_ip = cidrhost(var.ipv4_cidr, tonumber(each.key) + 2)
     stack_type = var.enable_ipv6 ? "IPV4_IPV6" : "IPV4_ONLY"
+
+    dynamic "alias_ip_range" {
+      for_each = each.value.alias_ip_ranges
+      content {
+        ip_cidr_range = alias_ip_range.value.ip_cidr_range
+        subnetwork_range_name = (
+          alias_ip_range.value.subnetwork_range_name == ""
+          ? null
+          : alias_ip_range.value.subnetwork_range_name
+        )
+      }
+    }
   }
 
   dynamic "service_account" {
