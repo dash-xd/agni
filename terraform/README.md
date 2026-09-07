@@ -4,30 +4,38 @@ Agni contains reusable Terraform implementation and may also contain standalone 
 
 Current reusable modules:
 
-- `regional-network`: one regional dual-stack subnet with caller-selected IPv4 CIDR, including `/29`; Private Google Access is enabled by default and the module reports the usable address count after Google Cloud's four reserved addresses.
-- `regional-internal-addresses`: caller-named static internal IPv4 reservations from a regional subnet. These are generic reservations that callers may later use as VM alias `/32`s, internal forwarding VIPs, or other service identities; the module does not assign application meaning.
-- `coreos-node`: indexed Fedora CoreOS instances attached to a supplied subnet; slot `0` begins at host offset `2`, valid slot count derives from the subnet size, and callers may attach alias IP ranges to a node.
-- `regional-cell`: composition of the network, optional internal-address reservations, and node modules.
-- `cloud-function-v1-http`: generic 1st gen HTTP function with caller-selected source/runtime/identity/ingress and non-authoritative invoker IAM members.
-- `cloud-function-v2-http`: generic Cloud Run function (2nd gen) with caller-selected source/runtime/identity/ingress and `roles/run.invoker` bindings on the underlying Cloud Run service.
+- `regional-network`: one regional dual-stack subnet with caller-selected IPv4 CIDR, including `/29`; Private Google Access is enabled by default and the module reports usable address count after Google Cloud's four reserved addresses.
+- `regional-internal-addresses`: caller-named static internal IPv4 reservations from a regional subnet.
+- `coreos-node`: indexed Fedora CoreOS instances attached to a supplied subnet; slot capacity derives from subnet size and callers may attach alias IP ranges.
+- `regional-cell`: composition of network, optional internal-address reservations, and node modules.
+- `cloud-function-v1-http`: generic 1st gen HTTP function with caller-selected source/runtime/identity/ingress and invoker IAM members.
+- `cloud-function-v2-http`: generic 2nd gen HTTP function with caller-selected source/runtime/identity/ingress and Cloud Run invoker IAM members.
 
-The function modules require the caller to choose an ingress policy; Agni does not impose internal-only, load-balanced, or public policy. They do not attach functions to the VM subnet or consume its addresses. Direct VPC egress for function-to-VPC traffic is a separate concern and is intentionally not implied by these modules.
-
-Static internal address reservations are likewise separate from serverless addressing. A caller may reserve addresses from the primary subnet and assign them as `/32` alias ranges to a VM to create stable application-owned service identities, but the guest OS/workload remains responsible for configuring and listening on those aliases.
+Function modules do not consume VM subnet addresses. Direct VPC egress remains a separate concern. Static internal reservations likewise carry no application meaning; callers may use them as aliases/VIPs while guest configuration remains caller-owned.
 
 ## Seed selected modules
 
-The Go package `github.com/dash-xd/agni/terraform` embeds these module files and exposes `SeedModules`. Seeding copies only caller-selected authoritative `.tf` source into a caller-owned Terraform root; it is not a second Terraform language.
+`github.com/dash-xd/agni/terraform` embeds the generic module source and exposes `SeedModules`. The implementation lives in `terraform/seed.go` and only copies caller-selected authoritative `.tf` files into `<root>/modules`.
 
-The CLI equivalent is:
+The installable tool is intentionally short:
+
+```text
+github.com/dash-xd/agni/cmd/tf
+```
+
+Use:
 
 ```bash
-agni-terraform seed \
+tf modules
+
+tf seed \
   --module regional-network \
   --module regional-cell \
   <terraform-root>
 ```
 
-`seed` is the same exact-source destination-preparation idiom used by Smoke/ghxd worktrees. Do not introduce `materialize` as a parallel public term for this operation.
+`tf seed` is independent from Smoke/ghxd worktree seeding. The two share the verb because both prepare an exact-source destination, but Agni performs no Git, repository, ref, object-database, auth, or worktree operations.
+
+The native `terraform` executable remains a separate contract and owns HCL parsing, providers, state, plan/apply/destroy/output semantics.
 
 No reusable module should contain names such as Astrochicken, Farcaster, World, Fatline, or application-specific service topology. Those belong to the caller that composes the generic modules.
