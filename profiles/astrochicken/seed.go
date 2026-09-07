@@ -30,10 +30,10 @@ func Seed(dst string) error {
 		return fmt.Errorf("destination is required")
 	}
 
-	if err := copyTree("terraform", dst, true); err != nil {
+	if err := copyTree("terraform", dst); err != nil {
 		return fmt.Errorf("seed Astrochicken Terraform root: %w", err)
 	}
-	if err := copyTree("config", filepath.Join(dst, "config"), false); err != nil {
+	if err := copyTree("config", filepath.Join(dst, "config")); err != nil {
 		return fmt.Errorf("seed Astrochicken config: %w", err)
 	}
 	if err := agnitf.Seed(dst); err != nil {
@@ -42,7 +42,7 @@ func Seed(dst string) error {
 	return nil
 }
 
-func copyTree(sourceRoot, dst string, flattenRoot bool) error {
+func copyTree(sourceRoot, dst string) error {
 	root, err := fs.Sub(profileFS, sourceRoot)
 	if err != nil {
 		return err
@@ -58,11 +58,7 @@ func copyTree(sourceRoot, dst string, flattenRoot bool) error {
 		if err != nil {
 			return err
 		}
-		targetRoot := dst
-		if !flattenRoot {
-			targetRoot = dst
-		}
-		target := filepath.Join(targetRoot, filepath.FromSlash(path))
+		target := filepath.Join(dst, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
