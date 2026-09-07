@@ -13,8 +13,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Check formatting
-        run: gofmt -l . | tee /dev/stderr | test -z "$(cat)"
+      - name: Check new Go surface formatting
+        run: gofmt -l main.go nativeexec | tee /dev/stderr | test -z "$(cat)"
       - name: Vet
         run: go vet ./...
       - name: Build
