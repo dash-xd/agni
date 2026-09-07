@@ -52,9 +52,9 @@ module "region" {
   nodes = {
     "0" = {
       metadata = {
-        "smoke-role"                 = "gateway"
-        "smoke-execution-service-ip" = local.execution_service_ip
-        "smoke-egress-service-ip"    = local.egress_service_ip
+        "probe-role"                 = "gateway"
+        "probe-execution-service-ip" = local.execution_service_ip
+        "probe-egress-service-ip"    = local.egress_service_ip
       }
       alias_ip_ranges = [
         { ip_cidr_range = "${local.execution_service_ip}/32" },
@@ -63,7 +63,7 @@ module "region" {
       service_account_email = var.service_account_email
     }
     "1" = {
-      metadata = { "smoke-role" = "world" }
+      metadata = { "probe-role" = "world" }
       service_account_email = var.service_account_email
     }
   }
@@ -86,7 +86,7 @@ module "gen1_functions" {
   available_memory_mb   = each.value.available_memory_mb
   timeout_seconds       = each.value.timeout_seconds
   environment_variables = each.value.environment_variables
-  labels                = merge({ "smoke-role" = "shadow" }, each.value.labels)
+  labels                = merge({ "probe-role" = "shadow" }, each.value.labels)
 }
 
 module "gen2_functions" {
