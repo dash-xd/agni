@@ -15,17 +15,20 @@ import (
 //go:embed modules/*/*.tf
 var source embed.FS
 
-var moduleNames = []string{
-	"cloud-function-v1-http",
-	"cloud-function-v2-http",
-	"coreos-node",
-	"regional-cell",
-	"regional-internal-addresses",
-	"regional-network",
-}
-
+// Modules reports the shared Terraform modules present in the embedded source
+// tree. The directory tree is authoritative; do not maintain a second module
+// inventory in Go.
 func Modules() []string {
-	out := append([]string(nil), moduleNames...)
+	entries, err := fs.ReadDir(source, "modules")
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			out = append(out, entry.Name())
+		}
+	}
 	sort.Strings(out)
 	return out
 }
