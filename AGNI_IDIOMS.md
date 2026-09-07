@@ -1,118 +1,129 @@
 # Agni Go-first cloud tooling idiom
 
-Agni is the reusable cloud/virtualization build layer. It contains generic implementation and native tool composition, but no organization-specific credentials, project IDs, regions, domains, tenant names, repository names, or deployment policy values.
+Agni is the reusable cloud/virtualization implementation layer. It contains generic implementation and native-tool adapters, but no organization-specific credentials, project IDs, regions, domains, tenant names, repository names, or deployment policy values.
 
 ## Responsibility
 
 ```text
 Huram
-  organization/business inputs + credentials + exact candidate selection
+  exact source/tool identities
+  credentials + business/deployment inputs
+  qualification + promotion
       |
       v
 Smoke
-  generic Go workspace/tool composition + immutable execution snapshots
+  named Go workspaces/tool sets
+  immutable environment snapshots
+  generic child execution
       |
       v
-Agni
-  generic cloud/CoreOS/QEMU build capabilities
+Agni tools/packages
+  generic cloud/CoreOS/QEMU/Terraform implementation
       |
-      +-- Terraform CLI + reusable .tf/config assets
-      +-- gcloud
-      +-- Butane/CoreOS
-      +-- QEMU
+      +-- reusable Terraform .tf modules
+      +-- Terraform asset materialization
+      +-- gcloud / Butane / QEMU native boundaries
 ```
 
-Agni should expose ordinary Go packages and installable Go tools. Smoke is optional: a Go programmer must be able to install or import Agni directly.
+Agni should expose ordinary Go packages and installable Go tools. Smoke is optional: Agni must remain usable directly by Go callers and from the command line.
 
 ## Native contracts remain authoritative
 
-Agni wraps mature native tools; it does not replace them. Terraform keeps ownership of `.tf`, state/backends, providers, plan/apply and variable semantics. Butane keeps ownership of Butane/Ignition transformation. QEMU keeps ownership of machine/device arguments. gcloud keeps ownership of Google Cloud CLI semantics.
+Agni composes mature native tools; it does not replace them. Terraform owns `.tf`, providers, variables, state/backends, plan/apply/destroy/output semantics. Butane owns Butane/Ignition transformation. QEMU owns machine/device arguments. gcloud owns Google Cloud CLI semantics.
 
-The root Agni tool is therefore intentionally thin:
+Do not convert Terraform source into Go DSLs or embed deployment-specific HCL as Go raw strings merely to invoke Terraform.
 
-```bash
-agni terraform ...
-agni gcloud ...
-agni coreos ...
-agni qemu ...
-agni exec ...
-```
+## Reusable Terraform modules
 
-Arguments and environment are forwarded rather than translated into an Agni-specific language.
-
-## Reusable regional Terraform
-
-Reusable regional infrastructure belongs under `terraform/modules` and must remain free of deployment-domain naming.
-
-The current primitive stack is:
+Reusable infrastructure belongs under `terraform/modules` and must remain free of deployment-domain vocabulary. Current primitives include:
 
 ```text
 regional-network
-    caller-selected regional IPv4 CIDR
-    optional dual stack
-    Private Google Access is caller-configurable
-    reports usable address capacity
-
+regional-internal-addresses
 coreos-node
-    indexed Fedora CoreOS instances
-    slot -> stable internal IPv4 derived from subnet CIDR
-    caller-supplied metadata/tags/service identity/user-data
-
 regional-cell
-    regional-network + coreos-node composition
-
 cloud-function-v1-http
-    caller-selected 1st-gen HTTP function
-    caller-selected ingress + invoker identities
-
 cloud-function-v2-http
-    caller-selected Cloud Run function
-    caller-selected ingress + Cloud Run invoker identities
 ```
 
-Google Cloud reserves the first two and last two IPv4 addresses in each primary subnet. Agni therefore derives usable node capacity from the CIDR rather than assuming a fixed `/28` or a fixed twelve-node topology. A `/29` yields four usable node slots; a `/28` yields twelve. Slot `0` starts at host offset `2`.
+The modules MUST NOT assign meanings such as gateway, world, Farcaster, Astrochicken, Fatline, Logma, Nginx, Squid, or serverless-shadow policy. Callers assign those meanings through ordinary Terraform roots and inputs.
 
-The modules MUST NOT assign meanings such as gateway, world, farcaster, astrochicken, Fatline, Logma, or application roles. Callers assign workload and topology meaning through ordinary Terraform inputs. A two-node `/29` smoke probe and a twelve-node `/28` regional deployment can therefore share the same implementation modules.
+Serverless functions are not VM subnet address slots. Function ingress, IAM, source/runtime, and VPC egress are separate caller-owned concerns. Agni MUST NOT silently select internal-only ingress.
 
-Serverless functions are not address slots in the VM subnet. Function source, runtime, ingress, IAM, and lifecycle are separate reusable inputs. In particular, Agni MUST NOT silently select `ALLOW_INTERNAL_ONLY`; a caller such as Smoke can choose it when the deployment requires VPC-only invocation. Direct VPC egress from serverless resources back into a VPC is also a separate capability and must not be implied merely because a function is regional or internally invokable.
+## Terraform asset tool
 
-`github.com/dash-xd/agni/terraform` embeds reusable module files and materializes only caller-selected modules. This is an asset-selection mechanism, not a second deployment language.
+`github.com/dash-xd/agni/terraform` owns the embedded generic module assets and `MaterializeModules` package API.
 
-## Smoke composition boundary
-
-Agni may provide an optional package for Smoke composition. That package may register a narrow provider with Smoke and may blank-import Smoke's corresponding command package so a single Go import adds the capability.
-
-The Agni side of this contract remains generic:
+The installable tool:
 
 ```text
-caller-owned Terraform root
-        |
-        | selects module names + Terraform args
-        v
-Agni Smoke provider
-        |
-        +-- materialize selected Agni modules
-        +-- invoke `terraform -chdir=<workspace> ...`
+github.com/dash-xd/agni/cmd/agni-terraform
 ```
 
-Agni MUST NOT define Smoke-domain recipes such as Astrochicken. Smoke owns those names, lifecycle policy, representative topology choices, serverless-shadow policy, and outside-vs-environment behavior. Agni only provides the generic infrastructure implementation selected by the caller.
+is the normal environment-composition surface for those assets:
+
+```bash
+agni-terraform modules
+agni-terraform materialize \
+  --module regional-network \
+  --module regional-cell \
+  <terraform-root>
+```
+
+The tool only selects and materializes Agni-owned generic modules. It does not run Terraform and does not define an environment or deployment recipe.
+
+This makes Agni naturally composable as a Smoke environment tool:
+
+```bash
+smoke env tool add <env> github.com/dash-xd/agni/cmd/agni-terraform@<version-or-sha>
+smoke env tool run <env> agni-terraform materialize --module ... <root>
+```
+
+## Smoke boundary
+
+The preferred Smoke integration is now **environment + ordinary Go tool**, not a deployment-specific provider command:
+
+```text
+Smoke environment
+    |
+    +-- exact Go modules
+    +-- exact Go tools
+    |     `-- agni-terraform
+    |
+    v
+ordinary Terraform composition root
+    |
+    v
+installed terraform executable
+```
+
+An older optional Agni Smoke provider may remain temporarily as a compatibility surface while callers migrate, but new Terraform composition should not depend on an Astrochicken-specific provider request. Provider registries remain appropriate for genuine runtime transport/provider capabilities; Terraform asset materialization is a tool concern.
+
+## Environment recipes
+
+A named environment such as Astrochicken is not an Agni primitive. It is a composition recipe above Agni that selects generic modules and gives them domain meaning.
+
+```text
+Astrochicken recipe
+  Terraform root + environment-specific policy
+        |
+        +-- Smoke environment runtime
+        +-- Agni generic module/tool assets
+        `-- Terraform CLI
+```
+
+Agni never needs to know the recipe name.
 
 ## Terraform migration
 
-Reusable, non-business-specific Terraform currently living in Huram or legacy Agni roots should move to reusable modules incrementally. Do not bulk-move modules merely to satisfy this boundary. For each module:
+For reusable Terraform currently living in Huram, Smoke, or legacy Agni roots:
 
-1. separate reusable infrastructure implementation from deployment-specific values;
-2. move the generic `.tf` implementation/assets to Agni modules;
-3. keep secrets, tfvars/business values, project/account identifiers, policy decisions and orchestration inputs with the caller;
-4. have the caller invoke Agni/Terraform with those values;
-5. preserve Terraform state/backend identity during the migration.
-
-Agni may retain existing standalone `terraform/`, `qemu/`, and build assets while Go packages/tools are layered over them. Compatibility is preferred over gratuitous moves, but new reusable code must follow the generic module boundary.
+1. keep deployment/domain policy in the caller-owned root;
+2. move only generic implementation into Agni modules;
+3. expose generic assets through `agni-terraform` when environment composition needs them;
+4. keep secrets, project/account values, exact candidates, backend selection, qualification, and promotion outside Agni;
+5. preserve Terraform resource/state/backend identity during migration.
 
 ## Secret/value boundary
 
-Agni MUST NOT embed or default organization-specific secrets or business deployment values. Environment variables and command arguments supplied by the caller are runtime inputs, not repository configuration.
-
-Smoke MUST NOT embed those values either.
-
-Huram is the authority for injecting them at orchestration time.
+Agni MUST NOT persist deployment credentials or business values. Runtime environment variables and arguments supplied by the caller are ephemeral inputs. Huram remains the authority for injecting credentials and deployment-specific values during qualified execution.
