@@ -1,6 +1,6 @@
 # Gateway installation profile
 
-Gateway is the durable Agni installation profile. It is distinct from the Astrochicken probe even when both reuse lower-level networking and frontend primitives.
+Gateway is the durable Agni installation profile. It is composed from reusable Probe capabilities and shared Agni primitives, then adds Gateway-specific network, lifecycle, and durable service policy.
 
 ## Required contract
 
@@ -13,6 +13,29 @@ Fatline       full durable service/resource graph
 runtime       persistent Redis and gateway services
 ```
 
+## Composition from Probe
+
+Probe is not a parent root that Gateway patches. Probe's `/29` HCL and transient systemd lifecycle remain Probe-specific policy.
+
+Gateway should reuse Probe-owned capabilities only where their contracts remain valid, while supplying its own durable profile root:
+
+```text
+shared Agni primitives
+        |
+        v
+Probe reusable capabilities
+        |
+        +-- Probe profile
+        |     /29 + transient lifecycle
+        |
+        `-- Gateway profile
+              /28 + persistent lifecycle
+              + Logma
+              + Fatline
+```
+
+This avoids both duplication and configuration override chains.
+
 ## Migration source
 
 The current top-level `terraform/` installation already contains useful Gateway pieces:
@@ -23,7 +46,7 @@ The current top-level `terraform/` installation already contains useful Gateway 
 - Nginx and Squid Quadlet assets;
 - durable boot-time service configuration.
 
-Those pieces should be migrated/recomposed here over the shared modules in `terraform/modules` rather than copied into a second independent infrastructure implementation.
+Those pieces should be migrated/recomposed here over Probe/shared Agni building blocks rather than copied into a second independent implementation.
 
 ## Completion gate
 
@@ -38,20 +61,4 @@ smoke env tool run gateway gateway seed <root>
 smoke env terraform gateway --dir <root> -- plan
 ```
 
-There must not be a subsequent `tf seed`, module list, or shell-side dependency declaration. Gateway HCL/configuration owns its composition; the profile seeder only makes its shared implementation library and profile assets available.
-
-## Relationship to Astrochicken
-
-```text
-Astrochicken                     Gateway
-------------                     -------
-/29                              /28
-4 usable IPv4                    12 usable IPv4
-transient systemd lifecycle      persistent Quadlet lifecycle
-Nginx + Squid                    Nginx + Squid
-no required Logma                Logma required
-no full Fatline                  full Fatline
-probe                            durable installation
-```
-
-Share primitives and config fragments where they are genuinely identical. Do not express Gateway as an Astrochicken mode flag when the lifecycle and durable graph differ.
+There must not be a subsequent `tf seed`, module list, or shell-side dependency declaration.
