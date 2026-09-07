@@ -1,6 +1,5 @@
 // Package terraform exposes Agni's reusable Terraform implementation as
-// selectable embedded source. Callers choose which modules to seed;
-// Agni does not impose a deployment topology or environment name.
+// embedded source for installation profiles and direct Go callers.
 package terraform
 
 import (
@@ -31,57 +30,37 @@ func Modules() []string {
 	return out
 }
 
-// SeedModules copies only the selected Agni-owned Terraform modules beneath
-// dst/modules. This seed path is independent from Smoke ghxd/worktree seeding:
-// it performs no Git operations, repository checkout, object sharing, or role
-// ref handling. It only copies embedded Terraform source unchanged into a
-// caller-owned root.
-func SeedModules(dst string, names ...string) error {
+// Seed copies Agni's complete shared Terraform module library beneath
+// dst/modules. Profile HCL remains authoritative for which of those modules it
+// actually imports, so callers do not maintain a second dependency manifest.
+//
+// This seed implementation is intentionally unrelated to Smoke ghxd/worktree
+// seeding: it performs no Git operations, repository checkout, object sharing,
+// authentication, ref handling, or worktree lifecycle.
+func Seed(dst string) error {
 	dst = strings.TrimSpace(dst)
 	if dst == "" {
 		return fmt.Errorf("destination is required")
 	}
-	if len(names) == 0 {
-		return fmt.Errorf("at least one Terraform module is required")
-	}
 
-	known := make(map[string]struct{}, len(moduleNames))
-	for _, name := range moduleNames {
-		known[name] = struct{}{}
-	}
-
-	seen := map[string]struct{}{}
-	for _, name := range names {
-		name = strings.TrimSpace(name)
-		if _, ok := known[name]; !ok {
-			return fmt.Errorf("unknown Terraform module %q", name)
-		}
-		if _, ok := seen[name]; ok {
-			continue
-		}
-		seen[name] = struct{}{}
-
-		root := "modules/" + name
-		err := fs.WalkDir(source, root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() {
-				return nil
-			}
-			data, err := source.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			target := filepath.Join(dst, filepath.FromSlash(path))
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return err
-			}
-			return os.WriteFile(target, data, 0o644)
-		})
+	return fs.WalkDir(source, "modules", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			return fmt.Errorf("seed Terraform module %s: %w", name, err)
+			return err
 		}
-	}
-	return nil
+		if entry.IsDir() {
+			return nil
+		}
+		data, err := source.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			return err
+		}
+		return nil
+	})
 }
