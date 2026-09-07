@@ -28,14 +28,14 @@ func run(args []string) error {
 			fmt.Println(name)
 		}
 		return nil
-	case "materialize":
-		return materialize(args[1:])
+	case "seed":
+		return seed(args[1:])
 	default:
 		return fmt.Errorf("unknown operation %q", args[0])
 	}
 }
 
-func materialize(args []string) error {
+func seed(args []string) error {
 	var modules []string
 	for len(args) > 0 && args[0] == "--module" {
 		if len(args) < 2 || strings.TrimSpace(args[1]) == "" {
@@ -45,11 +45,11 @@ func materialize(args []string) error {
 		args = args[2:]
 	}
 	if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
-		return fmt.Errorf("usage: agni-terraform materialize --module <name> [--module <name> ...] <destination>")
+		return fmt.Errorf("usage: agni-terraform seed --module <name> [--module <name> ...] <destination>")
 	}
-	return agnitf.MaterializeModules(args[0], modules...)
+	return agnitf.SeedModules(args[0], modules...)
 }
 
 func usage() error {
-	return fmt.Errorf("usage: agni-terraform <modules|materialize> ...")
+	return fmt.Errorf("usage: agni-terraform <modules|seed> ...")
 }
