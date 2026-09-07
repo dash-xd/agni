@@ -40,6 +40,51 @@ agni exec ...
 
 Arguments and environment are forwarded rather than translated into an Agni-specific language.
 
+## Reusable regional Terraform
+
+Reusable regional infrastructure belongs under `terraform/modules` and must remain free of deployment-domain naming.
+
+The current primitive stack is:
+
+```text
+regional-network
+    dual-stack regional subnet
+    IPv4 /28
+    stable twelve-slot usable IPv4 map
+
+coreos-node
+    indexed Fedora CoreOS instances
+    caller-supplied metadata/tags/service identity/user-data
+
+regional-cell
+    regional-network + coreos-node composition
+```
+
+A `/28` contains sixteen IPv4 addresses. GCE reserves four subnet addresses, so Agni exposes the twelve VM-usable addresses as slots `0..11` using host offsets `2..13`.
+
+The modules MUST NOT assign meanings such as gateway, world, farcaster, astrochicken, Fatline, Logma, or application roles. Callers assign workload and topology meaning through ordinary Terraform inputs. A two-node smoke probe and a full twelve-node regional deployment should therefore share the same implementation modules.
+
+`github.com/dash-xd/agni/terraform` embeds reusable module files and materializes only caller-selected modules. This is an asset-selection mechanism, not a second deployment language.
+
+## Smoke composition boundary
+
+Agni may provide an optional package for Smoke composition. That package may register a narrow provider with Smoke and may blank-import Smoke's corresponding command package so a single Go import adds the capability.
+
+The Agni side of this contract remains generic:
+
+```text
+caller-owned Terraform root
+        |
+        | selects module names + Terraform args
+        v
+Agni Smoke provider
+        |
+        +-- materialize selected Agni modules
+        +-- invoke `terraform -chdir=<workspace> ...`
+```
+
+Agni MUST NOT define Smoke-domain recipes such as Astrochicken. Smoke owns those names, lifecycle policy, representative topology choices, and outside-vs-environment behavior. Agni only provides the generic infrastructure implementation selected by the caller.
+
 ## Terraform migration
 
 Reusable, non-business-specific Terraform currently living in Huram should move to Agni incrementally. Do not bulk-move modules merely to satisfy this boundary. For each module:
