@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestSeedWritesRootAndImportedModules(t *testing.T) {
+func TestSeedWritesCompleteProfileTree(t *testing.T) {
 	dst := t.TempDir()
 	if err := Seed(dst); err != nil {
 		t.Fatal(err)
@@ -15,6 +15,9 @@ func TestSeedWritesRootAndImportedModules(t *testing.T) {
 		"main.tf",
 		"variables.tf",
 		"outputs.tf",
+		"config/nginx.conf",
+		"config/squid.conf",
+		"config/lifecycle.env",
 		"modules/regional-cell/main.tf",
 		"modules/cloud-function-v1-http/main.tf",
 		"modules/cloud-function-v2-http/main.tf",
