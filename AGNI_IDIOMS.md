@@ -7,7 +7,7 @@ Agni is the reusable cloud/virtualization implementation layer. It contains gene
 ```text
 Huram
   exact source/tool identities
-  credentials + business/deployment inputs
+  credentials + deployment inputs
   qualification + promotion
       |
       v
@@ -21,21 +21,39 @@ Agni tools/packages
   generic cloud/CoreOS/QEMU/Terraform implementation
       |
       +-- reusable Terraform .tf modules
-      +-- Terraform asset materialization
+      +-- exact-source Terraform seeding
       +-- gcloud / Butane / QEMU native boundaries
 ```
 
-Agni should expose ordinary Go packages and installable Go tools. Smoke is optional: Agni must remain usable directly by Go callers and from the command line.
+Agni exposes ordinary Go packages and installable Go tools. Smoke is optional: Agni must remain usable directly by Go callers and from the command line.
 
 ## Native contracts remain authoritative
 
-Agni composes mature native tools; it does not replace them. Terraform owns `.tf`, providers, variables, state/backends, plan/apply/destroy/output semantics. Butane owns Butane/Ignition transformation. QEMU owns machine/device arguments. gcloud owns Google Cloud CLI semantics.
+Terraform owns `.tf`, providers, variables, state/backends, plan/apply/destroy/output semantics. Butane owns Butane/Ignition transformation. QEMU owns machine/device arguments. gcloud owns Google Cloud CLI semantics.
 
 Do not convert Terraform source into Go DSLs or embed deployment-specific HCL as Go raw strings merely to invoke Terraform.
 
+## Seed is the source-preparation idiom
+
+Use **seed** for the operation that prepares a destination from an exact source/tool. This matches the existing Smoke/ghxd worktree idiom (`github-worktree seed`).
+
+`seed` means:
+
+```text
+exact source/tool
+      |
+      v
+copy/select authoritative source unchanged
+      |
+      v
+caller-owned destination/root
+```
+
+Do not introduce `materialize` as a parallel public verb or package API for the same operation. `materialize` may describe an implementation detail in external systems, but Agni's user-facing and package vocabulary for source-root preparation is `seed`.
+
 ## Reusable Terraform modules
 
-Reusable infrastructure belongs under `terraform/modules` and must remain free of deployment-domain vocabulary. Current primitives include:
+Reusable infrastructure belongs under `terraform/modules` and remains free of deployment-domain vocabulary. Current primitives include:
 
 ```text
 regional-network
@@ -50,54 +68,53 @@ The modules MUST NOT assign meanings such as gateway, world, Farcaster, Astrochi
 
 Serverless functions are not VM subnet address slots. Function ingress, IAM, source/runtime, and VPC egress are separate caller-owned concerns. Agni MUST NOT silently select internal-only ingress.
 
-## Terraform asset tool
+## Terraform seed tool
 
-`github.com/dash-xd/agni/terraform` owns the embedded generic module assets and `MaterializeModules` package API.
+`github.com/dash-xd/agni/terraform` owns embedded generic module assets and the `SeedModules` package API.
 
-The installable tool:
+The installable tool is:
 
 ```text
 github.com/dash-xd/agni/cmd/agni-terraform
 ```
 
-is the normal environment-composition surface for those assets:
+Its composition surface is:
 
 ```bash
 agni-terraform modules
-agni-terraform materialize \
+agni-terraform seed \
   --module regional-network \
   --module regional-cell \
   <terraform-root>
 ```
 
-The tool only selects and materializes Agni-owned generic modules. It does not run Terraform and does not define an environment or deployment recipe.
+The tool only selects and seeds Agni-owned generic modules. It does not run Terraform and does not define an environment or deployment recipe.
 
-This makes Agni naturally composable as a Smoke environment tool:
+Smoke composition therefore uses:
 
 ```bash
 smoke env tool add <env> github.com/dash-xd/agni/cmd/agni-terraform@<version-or-sha>
-smoke env tool run <env> agni-terraform materialize --module ... <root>
+smoke env tool run <env> agni-terraform seed --module ... <root>
 ```
 
 ## Smoke boundary
 
-The preferred Smoke integration is now **environment + ordinary Go tool**, not a deployment-specific provider command:
+The preferred Smoke integration is environment + ordinary Go tool, not a deployment-specific provider command:
 
 ```text
 Smoke environment
-    |
     +-- exact Go modules
     +-- exact Go tools
     |     `-- agni-terraform
     |
     v
-ordinary Terraform composition root
+seeded ordinary Terraform composition root
     |
     v
 installed terraform executable
 ```
 
-An older optional Agni Smoke provider may remain temporarily as a compatibility surface while callers migrate, but new Terraform composition should not depend on an Astrochicken-specific provider request. Provider registries remain appropriate for genuine runtime transport/provider capabilities; Terraform asset materialization is a tool concern.
+Provider registries remain appropriate for genuine runtime transport/provider capabilities. Terraform root seeding is a tool concern, not a runtime provider.
 
 ## Environment recipes
 
@@ -108,7 +125,7 @@ Astrochicken recipe
   Terraform root + environment-specific policy
         |
         +-- Smoke environment runtime
-        +-- Agni generic module/tool assets
+        +-- Agni generic seed tool/modules
         `-- Terraform CLI
 ```
 
@@ -120,7 +137,7 @@ For reusable Terraform currently living in Huram, Smoke, or legacy Agni roots:
 
 1. keep deployment/domain policy in the caller-owned root;
 2. move only generic implementation into Agni modules;
-3. expose generic assets through `agni-terraform` when environment composition needs them;
+3. expose generic assets through `agni-terraform seed` when environment composition needs them;
 4. keep secrets, project/account values, exact candidates, backend selection, qualification, and promotion outside Agni;
 5. preserve Terraform resource/state/backend identity during migration.
 
