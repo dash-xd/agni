@@ -1,6 +1,6 @@
 # Agni Go-first cloud/profile idiom
 
-Agni is the reusable cloud/virtualization implementation and installation-profile layer. It owns generic infrastructure primitives plus complete installation profiles. It does not own organization credentials, Huram qualification policy, or Smoke environment semantics.
+Agni is the reusable cloud/virtualization implementation and installation-profile layer. It owns generic infrastructure primitives plus reusable installation components/profiles. It does not own organization credentials, Huram qualification policy, or Smoke environment semantics.
 
 ## Authority
 
@@ -13,18 +13,18 @@ Smoke
   generic named environments + immutable Go tool execution
       |
       v
-Agni profile tool
-  complete installation source/configuration
+Agni profile/component tool
+  installation source/configuration
       |
       +-- profile HCL/config
-      +-- profile lifecycle/workload policy
+      +-- lifecycle/workload policy
       `-- shared Agni Terraform library
               |
               v
       Terraform / Butane / native tools
 ```
 
-Smoke environment names are operator-local labels. They never select a profile implicitly.
+Smoke environment names are operator-local labels. They never select an Agni component implicitly.
 
 ## Native source remains authoritative
 
@@ -81,9 +81,9 @@ cloud-function-v2-http
 
 These are a library, not an operator-facing installation selector.
 
-## Astrochicken
+## Probe
 
-Astrochicken is the small probe installation profile under `profiles/astrochicken`:
+Probe is the small reusable installation component under `profiles/probe`:
 
 ```text
 IPv4          /29, 4 GCP-usable addresses
@@ -94,23 +94,25 @@ Fatline       no full durable Fatline requirement
 serverless    optional Gen1/Gen2 shadow functions
 ```
 
-The installable profile tool is:
+The installable tool is:
 
 ```text
-github.com/dash-xd/agni/cmd/astrochicken
+github.com/dash-xd/agni/cmd/probe
 ```
 
 and its complete preparation surface is:
 
 ```bash
-astrochicken seed <root>
+probe seed <root>
 ```
 
-That one command seeds the profile source/configuration and shared Terraform library. The operator does not run a second module-seeding command.
+That one command seeds the Probe source/configuration and shared Terraform library. The operator does not run a second module-seeding command.
+
+`Probe` is an Agni composition identity. A Smoke environment may be named `astrochicken`, `test`, `us-west1`, or anything else while using Probe.
 
 ## Gateway
 
-Gateway is the durable installation profile:
+Gateway is the durable installation profile that grows from Probe's reusable capabilities while owning different network and lifecycle policy:
 
 ```text
 IPv4          /28, 12 GCP-usable addresses
@@ -121,54 +123,60 @@ Fatline       full durable Fatline graph
 runtime       persistent Redis/gateway services
 ```
 
-The existing top-level `terraform/` installation is the migration source for the `/28`, FCOS bootstrap, Nginx/Squid Quadlet, and related durable infrastructure pieces. It is not yet the complete Gateway profile because the full Logma/Fatline runtime has not been moved into that profile.
+Gateway composition should reuse Probe-owned implementation only where the semantics are genuinely shared, such as common frontend/runtime building blocks. Gateway MUST NOT seed Probe's `/29` root and then patch/override it. `/29` remains Probe policy; `/28` remains Gateway policy.
 
-Do not expose `cmd/gateway seed` until that graph is complete. Once complete, Gateway follows the same one-profile/one-seed contract as Astrochicken; it must never require an operator to layer a separate shared-module command afterward.
-
-## Profile evolution
-
-Astrochicken and Gateway may share implementation without becoming the same profile.
+The intended shape is:
 
 ```text
-Astrochicken
-  small/transient probe policy
-      |
-      +-- shared regional/network/node/function primitives
-      +-- Nginx/Squid config
-      `-- transient workload lifecycle
-
-Gateway
-  durable gateway policy
-      |
-      +-- shared regional/network/node primitives
-      +-- Nginx/Squid config
-      +-- persistent Quadlets
-      +-- Logma
-      `-- full Fatline runtime
+shared Agni primitives
+        |
+        v
+Probe reusable capabilities
+        |
+        +-- transient Probe profile (/29)
+        |
+        `-- Gateway composition
+              +-- Gateway /28 policy
+              +-- persistent FCOS/Quadlet lifecycle
+              +-- Logma
+              `-- full Fatline runtime
 ```
 
-Do not implement Gateway as "Astrochicken plus shell flags" when the lifecycle and durable service graph differ materially. Reuse lower-level primitives/config fragments instead.
+The existing top-level `terraform/` installation is the migration source for the `/28`, FCOS bootstrap, Nginx/Squid Quadlet, and related durable infrastructure pieces. It is not yet the complete Gateway profile because the full Logma/Fatline runtime has not been moved into that profile.
+
+Do not expose `cmd/gateway seed` until that graph is complete. Once complete, Gateway follows the same one-profile/one-seed contract as Probe.
 
 ## Smoke use
 
+Probe in an Astrochicken environment:
+
 ```bash
-smoke env create probe
-smoke env tool add probe github.com/dash-xd/agni/cmd/astrochicken@<exact-sha>
-smoke env tool run probe astrochicken seed <root>
-smoke env terraform probe --dir <root> -- plan
+smoke env create astrochicken
+smoke env tool add astrochicken github.com/dash-xd/agni/cmd/probe@<exact-sha>
+smoke env tool run astrochicken probe seed <root>
+smoke env terraform astrochicken --dir <root> -- plan
 ```
 
-The environment may be called `probe`, `gateway-test`, `us-west1`, or anything else. Profile identity and environment role are orthogonal.
+Eventually Gateway uses the same pattern with its own environment and profile tool:
+
+```bash
+smoke env create gateway
+smoke env tool add gateway github.com/dash-xd/agni/cmd/gateway@<exact-sha>
+smoke env tool run gateway gateway seed <root>
+```
+
+Environment role and Agni composition identity are orthogonal.
 
 ## Change protocol
 
 1. Huram owns exact candidates, credentials, deployment values, evidence, and promotion.
 2. Smoke owns generic environment/snapshot/tool/native execution.
-3. Agni owns reusable infrastructure primitives and complete installation profiles.
+3. Agni owns reusable infrastructure primitives and installation profiles/components.
 4. Profile HCL/config is authoritative for profile composition.
 5. Never duplicate a profile's module dependency graph in Go or shell arguments.
 6. Seed the shared Terraform library as an internal implementation detail, not as an operator step.
-7. Keep Astrochicken transient and Gateway durable; share primitives, not lifecycle identity.
-8. Do not expose an installation-profile command until that profile's promised service graph is complete.
-9. Preserve Terraform/Butane/QEMU/gcloud as authoritative native contracts.
-10. Use `seed` as common vocabulary without sharing unrelated provider/domain implementations.
+7. Keep Probe transient and `/29`; keep Gateway durable and `/28`.
+8. Compose Gateway from reusable Probe capabilities and shared primitives, not by patching a seeded Probe root.
+9. Do not expose an installation-profile command until that profile's promised service graph is complete.
+10. Preserve Terraform/Butane/QEMU/gcloud as authoritative native contracts.
+11. Use `seed` as common vocabulary without sharing unrelated provider/domain implementations.
