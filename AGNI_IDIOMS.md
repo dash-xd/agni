@@ -1,12 +1,12 @@
 # Agni Go-first cloud tooling idiom
 
-Agni is the reusable cloud/virtualization implementation layer. It contains generic implementation and native-tool adapters, but no organization-specific credentials, project IDs, regions, domains, tenant names, repository names, or deployment policy values.
+Agni is the reusable cloud/virtualization implementation and installation-profile layer. It contains generic infrastructure primitives plus complete installation profiles, but no organization credentials, promotion authority, or Huram qualification policy.
 
 ## Responsibility
 
 ```text
 Huram
-  exact source/tool identities
+  exact source/profile identities
   credentials + deployment inputs
   qualification + promotion
       |
@@ -17,45 +17,67 @@ Smoke
   generic child execution
       |
       v
-Agni tools/packages
-  generic cloud/CoreOS/QEMU/Terraform implementation
+Agni profiles
+  complete installation recipes
       |
-      +-- reusable Terraform .tf modules
-      +-- Terraform module seeding
-      +-- gcloud / Butane / QEMU native boundaries
+      +-- profile config/policy
+      +-- profile lifecycle/workload policy
+      `-- shared Agni infrastructure modules
+              |
+              v
+       Terraform / Butane / QEMU / gcloud
 ```
 
-Agni exposes ordinary Go packages and installable Go tools. Smoke is optional: Agni must remain usable directly by Go callers and from the command line.
+Smoke environment names are local/operator labels. They never implicitly select an Agni profile.
 
 ## Native contracts remain authoritative
 
 Terraform owns `.tf`, providers, variables, state/backends, plan/apply/destroy/output semantics. Butane owns Butane/Ignition transformation. QEMU owns machine/device arguments. gcloud owns Google Cloud CLI semantics.
 
-Do not convert Terraform source into Go DSLs or embed deployment-specific HCL as Go raw strings merely to invoke Terraform.
+Do not replace those languages with Go DSLs merely to invoke them.
+
+## Profiles own dependency selection
+
+A profile owns both its root configuration and the exact shared modules that configuration imports.
+
+```text
+profile seed
+    |
+    +-- root .tf/config files
+    `-- shared modules required by that root
+```
+
+The operator MUST NOT restate this dependency graph with a second command such as:
+
+```text
+tf seed --module regional-cell --module ...
+```
+
+That duplicates source-of-truth information already present in the profile.
+
+`github.com/dash-xd/agni/terraform` may expose package APIs such as `SeedModules` for profile implementations, but there is no public `cmd/tf` composition step. Shared Terraform modules are an internal library surface for profiles and Go callers.
 
 ## Seed is a shared verb, not a shared implementation
 
-Use **seed** for exact-source destination preparation, but keep each domain's seed implementation independent.
+Use `seed` for exact-source destination preparation, while keeping each domain implementation independent.
 
 ```text
 ghxd/worktree seed
     Git repository + exact SHA
-    -> Git object/worktree operations
-    -> detached source worktree
+    -> Git object/ref/worktree operations
 
-Agni Terraform seed
-    embedded Agni Terraform module source
-    -> filesystem copy/select operations
-    -> caller-owned Terraform modules/
+Agni profile seed
+    embedded profile config + selected shared modules
+    -> filesystem preparation of a complete installation root
 ```
 
-Agni MUST NOT import or call Smoke `ghxd/worktree` seeding merely because both operations use the verb `seed`. Agni Terraform seeding performs no Git checkout, object-database sharing, role-ref handling, repository auth, or worktree lifecycle.
+Agni MUST NOT import or call ghxd/worktree seeding merely because both operations use the verb `seed`.
 
-Do not introduce `materialize` as a parallel public verb or package API for the same source-preparation operation.
+Do not introduce `materialize` as a parallel public verb for the same operation.
 
-## Reusable Terraform modules
+## Shared Terraform primitives
 
-Reusable infrastructure belongs under `terraform/modules` and remains free of deployment-domain vocabulary. Current primitives include:
+Reusable infrastructure belongs under `terraform/modules` and should remain free of installation-specific vocabulary where practical. Current primitives include:
 
 ```text
 regional-network
@@ -66,90 +88,90 @@ cloud-function-v1-http
 cloud-function-v2-http
 ```
 
-The modules MUST NOT assign meanings such as gateway, world, Farcaster, Astrochicken, Fatline, Logma, Nginx, Squid, or serverless-shadow policy. Callers assign those meanings through ordinary Terraform roots and inputs.
+Serverless functions are not VM subnet slots. Function ingress, IAM, source/runtime, and VPC egress remain explicit profile/caller concerns.
 
-Serverless functions are not VM subnet address slots. Function ingress, IAM, source/runtime, and VPC egress are separate caller-owned concerns. Agni MUST NOT silently select internal-only ingress.
+## Astrochicken profile
 
-## Terraform seed package and tool
+Astrochicken is the small probe installation profile and lives under `profiles/astrochicken`.
 
-The package:
+Its contract is intentionally distinct from Gateway:
 
 ```text
-github.com/dash-xd/agni/terraform
+IPv4          /29, 4 GCP-usable addresses
+lifecycle     transient systemd smoke-testing idiom
+frontends     Nginx execution + Squid egress
+Logma         not required
+Fatline       no full Fatline
+serverless    optional Gen1/Gen2 shadow functions
 ```
 
-owns Agni's embedded generic module source and the `SeedModules` API. Its implementation lives in `terraform/seed.go` to make the source-preparation boundary explicit.
-
-The installable CLI is intentionally short:
+The installable tool is:
 
 ```text
-github.com/dash-xd/agni/cmd/tf
+github.com/dash-xd/agni/cmd/astrochicken
 ```
 
 Use:
 
 ```bash
-tf modules
-
-tf seed \
-  --module regional-network \
-  --module regional-cell \
-  <terraform-root>
+astrochicken seed <root>
 ```
 
-`tf` does not run Terraform. The name is deliberately distinct from the native `terraform` executable: `tf` seeds Agni-owned source; `terraform` parses/plans/applies it.
+That single operation writes the Astrochicken root and all shared Agni modules imported by it.
 
-Smoke composition therefore uses:
+## Gateway profile
 
-```bash
-smoke env tool add <env> github.com/dash-xd/agni/cmd/tf@<version-or-sha>
-smoke env tool run <env> tf seed --module ... <root>
+Gateway is the durable installation profile that the larger existing Agni root is converging toward:
+
+```text
+IPv4          /28, 12 GCP-usable addresses
+lifecycle     persistent Fedora CoreOS + Quadlet at boot
+frontends     Nginx + Squid
+Logma         required
+Fatline       full durable Fatline graph
+runtime       persistent Redis/gateway services
 ```
+
+The existing top-level `terraform/` root already contains the `/28` network and persistent FCOS/Quadlet bootstrap pieces and is the migration source for Gateway. Treat it as an installation root, not as a generic `tf` abstraction.
+
+Do not expose `cmd/gateway seed` until the complete durable Fatline/Logma runtime is represented by that profile; the command name must imply a complete gateway installation rather than a partial skeleton.
 
 ## Smoke boundary
 
-The preferred Smoke integration is environment + ordinary Go tool, not a deployment-specific provider command:
+Preferred composition is one exact profile tool per installation recipe:
 
-```text
-Smoke environment
-    +-- exact Go modules
-    +-- exact Go tools
-    |     `-- tf
-    |
-    v
-seeded ordinary Terraform composition root
-    |
-    v
-installed terraform executable
+```bash
+smoke env create probe
+smoke env tool add probe github.com/dash-xd/agni/cmd/astrochicken@<exact-sha>
+smoke env tool run probe astrochicken seed <root>
+smoke env terraform probe --dir <root> -- plan
 ```
 
-Provider registries remain appropriate for genuine runtime transport/provider capabilities. Terraform module seeding is a tool concern, not a runtime provider.
+No profile name belongs in Smoke core, and no separate module-enumeration command belongs in the operator path.
 
-## Environment recipes
+## Environment-role flexibility
 
-A named environment such as Astrochicken is not an Agni primitive. It is a composition recipe above Agni that selects generic modules and gives them domain meaning.
+Recipe identity and environment role are orthogonal.
 
 ```text
-Astrochicken recipe
-  Terraform root + environment-specific policy
-        |
-        +-- Smoke environment runtime
-        +-- Agni `tf` seed tool/modules
-        `-- Terraform CLI
+profile identity   Astrochicken / Gateway / future installation design
+environment name   probe / gateway-test / us-west1 / arbitrary local role
 ```
 
-Agni never needs to know the recipe name.
-
-## Terraform migration
-
-For reusable Terraform currently living in Huram, Smoke, or legacy Agni roots:
-
-1. keep deployment/domain policy in the caller-owned root;
-2. move only generic implementation into Agni modules;
-3. expose generic modules through `tf seed` when environment composition needs them;
-4. keep secrets, project/account values, exact candidates, backend selection, qualification, and promotion outside Agni;
-5. preserve Terraform resource/state/backend identity during migration.
+A profile may be used by many environments. An environment may accumulate additional tools while a design evolves. Environment names must not become hidden policy or dependency selectors.
 
 ## Secret/value boundary
 
-Agni MUST NOT persist deployment credentials or business values. Runtime environment variables and arguments supplied by the caller are ephemeral inputs. Huram remains the authority for injecting credentials and deployment-specific values during qualified execution.
+Agni MUST NOT persist deployment credentials or Huram business values. Runtime variables/arguments supplied by callers are ephemeral inputs. Huram remains authority for exact candidates, credentials, backend/tfvars, evidence, and promotion.
+
+## Change protocol
+
+1. Put exact candidate selection, credentials, deployment values, evidence, and promotion in Huram.
+2. Put generic environment/snapshot/tool/native execution in Smoke.
+3. Put reusable infrastructure primitives and complete installation profiles in Agni.
+4. Make each profile own its root configuration and shared-module selection.
+5. Never require operators to restate a profile's module dependency graph.
+6. Keep profile lifecycle policy explicit: transient probe behavior and durable Gateway behavior are different designs.
+7. Preserve Terraform/Butane/QEMU/gcloud as authoritative native contracts.
+8. Use `seed` for preparation without sharing unrelated seed implementations across providers/domains.
+9. Preserve exact source identity and qualification evidence across migrations.
