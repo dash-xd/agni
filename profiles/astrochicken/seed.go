@@ -1,8 +1,8 @@
 // Package astrochicken owns the Astrochicken installation profile.
 //
-// The profile contains its Terraform root and selects the exact shared Agni
-// Terraform modules that root imports. Callers seed one complete profile; they
-// do not restate the profile's module dependency graph.
+// The profile contains its Terraform root. That HCL is authoritative for which
+// shared Agni modules it imports; callers do not maintain a second dependency
+// manifest or enumerate modules on the command line.
 package astrochicken
 
 import (
@@ -19,17 +19,10 @@ import (
 //go:embed terraform/*.tf
 var rootFS embed.FS
 
-var modules = []string{
-	"regional-network",
-	"regional-internal-addresses",
-	"coreos-node",
-	"regional-cell",
-	"cloud-function-v1-http",
-	"cloud-function-v2-http",
-}
-
-// Seed writes a complete Astrochicken Terraform root into dst, including the
-// shared Agni modules imported by the profile. Astrochicken owns this selection.
+// Seed writes a complete Astrochicken Terraform source tree into dst. The root
+// HCL is copied unchanged, then Agni's shared Terraform library is made
+// available beneath modules/. Terraform itself remains authoritative for which
+// modules the root imports and uses.
 func Seed(dst string) error {
 	dst = strings.TrimSpace(dst)
 	if dst == "" {
@@ -58,8 +51,8 @@ func Seed(dst string) error {
 	}); err != nil {
 		return fmt.Errorf("seed Astrochicken root: %w", err)
 	}
-	if err := agnitf.SeedModules(dst, modules...); err != nil {
-		return fmt.Errorf("seed Astrochicken shared modules: %w", err)
+	if err := agnitf.Seed(dst); err != nil {
+		return fmt.Errorf("seed Astrochicken shared Terraform library: %w", err)
 	}
 	return nil
 }
