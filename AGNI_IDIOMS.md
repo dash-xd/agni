@@ -1,83 +1,74 @@
-# Agni Go-first cloud tooling idiom
+# Agni Go-first cloud/profile idiom
 
-Agni is the reusable cloud/virtualization implementation and installation-profile layer. It contains generic infrastructure primitives plus complete installation profiles, but no organization credentials, promotion authority, or Huram qualification policy.
+Agni is the reusable cloud/virtualization implementation and installation-profile layer. It owns generic infrastructure primitives plus complete installation profiles. It does not own organization credentials, Huram qualification policy, or Smoke environment semantics.
 
-## Responsibility
+## Authority
 
 ```text
 Huram
-  exact source/profile identities
-  credentials + deployment inputs
-  qualification + promotion
+  exact candidates + values + credentials + evidence + promotion
       |
       v
 Smoke
-  named Go workspaces/tool sets
-  immutable environment snapshots
-  generic child execution
+  generic named environments + immutable Go tool execution
       |
       v
-Agni profiles
-  complete installation recipes
+Agni profile tool
+  complete installation source/configuration
       |
-      +-- profile config/policy
+      +-- profile HCL/config
       +-- profile lifecycle/workload policy
-      `-- shared Agni infrastructure modules
+      `-- shared Agni Terraform library
               |
               v
-       Terraform / Butane / QEMU / gcloud
+      Terraform / Butane / native tools
 ```
 
-Smoke environment names are local/operator labels. They never implicitly select an Agni profile.
+Smoke environment names are operator-local labels. They never select a profile implicitly.
 
-## Native contracts remain authoritative
+## Native source remains authoritative
 
-Terraform owns `.tf`, providers, variables, state/backends, plan/apply/destroy/output semantics. Butane owns Butane/Ignition transformation. QEMU owns machine/device arguments. gcloud owns Google Cloud CLI semantics.
+Terraform owns HCL, providers, variables, module imports, backends, state, plan/apply/destroy/output semantics. Butane owns Butane/Ignition transformation. QEMU and gcloud own their native argument/command contracts.
 
-Do not replace those languages with Go DSLs merely to invoke them.
+Do not mirror those languages into a Go DSL or a second dependency manifest.
 
-## Profiles own dependency selection
+## Profiles own composition
 
-A profile owns both its root configuration and the exact shared modules that configuration imports.
+A profile seed produces one complete source tree:
 
 ```text
-profile seed
-    |
-    +-- root .tf/config files
-    `-- shared modules required by that root
+<root>/
+  main.tf
+  variables.tf
+  outputs.tf
+  profile config/workload files
+  modules/
+    shared Agni Terraform library
 ```
 
-The operator MUST NOT restate this dependency graph with a second command such as:
+The profile HCL is the only authority for which shared modules are imported. Go code MUST NOT carry a second list of the same module dependencies, and operators MUST NOT enumerate them on the command line.
 
-```text
-tf seed --module regional-cell --module ...
-```
+Agni's `terraform.Seed(root)` therefore makes the shared module library available under `modules/` as an implementation detail. Terraform resolves the actual `source = "./modules/..."` imports declared by the profile.
 
-That duplicates source-of-truth information already present in the profile.
+There is no public `cmd/tf` composition step.
 
-`github.com/dash-xd/agni/terraform` may expose package APIs such as `SeedModules` for profile implementations, but there is no public `cmd/tf` composition step. Shared Terraform modules are an internal library surface for profiles and Go callers.
+## Seed is vocabulary, not shared implementation
 
-## Seed is a shared verb, not a shared implementation
-
-Use `seed` for exact-source destination preparation, while keeping each domain implementation independent.
+`seed` means exact-source destination preparation, but implementations remain domain-specific:
 
 ```text
 ghxd/worktree seed
-    Git repository + exact SHA
-    -> Git object/ref/worktree operations
+  Git repository/SHA/auth/object/ref/worktree operations
 
 Agni profile seed
-    embedded profile config + selected shared modules
-    -> filesystem preparation of a complete installation root
+  embedded profile/config/shared-source filesystem preparation
 ```
 
-Agni MUST NOT import or call ghxd/worktree seeding merely because both operations use the verb `seed`.
-
-Do not introduce `materialize` as a parallel public verb for the same operation.
+Agni MUST NOT reuse ghxd/worktree implementation merely because both use the verb `seed`. Do not reintroduce `materialize` as a parallel public verb for this boundary.
 
 ## Shared Terraform primitives
 
-Reusable infrastructure belongs under `terraform/modules` and should remain free of installation-specific vocabulary where practical. Current primitives include:
+Reusable implementation stays under `terraform/modules` and remains free of installation-profile vocabulary where practical:
 
 ```text
 regional-network
@@ -88,40 +79,38 @@ cloud-function-v1-http
 cloud-function-v2-http
 ```
 
-Serverless functions are not VM subnet slots. Function ingress, IAM, source/runtime, and VPC egress remain explicit profile/caller concerns.
+These are a library, not an operator-facing installation selector.
 
-## Astrochicken profile
+## Astrochicken
 
-Astrochicken is the small probe installation profile and lives under `profiles/astrochicken`.
-
-Its contract is intentionally distinct from Gateway:
+Astrochicken is the small probe installation profile under `profiles/astrochicken`:
 
 ```text
 IPv4          /29, 4 GCP-usable addresses
-lifecycle     transient systemd smoke-testing idiom
+lifecycle     transient systemd smoke-testing lifecycle
 frontends     Nginx execution + Squid egress
 Logma         not required
-Fatline       no full Fatline
+Fatline       no full durable Fatline requirement
 serverless    optional Gen1/Gen2 shadow functions
 ```
 
-The installable tool is:
+The installable profile tool is:
 
 ```text
 github.com/dash-xd/agni/cmd/astrochicken
 ```
 
-Use:
+and its complete preparation surface is:
 
 ```bash
 astrochicken seed <root>
 ```
 
-That single operation writes the Astrochicken root and all shared Agni modules imported by it.
+That one command seeds the profile source/configuration and shared Terraform library. The operator does not run a second module-seeding command.
 
-## Gateway profile
+## Gateway
 
-Gateway is the durable installation profile that the larger existing Agni root is converging toward:
+Gateway is the durable installation profile:
 
 ```text
 IPv4          /28, 12 GCP-usable addresses
@@ -132,13 +121,35 @@ Fatline       full durable Fatline graph
 runtime       persistent Redis/gateway services
 ```
 
-The existing top-level `terraform/` root already contains the `/28` network and persistent FCOS/Quadlet bootstrap pieces and is the migration source for Gateway. Treat it as an installation root, not as a generic `tf` abstraction.
+The existing top-level `terraform/` installation is the migration source for the `/28`, FCOS bootstrap, Nginx/Squid Quadlet, and related durable infrastructure pieces. It is not yet the complete Gateway profile because the full Logma/Fatline runtime has not been moved into that profile.
 
-Do not expose `cmd/gateway seed` until the complete durable Fatline/Logma runtime is represented by that profile; the command name must imply a complete gateway installation rather than a partial skeleton.
+Do not expose `cmd/gateway seed` until that graph is complete. Once complete, Gateway follows the same one-profile/one-seed contract as Astrochicken; it must never require an operator to layer a separate shared-module command afterward.
 
-## Smoke boundary
+## Profile evolution
 
-Preferred composition is one exact profile tool per installation recipe:
+Astrochicken and Gateway may share implementation without becoming the same profile.
+
+```text
+Astrochicken
+  small/transient probe policy
+      |
+      +-- shared regional/network/node/function primitives
+      +-- Nginx/Squid config
+      `-- transient workload lifecycle
+
+Gateway
+  durable gateway policy
+      |
+      +-- shared regional/network/node primitives
+      +-- Nginx/Squid config
+      +-- persistent Quadlets
+      +-- Logma
+      `-- full Fatline runtime
+```
+
+Do not implement Gateway as "Astrochicken plus shell flags" when the lifecycle and durable service graph differ materially. Reuse lower-level primitives/config fragments instead.
+
+## Smoke use
 
 ```bash
 smoke env create probe
@@ -147,31 +158,17 @@ smoke env tool run probe astrochicken seed <root>
 smoke env terraform probe --dir <root> -- plan
 ```
 
-No profile name belongs in Smoke core, and no separate module-enumeration command belongs in the operator path.
-
-## Environment-role flexibility
-
-Recipe identity and environment role are orthogonal.
-
-```text
-profile identity   Astrochicken / Gateway / future installation design
-environment name   probe / gateway-test / us-west1 / arbitrary local role
-```
-
-A profile may be used by many environments. An environment may accumulate additional tools while a design evolves. Environment names must not become hidden policy or dependency selectors.
-
-## Secret/value boundary
-
-Agni MUST NOT persist deployment credentials or Huram business values. Runtime variables/arguments supplied by callers are ephemeral inputs. Huram remains authority for exact candidates, credentials, backend/tfvars, evidence, and promotion.
+The environment may be called `probe`, `gateway-test`, `us-west1`, or anything else. Profile identity and environment role are orthogonal.
 
 ## Change protocol
 
-1. Put exact candidate selection, credentials, deployment values, evidence, and promotion in Huram.
-2. Put generic environment/snapshot/tool/native execution in Smoke.
-3. Put reusable infrastructure primitives and complete installation profiles in Agni.
-4. Make each profile own its root configuration and shared-module selection.
-5. Never require operators to restate a profile's module dependency graph.
-6. Keep profile lifecycle policy explicit: transient probe behavior and durable Gateway behavior are different designs.
-7. Preserve Terraform/Butane/QEMU/gcloud as authoritative native contracts.
-8. Use `seed` for preparation without sharing unrelated seed implementations across providers/domains.
-9. Preserve exact source identity and qualification evidence across migrations.
+1. Huram owns exact candidates, credentials, deployment values, evidence, and promotion.
+2. Smoke owns generic environment/snapshot/tool/native execution.
+3. Agni owns reusable infrastructure primitives and complete installation profiles.
+4. Profile HCL/config is authoritative for profile composition.
+5. Never duplicate a profile's module dependency graph in Go or shell arguments.
+6. Seed the shared Terraform library as an internal implementation detail, not as an operator step.
+7. Keep Astrochicken transient and Gateway durable; share primitives, not lifecycle identity.
+8. Do not expose an installation-profile command until that profile's promised service graph is complete.
+9. Preserve Terraform/Butane/QEMU/gcloud as authoritative native contracts.
+10. Use `seed` as common vocabulary without sharing unrelated provider/domain implementations.
