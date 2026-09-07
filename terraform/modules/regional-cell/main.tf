@@ -23,7 +23,7 @@ module "nodes" {
   name_prefix              = var.node_name_prefix
   source_instance_template = var.source_instance_template
   subnetwork               = module.network.self_link
-  ipv4_by_slot             = module.network.usable_ipv4_by_slot
+  ipv4_cidr                = var.ipv4_cidr
   enable_ipv6              = var.enable_ipv6
   common_metadata          = var.common_metadata
   common_tags              = var.common_tags

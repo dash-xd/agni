@@ -22,8 +22,12 @@ variable "ipv4_cidr" {
   type = string
 
   validation {
-    condition     = can(cidrhost(var.ipv4_cidr, 0)) && tonumber(split("/", var.ipv4_cidr)[1]) == 28
-    error_message = "ipv4_cidr must be a valid IPv4 /28 CIDR."
+    condition = (
+      can(cidrhost(var.ipv4_cidr, 0)) &&
+      can(tonumber(split("/", var.ipv4_cidr)[1])) &&
+      tonumber(split("/", var.ipv4_cidr)[1]) <= 29
+    )
+    error_message = "ipv4_cidr must be a valid IPv4 CIDR with prefix length /29 or larger address space."
   }
 }
 
@@ -62,7 +66,7 @@ variable "common_tags" {
 }
 
 variable "nodes" {
-  description = "Node definitions keyed by regional slot. The caller assigns topology/workload semantics."
+  description = "Node definitions keyed by address slot. The caller assigns topology/workload semantics."
   type = map(object({
     metadata              = optional(map(string), {})
     tags                  = optional(list(string), [])
@@ -73,8 +77,8 @@ variable "nodes" {
   validation {
     condition = alltrue([
       for slot in keys(var.nodes) :
-      can(tonumber(slot)) && tonumber(slot) >= 0 && tonumber(slot) <= 11 && floor(tonumber(slot)) == tonumber(slot)
+      can(tonumber(slot)) && tonumber(slot) >= 0 && floor(tonumber(slot)) == tonumber(slot)
     ])
-    error_message = "nodes keys must be integer regional slots 0 through 11."
+    error_message = "nodes keys must be non-negative integer address slots."
   }
 }

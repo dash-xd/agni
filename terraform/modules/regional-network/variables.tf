@@ -17,12 +17,16 @@ variable "name" {
 }
 
 variable "ipv4_cidr" {
-  description = "Regional IPv4 /28. GCE reserves four addresses, leaving twelve VM-usable addresses."
+  description = "Regional IPv4 CIDR. Google Cloud reserves the first two and last two addresses; /29 is the smallest supported primary subnet."
   type        = string
 
   validation {
-    condition     = can(cidrhost(var.ipv4_cidr, 0)) && tonumber(split("/", var.ipv4_cidr)[1]) == 28
-    error_message = "ipv4_cidr must be a valid IPv4 /28 CIDR."
+    condition = (
+      can(cidrhost(var.ipv4_cidr, 0)) &&
+      can(tonumber(split("/", var.ipv4_cidr)[1])) &&
+      tonumber(split("/", var.ipv4_cidr)[1]) <= 29
+    )
+    error_message = "ipv4_cidr must be a valid IPv4 CIDR with prefix length /29 or larger address space."
   }
 }
 
@@ -42,6 +46,7 @@ variable "ipv6_access_type" {
 }
 
 variable "private_ip_google_access" {
-  type    = bool
-  default = true
+  description = "Allow internal-IP-only VMs in the subnet to reach supported Google APIs and serverless endpoints without public IPv4."
+  type        = bool
+  default     = true
 }

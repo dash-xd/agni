@@ -17,6 +17,8 @@ import (
 var assets embed.FS
 
 var moduleNames = []string{
+	"cloud-function-v1-http",
+	"cloud-function-v2-http",
 	"coreos-node",
 	"regional-cell",
 	"regional-network",

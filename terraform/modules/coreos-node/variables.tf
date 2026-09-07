@@ -21,9 +21,9 @@ variable "subnetwork" {
   type        = string
 }
 
-variable "ipv4_by_slot" {
-  description = "Stable slot-to-private-IPv4 mapping supplied by the regional network."
-  type        = map(string)
+variable "ipv4_cidr" {
+  description = "Subnet CIDR used to derive stable per-slot internal IPv4 addresses. Slot 0 maps to host offset 2."
+  type        = string
 }
 
 variable "enable_ipv6" {
@@ -42,7 +42,7 @@ variable "common_tags" {
 }
 
 variable "nodes" {
-  description = "CoreOS node definitions keyed by regional slot 0..11. Workload/domain meaning belongs to the caller."
+  description = "CoreOS node definitions keyed by non-negative integer address slot. Workload/domain meaning belongs to the caller."
   type = map(object({
     metadata              = optional(map(string), {})
     tags                  = optional(list(string), [])
@@ -53,8 +53,8 @@ variable "nodes" {
   validation {
     condition = alltrue([
       for slot in keys(var.nodes) :
-      can(tonumber(slot)) && tonumber(slot) >= 0 && tonumber(slot) <= 11 && floor(tonumber(slot)) == tonumber(slot)
+      can(tonumber(slot)) && tonumber(slot) >= 0 && floor(tonumber(slot)) == tonumber(slot)
     ])
-    error_message = "nodes keys must be integer regional slots 0 through 11."
+    error_message = "nodes keys must be non-negative integer address slots."
   }
 }

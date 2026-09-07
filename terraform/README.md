@@ -4,9 +4,13 @@ Agni contains reusable Terraform implementation and may also contain standalone 
 
 Current reusable modules:
 
-- `regional-network`: one regional dual-stack subnet with an IPv4 `/28`; it exposes the twelve GCE-usable IPv4 addresses as stable slots `0..11`.
-- `coreos-node`: indexed Fedora CoreOS instances attached to a supplied subnet; workload meaning is supplied by the caller through metadata, tags, service identity, and Ignition/user-data.
+- `regional-network`: one regional dual-stack subnet with caller-selected IPv4 CIDR, including `/29`; Private Google Access is enabled by default and the module reports the usable address count after Google Cloud's four reserved addresses.
+- `coreos-node`: indexed Fedora CoreOS instances attached to a supplied subnet; slot `0` begins at host offset `2`, and valid slot count derives from the subnet size rather than a fixed twelve-node assumption.
 - `regional-cell`: composition of the network and node modules.
+- `cloud-function-v1-http`: generic 1st gen HTTP function with caller-selected source/runtime/identity/ingress and non-authoritative invoker IAM members.
+- `cloud-function-v2-http`: generic Cloud Run function (2nd gen) with caller-selected source/runtime/identity/ingress and `roles/run.invoker` bindings on the underlying Cloud Run service.
+
+The function modules default ingress to `ALLOW_INTERNAL_ONLY`, but callers may explicitly select another supported ingress policy. They do not attach functions to the VM subnet or consume its addresses. A VM-only `/29` can therefore retain all four usable internal addresses while reaching internal-only functions through Google private service networking. Direct VPC egress for function-to-VPC traffic is a separate concern and is intentionally not implied by these modules.
 
 The Go package `github.com/dash-xd/agni/terraform` embeds these module files and lets callers materialize only the modules they selected. This is the integration surface used by optional Smoke composition; it is not a second Terraform configuration language.
 

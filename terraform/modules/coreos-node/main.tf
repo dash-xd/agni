@@ -9,6 +9,8 @@ terraform {
 }
 
 locals {
+  ipv4_prefix        = tonumber(split("/", var.ipv4_cidr)[1])
+  usable_ipv4_count  = pow(2, 32 - local.ipv4_prefix) - 4
   nodes = {
     for slot, node in var.nodes : tostring(tonumber(slot)) => node
   }
@@ -32,7 +34,7 @@ resource "google_compute_instance_from_template" "this" {
 
   network_interface {
     subnetwork = var.subnetwork
-    network_ip = var.ipv4_by_slot[each.key]
+    network_ip = cidrhost(var.ipv4_cidr, tonumber(each.key) + 2)
     stack_type = var.enable_ipv6 ? "IPV4_IPV6" : "IPV4_ONLY"
   }
 
@@ -41,6 +43,13 @@ resource "google_compute_instance_from_template" "this" {
     content {
       email  = service_account.value
       scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = tonumber(each.key) >= 0 && tonumber(each.key) < local.usable_ipv4_count
+      error_message = "node slot ${each.key} is outside the usable address range for ${var.ipv4_cidr}."
     }
   }
 }
