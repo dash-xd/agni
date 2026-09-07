@@ -14,22 +14,22 @@ func TestModules(t *testing.T) {
 	}
 }
 
-func TestMaterializeModulesSelectsOnlyRequestedModules(t *testing.T) {
+func TestSeedModulesSelectsOnlyRequestedModules(t *testing.T) {
 	dst := t.TempDir()
-	if err := MaterializeModules(dst, "regional-network"); err != nil {
+	if err := SeedModules(dst, "regional-network"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dst, "modules", "regional-network", "main.tf")); err != nil {
 		t.Fatalf("selected module missing: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dst, "modules", "coreos-node", "main.tf")); !os.IsNotExist(err) {
-		t.Fatalf("unselected module unexpectedly materialized: %v", err)
+		t.Fatalf("unselected module unexpectedly seeded: %v", err)
 	}
 }
 
-func TestMaterializeModulesCanSelectServerlessModules(t *testing.T) {
+func TestSeedModulesCanSelectServerlessModules(t *testing.T) {
 	dst := t.TempDir()
-	if err := MaterializeModules(dst, "cloud-function-v1-http", "cloud-function-v2-http"); err != nil {
+	if err := SeedModules(dst, "cloud-function-v1-http", "cloud-function-v2-http"); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"cloud-function-v1-http", "cloud-function-v2-http"} {
@@ -39,9 +39,9 @@ func TestMaterializeModulesCanSelectServerlessModules(t *testing.T) {
 	}
 }
 
-func TestMaterializeModulesCanSelectInternalAddressModule(t *testing.T) {
+func TestSeedModulesCanSelectInternalAddressModule(t *testing.T) {
 	dst := t.TempDir()
-	if err := MaterializeModules(dst, "regional-internal-addresses"); err != nil {
+	if err := SeedModules(dst, "regional-internal-addresses"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dst, "modules", "regional-internal-addresses", "main.tf")); err != nil {
@@ -49,8 +49,8 @@ func TestMaterializeModulesCanSelectInternalAddressModule(t *testing.T) {
 	}
 }
 
-func TestMaterializeModulesRejectsUnknownModule(t *testing.T) {
-	if err := MaterializeModules(t.TempDir(), "astrochicken"); err == nil {
+func TestSeedModulesRejectsUnknownModule(t *testing.T) {
+	if err := SeedModules(t.TempDir(), "astrochicken"); err == nil {
 		t.Fatal("expected unknown module error")
 	}
 }
