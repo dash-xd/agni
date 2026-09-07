@@ -14,7 +14,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Generate dependency sums
-        run: go mod download && cat go.sum
+        run: go get github.com/dash-xd/agni/smoke && cat go.sum
       - name: Check new Go surface formatting
         run: gofmt -l main.go nativeexec | tee /dev/stderr | test -z "$(cat)"
       - name: Vet
