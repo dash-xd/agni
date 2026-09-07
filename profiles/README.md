@@ -1,64 +1,92 @@
 # Agni installation profiles
 
-Agni profiles are complete installation recipes built from shared infrastructure primitives. A caller selects a profile; the profile owns its configuration files and its shared-module dependency graph.
+Agni profiles are complete installation recipes built from shared infrastructure primitives. A caller selects one profile tool; that profile owns its source, configuration, lifecycle policy, and internal use of the shared Terraform library.
 
-The operator must never enumerate a profile's internal Terraform modules separately.
+The operator never enumerates a profile's internal Terraform modules separately.
 
 ```text
 Smoke environment
     |
     `-- exact Agni profile tool
             |
-            +-- profile configuration
-            +-- profile workload/bootstrap policy
-            `-- shared Agni Terraform modules
+            +-- profile HCL/config
+            +-- workload/lifecycle policy
+            `-- shared Agni Terraform library
                     |
                     `-- native Terraform
 ```
 
+## Dependency authority
+
+Profile HCL is authoritative for module imports:
+
+```hcl
+module "region" {
+  source = "./modules/regional-cell"
+}
+```
+
+Profile Go code does not repeat that list. Seeding simply places the shared Agni module library under `modules/`, after which Terraform resolves the imports declared by HCL.
+
+There is no `tf seed --module ...` operator step.
+
 ## Astrochicken
 
-Astrochicken is the small probe profile.
+Astrochicken is the small probe profile:
 
 ```text
 IPv4            /29, 4 GCP-usable addresses
 lifecycle       transient systemd smoke-testing idiom
 frontends       Nginx execution + Squid egress
-Fatline         no full Fatline requirement
+Fatline         no full durable Fatline requirement
 Logma           not required
 serverless      optional Gen1/Gen2 shadow functions
 ```
 
-The profile currently lives in `profiles/astrochicken`. `cmd/astrochicken` seeds a complete root, including the exact shared modules its `.tf` files import.
+`cmd/astrochicken` seeds the complete profile source tree:
 
 ```bash
 astrochicken seed <root>
 ```
 
-There is no second `tf seed --module ...` step.
-
 ## Gateway
 
-Gateway is the durable installation profile that the current larger Agni installation is converging toward.
+Gateway is the durable installation profile:
 
 ```text
 IPv4            /28, 12 GCP-usable addresses
 lifecycle       persistent Fedora CoreOS + Quadlet at boot
 frontends       Nginx + Squid
-Fatline         full Fatline
-Logma           required as part of the durable graph
+Fatline         full durable Fatline
+Logma           required
 Redis/runtime   persistent gateway runtime components
 ```
 
-The existing top-level `terraform/` installation contains the `/28` network and persistent FCOS/Quadlet bootstrap pieces and is the migration source for this profile. Do not call that installation `tf`: `terraform` is the implementation language/tool boundary, not the installation identity.
+The existing top-level `terraform/` installation is the migration source for the `/28` network and persistent FCOS/Quadlet pieces. It is not yet a complete Gateway profile because the full Logma/Fatline graph is not represented there yet.
 
-Before exposing `cmd/gateway seed`, finish moving the complete durable Fatline/Logma runtime into the Gateway profile so the command cannot imply a partially assembled gateway.
+Do not expose `cmd/gateway seed` until the profile is complete. Once complete it must have the same simple surface:
 
-## Shared modules
+```bash
+gateway seed <root>
+```
 
-Reusable implementation stays under `terraform/modules` and remains free of profile policy where possible. Examples include `regional-network`, `regional-cell`, `coreos-node`, and the Gen1/Gen2 function modules.
+with no second shared-module command.
 
-Profiles may import those modules in their `.tf` files and select them internally in Go when seeding. The dependency graph belongs to the profile source and exact Agni SHA, not to the shell command line.
+## Shared implementation
+
+Reusable implementation remains under `terraform/modules`. Profiles may share networking, node, address, and serverless primitives while retaining distinct installation policy.
+
+```text
+Astrochicken                Gateway
+   |                           |
+   +---- shared modules -------+
+   |                           |
+ transient lifecycle        durable lifecycle
+ /29                       /28
+ nginx+squid               nginx+squid+Logma+Fatline
+```
+
+Do not make Gateway a flag mode of Astrochicken merely because they share primitives. Their lifecycle and durable service graphs are intentionally different.
 
 ## Composition rule
 
@@ -66,7 +94,7 @@ Profiles may import those modules in their `.tf` files and select them internall
 profile name       = installation design
 Smoke env name     = local role/lifecycle label
 shared module      = implementation primitive
-Terraform          = authoritative infrastructure engine
+Terraform          = authoritative dependency/lifecycle engine
 Huram              = exact candidate/values/credentials/evidence
 ```
 
