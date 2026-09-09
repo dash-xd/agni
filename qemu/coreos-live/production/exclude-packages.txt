@@ -1,0 +1,13 @@
+# Package names forbidden from being pulled back in as dependencies after the
+# direct manifest entries in remove-manifest-items.txt are removed.
+file
+console-login-helper-messages-issuegen
+console-login-helper-messages-profile
+kexec-tools
+makedumpfile
+kdump-utils
+toolbox
+nvme-cli
+lsof
+which
+pciutils

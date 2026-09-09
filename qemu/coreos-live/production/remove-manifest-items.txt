@@ -1,0 +1,14 @@
+# Exact manifest entries to remove from the pinned Fedora CoreOS config.
+# Keep this intentionally small and validate each addition by booting the
+# resulting QEMU and GCP images.
+file
+console-login-helper-messages-issuegen
+console-login-helper-messages-profile
+kexec-tools
+/usr/share/makedumpfile
+/usr/bin/kdumpctl
+toolbox
+nvme-cli
+lsof
+which
+pciutils
