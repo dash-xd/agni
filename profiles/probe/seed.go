@@ -24,12 +24,26 @@ var profileFS embed.FS
 // unchanged, profile configuration is copied beneath config/, and Agni's shared
 // Terraform library is made available beneath modules/. Terraform itself
 // remains authoritative for which modules the root imports and uses.
+//
+// Probe owns root-level *.tf, config/, and modules/. Reseeding reconciles those
+// source paths so files removed from the selected profile cannot survive and
+// continue affecting Terraform or bootstrap behavior. Terraform runtime/state
+// artifacts such as .terraform/ and terraform.tfstate are deliberately outside
+// that source ownership and are preserved.
 func Seed(dst string) error {
 	dst = strings.TrimSpace(dst)
 	if dst == "" {
 		return fmt.Errorf("destination is required")
 	}
-
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	if err := reconcileRootTerraform("terraform", dst); err != nil {
+		return fmt.Errorf("reconcile Probe Terraform root: %w", err)
+	}
+	if err := os.RemoveAll(filepath.Join(dst, "config")); err != nil {
+		return fmt.Errorf("remove stale Probe config: %w", err)
+	}
 	if err := copyTree("terraform", dst); err != nil {
 		return fmt.Errorf("seed Probe Terraform root: %w", err)
 	}
@@ -38,6 +52,39 @@ func Seed(dst string) error {
 	}
 	if err := agnitf.Seed(dst); err != nil {
 		return fmt.Errorf("seed Probe shared Terraform library: %w", err)
+	}
+	return nil
+}
+
+func reconcileRootTerraform(sourceRoot, dst string) error {
+	root, err := fs.Sub(profileFS, sourceRoot)
+	if err != nil {
+		return err
+	}
+	entries, err := fs.ReadDir(root, ".")
+	if err != nil {
+		return err
+	}
+	desired := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".tf" {
+			desired[entry.Name()] = struct{}{}
+		}
+	}
+	existing, err := os.ReadDir(dst)
+	if err != nil {
+		return err
+	}
+	for _, entry := range existing {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".tf" {
+			continue
+		}
+		if _, ok := desired[entry.Name()]; ok {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dst, entry.Name())); err != nil {
+			return fmt.Errorf("remove stale profile source %s: %w", entry.Name(), err)
+		}
 	}
 	return nil
 }
