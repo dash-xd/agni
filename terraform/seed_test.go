@@ -26,6 +26,31 @@ func TestSeedWritesSharedLibrary(t *testing.T) {
 	}
 }
 
+func TestSeedRemovesStaleModuleSource(t *testing.T) {
+	dst := t.TempDir()
+	stale := filepath.Join(dst, "modules", "removed-module", "main.tf")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("stale\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state := filepath.Join(dst, "terraform.tfstate")
+	if err := os.WriteFile(state, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Seed(dst); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("stale module source still exists: %v", err)
+	}
+	if _, err := os.Stat(state); err != nil {
+		t.Fatalf("state artifact was not preserved: %v", err)
+	}
+}
+
 func TestSeedRequiresDestination(t *testing.T) {
 	if err := Seed(" "); err == nil {
 		t.Fatal("expected destination error")

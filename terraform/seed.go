@@ -33,9 +33,14 @@ func Modules() []string {
 	return out
 }
 
-// Seed copies Agni's complete shared Terraform module library beneath
-// dst/modules. Profile HCL remains authoritative for which of those modules it
-// actually imports, so callers do not maintain a second dependency manifest.
+// Seed reconciles Agni's complete shared Terraform module library beneath
+// dst/modules. Profile HCL remains authoritative for which modules it actually
+// imports, so callers do not maintain a second dependency manifest.
+//
+// dst/modules is profile-owned source. Reseeding replaces that directory so a
+// module or *.tf file removed from the selected Agni revision cannot survive
+// and continue influencing Terraform. Terraform runtime/state artifacts live
+// outside this source directory and are not touched.
 //
 // This seed implementation is intentionally unrelated to Smoke ghxd/worktree
 // seeding: it performs no Git operations, repository checkout, object sharing,
@@ -44,6 +49,12 @@ func Seed(dst string) error {
 	dst = strings.TrimSpace(dst)
 	if dst == "" {
 		return fmt.Errorf("destination is required")
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(filepath.Join(dst, "modules")); err != nil {
+		return fmt.Errorf("remove stale Terraform module source: %w", err)
 	}
 
 	return fs.WalkDir(source, "modules", func(path string, entry fs.DirEntry, err error) error {
