@@ -157,20 +157,23 @@ redis_as() {
   local user="$1"
   local password_file="$2"
   shift 2
-  local password
-  password="$(cat "$password_file")"
-  docker exec -e REDISCLI_AUTH="$password" "$marai_container" \
-    redis-cli -s /run/marai/redis.sock --user "$user" "$@"
+  docker exec "$marai_container" sh -ceu '
+    user="$1"
+    password_file="$2"
+    shift 2
+    password="$(cat "$password_file")"
+    REDISCLI_AUTH="$password" redis-cli -s /run/marai/redis.sock --user "$user" "$@"
+  ' -- "$user" "$password_file" "$@"
 }
 
 lifecycle() {
   [[ $# -gt 0 ]] || { echo "lifecycle command required" >&2; exit 2; }
-  redis_as marai-admin "$admin_dir/admin.password" "$@"
+  redis_as marai-admin /run/marai-admin/admin.password "$@"
 }
 
 app() {
   [[ $# -gt 0 ]] || { echo "app command required" >&2; exit 2; }
-  redis_as marai-app "$app_dir/app.password" "$@"
+  redis_as marai-app /run/marai/app.password "$@"
 }
 
 status() {
