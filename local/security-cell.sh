@@ -49,7 +49,7 @@ prepare_runtime() {
   head -c 48 /dev/urandom | base64 -w0 > "$admin_dir/admin.password"
   head -c 48 /dev/urandom | base64 -w0 > "$app_dir/app.password"
   chmod 0400 "$admin_dir/admin.password"
-  chmod 0444 "$app_dir/app.password"
+  chmod 0400 "$app_dir/app.password"
 
   cp "${PRAJAPATI_TENANT_REGISTRY_FILE:?PRAJAPATI_TENANT_REGISTRY_FILE is required}" "$prajapati_dir/tenants.json"
   cp "${PRAJAPATI_ED25519_KEYS_FILE:?PRAJAPATI_ED25519_KEYS_FILE is required}" "$prajapati_dir/keys.json"
@@ -61,6 +61,32 @@ prepare_runtime() {
     echo "Prajapati registry references marai-admin" >&2
     exit 1
   fi
+}
+
+prepare_marai_mount_ownership() {
+  local marai_uid marai_gid
+  marai_uid="$(docker run --rm --user 0:0 --entrypoint sh "$marai_image" -ceu 'id -u redis')"
+  marai_gid="$(docker run --rm --user 0:0 --entrypoint sh "$marai_image" -ceu 'id -g redis')"
+
+  case "$marai_uid:$marai_gid" in
+    *[!0-9:]*|:*|*:) echo "invalid Marai runtime uid/gid: $marai_uid:$marai_gid" >&2; exit 1 ;;
+  esac
+
+  # Bind mounts replace the image's pre-owned /run/marai directory. Prepare the
+  # host-backed directories for the image's actual redis uid/gid before startup
+  # so Marai can create users.acl + redis.sock without running privileged.
+  docker run --rm \
+    -v "$app_dir:/app" \
+    -v "$admin_dir:/admin" \
+    alpine:3.22 sh -ceu '
+      uid="$1"
+      gid="$2"
+      chown "$uid:$gid" /app /app/app.password /admin /admin/admin.password
+      chmod 0770 /app
+      chmod 0400 /app/app.password
+      chmod 0700 /admin
+      chmod 0400 /admin/admin.password
+    ' -- "$marai_uid" "$marai_gid"
 }
 
 start() {
@@ -78,6 +104,7 @@ start() {
 
   docker build -t "$marai_image" "$MARAI_DIR"
   docker build -t "$prajapati_image" "$PRAJAPATI_DIR"
+  prepare_marai_mount_ownership
 
   docker run -d --name "$marai_container" \
     --network none \
