@@ -37,6 +37,11 @@ marai_diagnostics() {
   docker logs "$marai_container" >&2 || true
 }
 
+prajapati_diagnostics() {
+  docker inspect -f 'prajapati state={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} user={{.Config.User}}' "$prajapati_container" >&2 || true
+  docker logs "$prajapati_container" >&2 || true
+}
+
 wait_socket() {
   for _ in $(seq 1 150); do
     # The host-backed app directory is intentionally owned by Marai's runtime
@@ -53,6 +58,24 @@ wait_socket() {
   done
   echo "Marai socket did not become ready" >&2
   marai_diagnostics
+  return 1
+}
+
+wait_prajapati() {
+  local status
+  for _ in $(seq 1 100); do
+    status="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:${prajapati_port}/healthz" 2>/dev/null || true)"
+    case "$status" in
+      200|503) return 0 ;;
+    esac
+    if ! docker inspect -f '{{.State.Running}}' "$prajapati_container" 2>/dev/null | grep -q true; then
+      prajapati_diagnostics
+      return 1
+    fi
+    sleep 0.1
+  done
+  echo "Prajapati did not become reachable" >&2
+  prajapati_diagnostics
   return 1
 }
 
@@ -105,6 +128,34 @@ prepare_marai_mount_ownership() {
     ' -- "$marai_uid" "$marai_gid"
 }
 
+prepare_prajapati_mount_access() {
+  local runtime_user runtime_uid runtime_gid
+  runtime_user="$(docker inspect -f '{{.Config.User}}' "$prajapati_image")"
+  case "$runtime_user" in
+    *:*)
+      runtime_uid="${runtime_user%%:*}"
+      runtime_gid="${runtime_user#*:}"
+      ;;
+    *)
+      echo "Prajapati image must declare a numeric uid:gid USER; got: $runtime_user" >&2
+      exit 1
+      ;;
+  esac
+  case "$runtime_uid:$runtime_gid" in
+    *[!0-9:]*|:*|*:) echo "invalid Prajapati runtime uid/gid: $runtime_uid:$runtime_gid" >&2; exit 1 ;;
+  esac
+
+  # Registry and verifier material is read-only policy input. Grant only the
+  # image-declared runtime group traversal/read access; do not expose lifecycle
+  # material and do not duplicate the image USER in docker run.
+  docker run --rm -v "$prajapati_dir:/work" alpine:3.22 sh -ceu '
+    gid="$1"
+    chgrp "$gid" /work /work/tenants.json /work/keys.json
+    chmod 0750 /work
+    chmod 0440 /work/tenants.json /work/keys.json
+  ' -- "$runtime_gid"
+}
+
 start() {
   : "${MARAI_DIR:?MARAI_DIR is required}"
   : "${PRAJAPATI_DIR:?PRAJAPATI_DIR is required}"
@@ -121,6 +172,7 @@ start() {
   docker build -t "$marai_image" "$MARAI_DIR"
   docker build -t "$prajapati_image" "$PRAJAPATI_DIR"
   prepare_marai_mount_ownership
+  prepare_prajapati_mount_access
 
   docker run -d --name "$marai_container" \
     --network none \
@@ -136,13 +188,17 @@ start() {
   wait_socket
 
   # Root in a short-lived helper changes only the exact shared socket/app files
-  # so Prajapati's unprivileged uid can read/connect. Admin material stays private.
+  # so Prajapati's unprivileged runtime group can read/connect. Admin material
+  # stays private.
+  prajapati_runtime_group="$(docker inspect -f '{{.Config.User}}' "$prajapati_image")"
+  prajapati_runtime_group="${prajapati_runtime_group#*:}"
   docker run --rm -v "$app_dir:/work" alpine:3.22 sh -ceu '
-    chgrp 65532 /work /work/app.password /work/redis.sock
+    gid="$1"
+    chgrp "$gid" /work /work/app.password /work/redis.sock
     chmod 0770 /work
     chmod 0440 /work/app.password
     chmod 0660 /work/redis.sock
-  '
+  ' -- "$prajapati_runtime_group"
 
   docker run -d --name "$logma_redis_container" \
     -p "127.0.0.1:${logma_redis_port}:6379" \
@@ -151,7 +207,6 @@ start() {
 
   docker run -d --name "$prajapati_container" \
     --network host \
-    --user 65532:65532 \
     -v "$app_dir:/run/marai:ro" \
     -v "$prajapati_dir:/run/prajapati:ro" \
     -e PRAJAPATI_ALLOW_INSECURE_HTTP=1 \
@@ -160,6 +215,10 @@ start() {
     -e PRAJAPATI_ED25519_KEYS_FILE=/run/prajapati/keys.json \
     -e PRAJAPATI_TENANT_REGISTRY_FILE=/run/prajapati/tenants.json \
     "$prajapati_image" >/dev/null
+
+  # Placement is not complete until the process is reachable. A 503 is valid
+  # here because Smoke has not yet activated Marai by creating its first key.
+  wait_prajapati
 
   printf 'cell_root=%s\n' "$root"
   printf 'marai_container=%s\n' "$marai_container"
