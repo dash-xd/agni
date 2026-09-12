@@ -13,11 +13,9 @@ esac
 root="${AGNI_CELL_ROOT:?AGNI_CELL_ROOT is required}"
 marai_container="agni-${cell_id}-marai"
 prajapati_container="agni-${cell_id}-prajapati"
-logma_redis_container="agni-${cell_id}-logma-redis"
 marai_image="${MARAI_IMAGE:-agni-${cell_id}-marai:local}"
 prajapati_image="${PRAJAPATI_IMAGE:-agni-${cell_id}-prajapati:local}"
 prajapati_port="${PRAJAPATI_PORT:-18081}"
-logma_redis_port="${LOGMA_REDIS_PORT:-16379}"
 
 app_dir="$root/marai-app"
 admin_dir="$root/marai-admin"
@@ -160,7 +158,7 @@ start() {
   : "${MARAI_DIR:?MARAI_DIR is required}"
   : "${PRAJAPATI_DIR:?PRAJAPATI_DIR is required}"
 
-  for name in "$marai_container" "$prajapati_container" "$logma_redis_container"; do
+  for name in "$marai_container" "$prajapati_container"; do
     if container_exists "$name"; then
       echo "refusing to reuse existing container $name" >&2
       exit 1
@@ -200,11 +198,6 @@ start() {
     chmod 0660 /work/redis.sock
   ' -- "$prajapati_runtime_group"
 
-  docker run -d --name "$logma_redis_container" \
-    -p "127.0.0.1:${logma_redis_port}:6379" \
-    redis:7.2.5-alpine \
-    redis-server --save '' --appendonly no >/dev/null
-
   docker run -d --name "$prajapati_container" \
     --network host \
     -v "$app_dir:/run/marai:ro" \
@@ -223,9 +216,7 @@ start() {
   printf 'cell_root=%s\n' "$root"
   printf 'marai_container=%s\n' "$marai_container"
   printf 'prajapati_container=%s\n' "$prajapati_container"
-  printf 'logma_redis_container=%s\n' "$logma_redis_container"
   printf 'prajapati_url=http://127.0.0.1:%s\n' "$prajapati_port"
-  printf 'logma_redis_addr=127.0.0.1:%s\n' "$logma_redis_port"
 }
 
 redis_as() {
@@ -252,14 +243,14 @@ app() {
 }
 
 status() {
-  for name in "$marai_container" "$prajapati_container" "$logma_redis_container"; do
+  for name in "$marai_container" "$prajapati_container"; do
     docker inspect -f '{{.Name}} {{.State.Status}}' "$name"
   done
 }
 
 stop() {
   # Exact identity cleanup only. Never discover by image/name prefix.
-  docker rm -f "$prajapati_container" "$logma_redis_container" "$marai_container" >/dev/null 2>&1 || true
+  docker rm -f "$prajapati_container" "$marai_container" >/dev/null 2>&1 || true
 }
 
 case "${1:-}" in
