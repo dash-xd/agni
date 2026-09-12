@@ -37,8 +37,6 @@ storage:
           token="$(printf '%s' "$token_json" | sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
           test -n "$token"
 
-          # Keep the short-lived registry credential on /run rather than in
-          # Podman's normal persistent auth location.
           printf '%s' "$token" | podman login \
             --authfile "$authfile" \
             --username oauth2accesstoken \
@@ -56,35 +54,43 @@ storage:
           umask 077
 
           root=/run/agni-security-cell
-          marai="$root/marai"
-          atman="$root/atman"
-          install -d -m 0700 "$root" "$marai" "$atman"
+          marai_app="$root/marai-app"
+          marai_admin="$root/marai-admin"
+          prajapati="$root/prajapati"
 
-          if [[ ! -s "$marai/admin.password" ]]; then
-            head -c 48 /dev/urandom | base64 -w0 > "$marai/admin.password"
+          install -d -m 0700 "$root" "$marai_admin" "$prajapati"
+          install -d -m 0770 "$marai_app"
+          chown root:65532 "$marai_app"
+
+          if [[ ! -s "$marai_admin/admin.password" ]]; then
+            head -c 48 /dev/urandom | base64 -w0 > "$marai_admin/admin.password"
           fi
-          if [[ ! -s "$marai/app.password" ]]; then
-            head -c 48 /dev/urandom | base64 -w0 > "$marai/app.password"
+          if [[ ! -s "$marai_app/app.password" ]]; then
+            head -c 48 /dev/urandom | base64 -w0 > "$marai_app/app.password"
           fi
 
-          # These files are deliberately readable inside explicitly mounted
-          # containers; the host and the selected bind mounts are the trust
-          # boundary. The parent /run directories remain 0700 on the host.
-          chmod 0444 "$marai/admin.password" "$marai/app.password"
+          chown root:root "$marai_admin/admin.password"
+          chmod 0400 "$marai_admin/admin.password"
+          chown root:65532 "$marai_app/app.password"
+          chmod 0440 "$marai_app/app.password"
 
-          # Tenant/caller/audience policy is supplied by Huram/the caller as
-          # non-secret deployment data. Agni does not know tenant names,
-          # projects, service accounts, or provider profile semantics.
-          printf '%s' '${ATMAN_TENANT_REGISTRY_B64}' \
-            | base64 -d > "$atman/tenants.json"
-          chmod 0444 "$atman/tenants.json"
+          # Principal/audience/policy data is supplied by Huram/the caller as
+          # non-secret deployment data. Agni only materializes it.
+          printf '%s' '${PRAJAPATI_TENANT_REGISTRY_B64}' \
+            | base64 -d > "$prajapati/tenants.json"
+          chown root:65532 "$prajapati/tenants.json"
+          chmod 0440 "$prajapati/tenants.json"
 
-          # Fail bootstrap if the materialized registry is empty or does not
-          # reference this cell's local Marai application boundary.
-          test -s "$atman/tenants.json"
-          grep -q '"socket"' "$atman/tenants.json"
-          grep -q '/run/marai/redis.sock' "$atman/tenants.json"
-          grep -q '"user"[[:space:]]*:[[:space:]]*"marai-app"' "$atman/tenants.json"
+          # Prajapati may target only the application side of this cell.
+          test -s "$prajapati/tenants.json"
+          grep -q '"socket"' "$prajapati/tenants.json"
+          grep -q '/run/marai/redis.sock' "$prajapati/tenants.json"
+          grep -q '"user"[[:space:]]*:[[:space:]]*"marai-app"' "$prajapati/tenants.json"
+          grep -q '"password_file"[[:space:]]*:[[:space:]]*"/run/marai/app.password"' "$prajapati/tenants.json"
+          if grep -q 'marai-admin' "$prajapati/tenants.json"; then
+            echo "Prajapati tenant registry must not reference marai-admin" >&2
+            exit 1
+          fi
 
     - path: /etc/containers/systemd/marai.container
       mode: 0644
@@ -95,58 +101,57 @@ storage:
           Wants=network-online.target
           After=network-online.target agni-artifact-registry-login.service agni-security-cell-init.service
           Requires=agni-security-cell-init.service
-          Before=atman.service
+          Before=prajapati.service
 
           [Container]
           Image=${MARAI_IMAGE}
           ContainerName=marai
           Network=none
-          Volume=/run/agni-security-cell/marai:/run/marai:rw,z
+          Volume=/run/agni-security-cell/marai-app:/run/marai-app:rw,z
+          Volume=/run/agni-security-cell/marai-admin:/run/marai-admin:ro,z
           Environment=MARAI_REDIS_PORT=0
-          Environment=MARAI_REDIS_SOCKET=/run/marai/redis.sock
-          Environment=MARAI_REDIS_SOCKET_MODE=777
-          Environment=MARAI_ADMIN_PASSWORD_FILE=/run/marai/admin.password
-          Environment=MARAI_APP_PASSWORD_FILE=/run/marai/app.password
+          Environment=MARAI_REDIS_SOCKET=/run/marai-app/redis.sock
+          Environment=MARAI_REDIS_SOCKET_MODE=660
+          Environment=MARAI_ADMIN_PASSWORD_FILE=/run/marai-admin/admin.password
+          Environment=MARAI_APP_PASSWORD_FILE=/run/marai-app/app.password
           NoNewPrivileges=true
           DropCapability=all
 
           [Service]
-          # Marai process loss is authority loss. Never silently replace it
-          # with a fresh empty KMS and pretend continuity. Recovery is an
-          # explicit Huram lifecycle operation using an MRS1 checkpoint.
           Restart=no
           Environment=REGISTRY_AUTH_FILE=/run/agni-security-cell/containers-auth.json
+          # Redis creates the socket as the Marai container user. Give only the
+          # Prajapati runtime group access before Prajapati starts.
+          ExecStartPost=/usr/bin/chgrp 65532 /run/agni-security-cell/marai-app/redis.sock
+          ExecStartPost=/usr/bin/chmod 0660 /run/agni-security-cell/marai-app/redis.sock
 
           [Install]
           WantedBy=multi-user.target
 
-    - path: /etc/containers/systemd/atman.container
+    - path: /etc/containers/systemd/prajapati.container
       mode: 0644
       contents:
         inline: |
           [Unit]
-          Description=Atman authenticated application ingress for one security cell
+          Description=Prajapati authenticated application ingress for one security cell
           Wants=network-online.target
           After=network-online.target agni-artifact-registry-login.service agni-security-cell-init.service marai.service
           Requires=agni-security-cell-init.service marai.service
 
           [Container]
-          Image=${ATMAN_IMAGE}
-          ContainerName=atman
+          Image=${PRAJAPATI_IMAGE}
+          ContainerName=prajapati
           PublishPort=127.0.0.1:8443:8443
-          Volume=/run/agni-security-cell/atman/tenants.json:/run/atman/tenants.json:ro,z
-          Volume=/run/agni-security-cell/marai:/run/marai:ro,z
-          Environment=ATMAN_TENANT_REGISTRY_FILE=/run/atman/tenants.json
-          Environment=ATMAN_LISTEN=:8443
-          Environment=ATMAN_ALLOW_INSECURE_HTTP=1
+          Volume=/run/agni-security-cell/prajapati/tenants.json:/run/prajapati/tenants.json:ro,z
+          Volume=/run/agni-security-cell/marai-app:/run/marai:ro,z
+          Environment=PRAJAPATI_TENANT_REGISTRY_FILE=/run/prajapati/tenants.json
+          Environment=PRAJAPATI_LISTEN=:8443
+          Environment=PRAJAPATI_ALLOW_INSECURE_HTTP=1
           NoNewPrivileges=true
           DropCapability=all
           ReadOnly=true
 
           [Service]
-          # Atman is stateless ingress and may restart. Its readiness is tied
-          # to KMS.STATUS=active, so restarting Atman cannot recreate Marai
-          # authority or make a quiesced/dead cell ready again.
           Restart=on-failure
           RestartSec=2s
           Environment=REGISTRY_AUTH_FILE=/run/agni-security-cell/containers-auth.json
@@ -166,7 +171,7 @@ systemd:
         Description=Authenticate Podman to Artifact Registry using a run-scoped auth file
         Wants=network-online.target
         After=network-online.target
-        Before=marai.service atman.service
+        Before=marai.service prajapati.service
 
         [Service]
         Type=oneshot
@@ -181,7 +186,7 @@ systemd:
       contents: |
         [Unit]
         Description=Materialize generic security-cell runtime inputs
-        Before=marai.service atman.service
+        Before=marai.service prajapati.service
 
         [Service]
         Type=oneshot
