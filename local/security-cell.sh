@@ -27,16 +27,32 @@ container_exists() {
   docker inspect "$1" >/dev/null 2>&1
 }
 
+marai_diagnostics() {
+  docker inspect -f 'marai state={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}}' "$marai_container" >&2 || true
+  docker exec "$marai_container" sh -ceu '
+    id
+    stat -c "%A %u:%g %n" /run/marai /run/marai-admin /run/marai/app.password /run/marai-admin/admin.password 2>/dev/null || true
+    stat -c "%A %u:%g %n" /run/marai/redis.sock /run/marai/users.acl 2>/dev/null || true
+  ' >&2 2>/dev/null || true
+  docker logs "$marai_container" >&2 || true
+}
+
 wait_socket() {
-  local path="$1"
   for _ in $(seq 1 150); do
-    [[ -S "$path" ]] && return 0
+    # The host-backed app directory is intentionally owned by Marai's runtime
+    # uid/gid and is not traversable by the unprivileged runner. Observe the
+    # socket from inside the cell instead of weakening host filesystem modes.
+    if docker exec "$marai_container" test -S /run/marai/redis.sock 2>/dev/null; then
+      return 0
+    fi
     if ! docker inspect -f '{{.State.Running}}' "$marai_container" 2>/dev/null | grep -q true; then
-      docker logs "$marai_container" >&2 || true
+      marai_diagnostics
       return 1
     fi
     sleep 0.1
   done
+  echo "Marai socket did not become ready" >&2
+  marai_diagnostics
   return 1
 }
 
@@ -117,7 +133,7 @@ start() {
     -e MARAI_REDIS_SOCKET_MODE=660 \
     "$marai_image" >/dev/null
 
-  wait_socket "$app_dir/redis.sock"
+  wait_socket
 
   # Root in a short-lived helper changes only the exact shared socket/app files
   # so Prajapati's unprivileged uid can read/connect. Admin material stays private.
