@@ -58,8 +58,9 @@ variable "ipv6_access_type" {
 }
 
 variable "service_account_email" {
-  type    = string
-  default = "dev-builder@dashxd.iam.gserviceaccount.com"
+  description = "Optional caller-selected service account attached to the leader. Agni never supplies an organization-specific identity by default."
+  type        = string
+  default     = ""
 }
 
 variable "ssh_public_key_file" {
