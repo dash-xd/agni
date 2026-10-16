@@ -1,61 +1,266 @@
-# Agni Go-first cloud tooling idiom
+# Agni Go-first cloud/profile idiom
 
-Agni is the reusable cloud/virtualization build layer. It contains generic implementation and native tool composition, but no organization-specific credentials, project IDs, regions, domains, tenant names, repository names, or deployment policy values.
+Agni is the reusable cloud/virtualization implementation and installation-profile layer. It owns generic infrastructure primitives plus reusable installation components/profiles in the infrastructure domains it actually owns. It does not own organization credentials, Huram qualification policy, Smoke environment semantics, or unrelated provider-specific control-plane profiles merely because they also use Terraform.
 
-## Responsibility
+## Authority
 
 ```text
 Huram
-  organization/business inputs + credentials + exact candidate selection
+  exact candidates + values + credentials + evidence + promotion
       |
       v
 Smoke
-  generic Go workspace/tool composition + immutable execution snapshots
+  generic named environments + immutable Go tool execution
       |
       v
-Agni
-  generic cloud/CoreOS/QEMU build capabilities
+Agni profile/component tool
+  installation source/configuration
       |
-      +-- Terraform CLI + reusable .tf/config assets
-      +-- gcloud
-      +-- Butane/CoreOS
-      +-- QEMU
+      +-- profile HCL/config
+      +-- lifecycle/workload policy
+      `-- shared Agni Terraform library
+              |
+              v
+      Terraform / Butane / native tools
 ```
 
-Agni should expose ordinary Go packages and installable Go tools. Smoke is optional: a Go programmer must be able to install or import Agni directly.
+Smoke environment names are operator-local labels. They never select an Agni component implicitly.
 
-## Native contracts remain authoritative
+Smoke is a composition/execution convenience, not an Agni dependency. Agni packages and installable tools must remain directly usable with ordinary Go/native tooling when Smoke is not involved.
 
-Agni wraps mature native tools; it does not replace them. Terraform keeps ownership of `.tf`, state/backends, providers, plan/apply and variable semantics. Butane keeps ownership of Butane/Ignition transformation. QEMU keeps ownership of machine/device arguments. gcloud keeps ownership of Google Cloud CLI semantics.
+## Native source remains authoritative
 
-The root Agni tool is therefore intentionally thin:
+Terraform owns HCL, providers, variables, module imports, backends, state, plan/apply/destroy/output semantics. Butane owns Butane/Ignition transformation. QEMU and gcloud own their native argument/command contracts.
+
+Do not mirror those languages into a Go DSL or a second dependency manifest.
+
+## Profiles own composition
+
+A profile seed produces one complete source tree:
+
+```text
+<root>/
+  main.tf
+  variables.tf
+  outputs.tf
+  profile config/workload files
+  modules/
+    shared Agni Terraform library
+```
+
+The profile HCL is the only authority for which shared modules are imported. Go code MUST NOT carry a second list of the same module dependencies, and operators MUST NOT enumerate them on the command line.
+
+Agni's `terraform.Seed(root)` therefore makes the shared module library available under `modules/` as an implementation detail. Terraform resolves the actual `source = "./modules/..."` imports declared by the profile.
+
+There is no public `cmd/tf` composition step.
+
+### Profile source is reconciled on seed
+
+A profile seed is exact-source preparation, not an additive copy operation. Profile-owned source removed from the selected revision must not survive a reseed and continue influencing Terraform or bootstrap behavior.
+
+For Probe, the profile owns:
+
+```text
+root *.tf
+config/
+modules/
+```
+
+For the shared Terraform library, `modules/` is wholly Agni-owned source. Reseeding reconciles those paths. Terraform runtime/state and externally supplied instance configuration are not profile source and must be preserved:
+
+```text
+not profile-owned
+  .terraform/
+  terraform.tfstate / remote backend state
+  sibling/session *.tfvars
+  provider credentials
+```
+
+Do not place hand-written deployment policy in extra profile-root `*.tf` files and expect it to survive seeding. Put deployment values in external tfvars/configuration and separately owned infrastructure in its own profile/root.
+
+A failed seed is a failed source-preparation gate. Do not run Terraform against a root after seed failure merely because some files already exist.
+
+## Identity ownership
+
+Agni-owned source, resource metadata, labels, config keys, and runtime conventions must use Agni/profile vocabulary rather than Smoke environment vocabulary.
+
+For example, Probe may emit `probe-role` or another Probe-owned key. It must not emit `smoke-role`, because a caller can use Probe without Smoke and a Smoke environment can be named anything.
+
+Likewise `astrochicken` is not an Agni profile name. It is the current Smoke environment name used when deploying Probe.
+
+## Seed is vocabulary, not shared implementation
+
+`seed` means exact-source destination preparation, but implementations remain domain-specific:
+
+```text
+ghxd/worktree seed
+  Git repository/SHA/auth/object/ref/worktree operations
+
+Agni profile seed
+  embedded profile/config/shared-source filesystem preparation
+```
+
+Agni MUST NOT reuse ghxd/worktree implementation merely because both use the verb `seed`. Do not reintroduce `materialize` as a parallel public verb for this boundary.
+
+## Provider ownership boundary
+
+Terraform is an implementation language, not an ownership namespace. A Terraform module/profile belongs with the domain that owns the resources and reconciliation contract.
+
+In particular, Cloudflare DNS/xdroute projection belongs to cfxd, not Agni:
+
+```text
+Agni profile: probe
+  CoreOS/network/runtime substrate
+
+cfxd profile: dns-txt
+  Cloudflare TXT reconciliation for xdroute metadata
+```
+
+A Smoke environment such as `astrochicken-xd-run` may compose both profiles independently. `cfxd/dns-txt` is optional observability/discovery infrastructure and is not a dependency of Agni Probe.
+
+Do not place cfxd profiles or Cloudflare DNS reconciliation under `terraform/modules` merely because Agni already has Terraform seeding machinery. Independently owned profiles should keep independent Terraform roots/state lifecycles unless a concrete cross-domain requirement proves that coupling necessary.
+
+The older top-level `terraform/cloudflare-zone` root predates this boundary and is migration debt. Do not grow new Cloudflare policy there; move provider-specific behavior to cfxd when that root is next migrated.
+
+## Shared Terraform primitives
+
+Reusable implementation stays under `terraform/modules` and remains free of installation-profile vocabulary where practical:
+
+```text
+regional-network
+regional-internal-addresses
+coreos-node
+regional-cell
+cloud-function-v1-http
+cloud-function-v2-http
+```
+
+These are a library, not an operator-facing installation selector.
+
+## Probe
+
+Probe is the small reusable installation component under `profiles/probe`:
+
+```text
+IPv4             /29, 4 GCP-usable addresses
+lifecycle intent transient systemd smoke-testing
+frontend assets  Nginx execution + Squid egress configuration
+Logma            not required
+Fatline          no full durable Fatline requirement
+serverless       optional Gen1/Gen2 shadow functions
+```
+
+The installable tool is:
+
+```text
+github.com/dash-xd/agni/cmd/probe
+```
+
+and its complete source-preparation surface is:
 
 ```bash
-agni terraform ...
-agni gcloud ...
-agni coreos ...
-agni qemu ...
-agni exec ...
+probe seed <root>
 ```
 
-Arguments and environment are forwarded rather than translated into an Agni-specific language.
+That one command seeds the Probe source/configuration and shared Terraform library. The operator does not run a second module-seeding command.
 
-## Terraform migration
+`Probe` is an Agni composition identity. A Smoke environment may be named `astrochicken`, `test`, `us-west1`, or anything else while using Probe.
 
-Reusable, non-business-specific Terraform currently living in Huram should move to Agni incrementally. Do not bulk-move modules merely to satisfy this boundary. For each module:
+### Current Probe runtime wiring is incomplete
 
-1. separate reusable infrastructure implementation from deployment-specific values;
-2. move the generic `.tf` implementation/assets to Agni;
-3. keep secrets, tfvars/business values, project/account identifiers, policy decisions and orchestration inputs in Huram;
-4. have Huram invoke Agni/Terraform with those values;
-5. preserve Terraform state/backend identity during the migration.
+Probe currently seeds these exact profile assets:
 
-Agni may retain its existing `terraform/`, `qemu/`, and build assets while Go packages/tools are layered over them. Compatibility is preferred over gratuitous moves.
+```text
+config/nginx.conf
+config/squid.conf
+config/lifecycle.env
+```
 
-## Secret/value boundary
+Those files define the intended transient frontend/lifecycle configuration, but the current Probe Terraform root does not yet project them into `coreos-node.user_data` or another profile-owned Butane/Ignition/launcher path. The current HCL provisions the `/29` regional cell, nodes from a caller-supplied source instance template, internal service addresses, and optional Gen1/Gen2 shadow functions.
 
-Agni MUST NOT embed or default organization-specific secrets or business deployment values. Environment variables and command arguments supplied by the caller are runtime inputs, not repository configuration.
+Therefore:
 
-Smoke MUST NOT embed those values either.
+- profile seed proves the assets/source are present;
+- Terraform apply proves only the resources represented by the current HCL;
+- neither alone proves Nginx, Squid, or transient-systemd runtime readiness;
+- qualification must not claim those frontends are deployed until a profile-owned execution path consumes the assets and the intended FCOS execution class is tested.
 
-Huram is the authority for injecting them at orchestration time.
+When that path is added, keep Butane/Ignition/native systemd as the authoritative configuration/execution contracts rather than mirroring them into a Go or Terraform DSL.
+
+## Gateway
+
+Gateway is the durable installation profile that grows from Probe's reusable capabilities while owning different network and lifecycle policy:
+
+```text
+IPv4          /28, 12 GCP-usable addresses
+lifecycle     persistent Fedora CoreOS + Quadlet at boot
+frontends     Nginx + Squid
+Logma         required
+Fatline       full durable Fatline graph
+runtime       persistent Redis/gateway services
+```
+
+Gateway composition should reuse Probe-owned implementation only where the semantics are genuinely shared, such as common frontend/runtime building blocks. Gateway MUST NOT seed Probe's `/29` root and then patch/override it. `/29` remains Probe policy; `/28` remains Gateway policy.
+
+The intended shape is:
+
+```text
+shared Agni primitives
+        |
+        v
+Probe reusable capabilities
+        |
+        +-- transient Probe profile (/29)
+        |
+        `-- Gateway composition
+              +-- Gateway /28 policy
+              +-- persistent FCOS/Quadlet lifecycle
+              +-- Logma
+              `-- full Fatline runtime
+```
+
+The existing top-level `terraform/` installation is the migration source for the `/28`, FCOS bootstrap, Nginx/Squid Quadlet, and related durable infrastructure pieces. It is not yet the complete Gateway profile because the full Logma/Fatline runtime has not been moved into that profile.
+
+The legacy top-level installation root is migration input, not a second canonical profile. Do not add new Probe/Gateway policy there. Move reusable behavior downward into shared modules/config packages and move durable installation behavior into `profiles/gateway`. Retire the old root once Gateway supersedes it.
+
+Do not expose `cmd/gateway seed` until that graph is complete. Once complete, Gateway follows the same one-profile/one-seed contract as Probe.
+
+## Smoke use
+
+Probe in an Astrochicken environment:
+
+```bash
+smoke env create astrochicken
+smoke env tool add astrochicken github.com/dash-xd/agni/cmd/probe@<exact-sha>
+smoke env shell astrochicken <session-root>
+
+go tool probe seed ./agni-probe
+terraform -chdir=./agni-probe init
+terraform -chdir=./agni-probe plan -var-file=../config/probe.tfvars
+```
+
+A named Smoke composition such as `astrochicken-xd-run` may compose an exact Probe tool and an exact cfxd `dns-txt` tool into one execution environment, while their Terraform roots/state remain independent. Smoke composition groups capabilities intended to operate together; it does not decide which resources belong in one Terraform state.
+
+Eventually Gateway uses the same pattern with its own environment and profile tool.
+
+Environment role and Agni composition identity are orthogonal.
+
+## Change protocol
+
+1. Huram owns exact candidates, credentials, deployment values, evidence, and promotion.
+2. Smoke owns generic environment/snapshot/tool/native execution and may group independently owned profile tools in a named composition.
+3. Agni owns reusable infrastructure primitives and installation profiles/components in Agni's infrastructure domain.
+4. Keep provider-specific control-plane profiles with their provider owner; Cloudflare DNS/xdroute projection belongs to cfxd.
+5. Keep Agni directly usable without requiring Smoke.
+6. Profile HCL/config is authoritative for profile composition.
+7. Never duplicate a profile's module dependency graph in Go or shell arguments.
+8. Reconcile profile-owned source on seed; do not leave removed `*.tf`, config, or module source behind.
+9. Preserve Terraform runtime/state and externally supplied instance configuration across profile reseeding.
+10. Keep Agni/profile resource metadata independent of Smoke environment identity.
+11. Keep Probe transient and `/29`; keep Gateway durable and `/28`.
+12. Do not claim seeded-but-unwired Probe frontend assets are deployed runtime behavior.
+13. Compose Gateway from reusable Probe capabilities and shared primitives, not by patching a seeded Probe root.
+14. Freeze the legacy top-level installation root to migration/compatibility work; do not grow new profile policy there.
+15. Do not expose an installation-profile command until that profile's promised service graph is complete.
+16. Preserve Terraform/Butane/QEMU/gcloud as authoritative native contracts.
+17. Use `seed` as common vocabulary without sharing unrelated provider/domain implementations.
