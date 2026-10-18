@@ -1,0 +1,23 @@
+variant: fcos
+version: 1.7.0
+systemd:
+  units:
+    - name: farcaster-world.target
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Farcaster local world
+storage:
+  files:
+    - path: /etc/containers/systemd/farcaster-quadlet.container
+      mode: 0644
+      contents:
+        inline: |
+          [Unit]
+          Description=Farcaster qualification Quadlet
+          [Container]
+          Image=quay.io/podman/hello:latest
+          [Service]
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target
