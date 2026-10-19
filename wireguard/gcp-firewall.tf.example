@@ -1,0 +1,22 @@
+# Example only: integrate with the owning GCP network stack, not a parallel
+# Terraform state. Requires an externally reachable UDP endpoint on the VM.
+variable "wireguard_client_cidrs" {
+  type = list(string)
+  validation {
+    condition     = length(var.wireguard_client_cidrs) > 0 && alltrue([for c in var.wireguard_client_cidrs : can(cidrhost(c, 0))])
+    error_message = "Specify one or more valid client source CIDRs."
+  }
+}
+resource "google_compute_firewall" "wireguard_ingress" {
+  name          = "agni-wireguard-ingress"
+  project       = var.project
+  network       = var.network
+  direction     = "INGRESS"
+  source_ranges = var.wireguard_client_cidrs
+  target_tags   = ["agni-wireguard"]
+  allow {
+    protocol = "udp"
+    ports    = ["51820"]
+  }
+}
+# Apply the agni-wireguard network tag only to the chosen VM.

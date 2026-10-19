@@ -1,0 +1,13 @@
+[NetDev]
+Name=wg-minecraft
+Kind=wireguard
+MTUBytes=1420
+
+[WireGuard]
+ListenPort=51820
+PrivateKeyFile=/etc/wireguard/minecraft-server.key
+
+# One section per authorized client; generate unique keys per device.
+[WireGuardPeer]
+PublicKey=REPLACE_WITH_CLIENT_PUBLIC_KEY
+AllowedIPs=10.77.0.2/32
