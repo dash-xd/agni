@@ -14,10 +14,10 @@ The local runner is defined in `flake.local.nix` to avoid breaking the existing 
 cd qemu/coreos-live
 export AGNI_COREOS_QCOW2=/absolute/path/to/verified-coreos.qcow2
 export AGNI_IGNITION=/absolute/path/to/config.ign
-nix run --file flake.local.nix
+nix shell nixpkgs#qemu nixpkgs#systemd --command bash deploy-local.sh install
 ```
 
-**Note:** `nix run --file` is not a supported flake invocation. Until the canonical `flake.nix` is reconciled, use the script directly with QEMU installed on the host:
+The staged `flake.local.nix` is not yet wired into the canonical flake; use the command above or run the script directly with QEMU installed on the host:
 
 ```sh
 bash deploy-local.sh install
