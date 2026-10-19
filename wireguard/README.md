@@ -1,6 +1,6 @@
 # Fedora CoreOS WireGuard egress gateway
 
-This is an opt-in **host systemd-networkd** service, independent of Squid, Podman, and Fatline. It does not alter existing GCP Terraform resources or deploy automatically.
+This is an opt-in **Fedora CoreOS host WireGuard** service, independent of Squid, Podman, and Fatline. It does not alter existing GCP Terraform resources or deploy automatically.
 
 ## Network prerequisites
 
@@ -8,7 +8,7 @@ This is an opt-in **host systemd-networkd** service, independent of Squid, Podma
 - Explicit GCP VPC ingress firewall rule, scoped to intended client public source CIDRs. Do not use 0.0.0.0/0 by default.
 - An outbound internet path from the CoreOS VM (external IPv4 or suitable NAT); confirm the actual egress IP.
 - Choose a tunnel subnet that does not overlap local, VPC, or destination networks.
-- Confirm Fedora CoreOS systemd-networkd owns the host interface and supports WireGuard netdev, IPv4 forwarding and IPMasquerade. Do not replace an active NetworkManager-managed uplink without qualification.
+- Fedora CoreOS normally uses NetworkManager. Use NetworkManager-managed WireGuard connections; do not start systemd-networkd alongside the existing network manager.
 
 ## Keys
 
@@ -16,14 +16,7 @@ Generate one server key and one unique key per client **off-repository** using `
 
 ## Host deployment
 
-The supplied networkd files are templates. Render the peer blocks and place:
-- `/etc/systemd/network/50-wg-minecraft.netdev` (mode 0600; includes server public peer keys and a reference to private key file)
-- `/etc/systemd/network/50-wg-minecraft.network` (mode 0644)
-- `/etc/wireguard/minecraft-server.key` (mode 0600, owned by root)
-
-Set the real server private-key path in the netdev template. Each peer has one `[WireGuardPeer]` section with `PublicKey=` and `AllowedIPs=10.77.0.N/32`. Never use broad peer AllowedIPs on the server.
-
-After validating the interface manager and configuration, restart or reload systemd-networkd in a maintenance window, and enable its existing boot service. Changes to host networking can disrupt SSH/IAP. Test on a disposable CoreOS VM before production.
+The earlier `50-wg-minecraft.netdev.example` and `.network.example` files are **superseded design references**, not deployable Fedora CoreOS configuration. Do not install them on a NetworkManager-managed host. Generate unique keys outside Git, provision the server private key securely, and import the WireGuard configuration using NetworkManager (`nmcli connection import type wireguard file ...`) after checking that the installed NetworkManager version supports this import. Ensure the resulting connection autoconnects and persists across reboot. IP forwarding and narrowly scoped NAT require separate qualified host firewall configuration; the QEMU user-network UDP port mapping alone does not prove internet egress routing.
 
 ## Client profile
 
@@ -32,11 +25,11 @@ See `client.conf.example`. Replace keys, public endpoint and DNS settings; impor
 ## Qualification
 
 1. Confirm VPC firewall permits UDP 51820 only from intended client source ranges, and that the server has a public UDP endpoint.
-2. Validate `systemd-analyze verify` for networkd unit compatibility, then inspect `networkctl status wg-minecraft` and `journalctl -u systemd-networkd`.
+2. Validate NetworkManager WireGuard import, `nmcli connection show`, and `journalctl -u NetworkManager`; ensure systemd-networkd is not competing for the interface.
 3. Import a unique client profile, activate the tunnel, and verify handshake counters (using `wg show` where installed).
 4. Check a public IPv4 egress service from the client and compare with the VM's observed public egress address. Confirm Minecraft's TCP connection uses the tunnel.
 5. Test DNS resolution and IPv6 behavior explicitly; a public-IP check alone does not prove absence of DNS/IPv6 leaks.
-6. Reboot a disposable VM and verify networkd recreates the interface and forwarding/NAT without manual intervention.
+6. Reboot a disposable VM and verify NetworkManager restores the interface and forwarding/NAT without manual intervention.
 7. Test client disconnect, unauthorized key rejection, peer isolation, and routing rollback.
 
 No successful runtime qualification is claimed by these templates.
