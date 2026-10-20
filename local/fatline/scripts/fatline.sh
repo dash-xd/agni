@@ -76,7 +76,15 @@ qualify() {
   echo "Baseline complete. Cross-project HTTP enforcement is NOT tested yet."
 }
 
+qualify_integration() {
+  preflight
+  echo "Integration gate requires Logma HTTP project-authorization tests and Redis persistence tests." >&2
+  echo "These tests are not implemented on the pinned Logma revision; refusing to report a false pass." >&2
+  return 1
+}
+
 case "${1:-}" in
   bootstrap|preflight|build|qualify) "$1" ;;
-  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify}" >&2; exit 2 ;;
+  qualify-integration) qualify_integration ;;
+  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration}" >&2; exit 2 ;;
 esac
