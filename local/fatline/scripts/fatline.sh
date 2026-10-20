@@ -57,6 +57,27 @@ preflight() {
   done
 }
 
+advance_pin() {
+  local name="${2:-}"
+  local i path old new tmp
+  for i in "${!names[@]}"; do
+    [[ "${names[$i]}" == "$name" ]] && break
+  done
+  [[ "$i" =~ ^[0-9]+$ ]] && [[ "$i" -lt "${#names[@]}" ]] && [[ "${names[$i]}" == "$name" ]] || { echo "Usage: advance-pin {logma|prajapati|smoke}" >&2; return 2; }
+  preflight
+  path="$SOURCES/$name"
+  old="$(git -C "$path" rev-parse HEAD)"
+  git -C "$path" fetch origin "${branches[$i]}"
+  new="$(git -C "$path" rev-parse FETCH_HEAD)"
+  git -C "$path" merge-base --is-ancestor "$old" "$new" || { echo "Refusing non-fast-forward pin update" >&2; return 1; }
+  git -C "$path" merge --ff-only "$new"
+  tmp="$(mktemp "$ROOT/refs.lock.XXXXXX")"
+  awk -v n="$name" -v sha="$new" '$1 == n {$2 = sha} {print $1, $2}' "$LOCK" > "$tmp"
+  mv "$tmp" "$LOCK"
+  echo "$name pin advanced: $old -> $new"
+  preflight
+}
+
 build() {
   preflight
   for name in "${names[@]}"; do
@@ -86,5 +107,6 @@ qualify_integration() {
 case "${1:-}" in
   bootstrap|preflight|build|qualify) "$1" ;;
   qualify-integration) qualify_integration ;;
-  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration}" >&2; exit 2 ;;
+  advance-pin) advance_pin "$@" ;;
+  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration|advance-pin}" >&2; exit 2 ;;
 esac
