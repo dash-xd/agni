@@ -99,8 +99,27 @@ qualify() {
 
 qualify_integration() {
   preflight
-  echo "Integration gate requires Logma HTTP project-authorization tests and Redis persistence tests." >&2
-  echo "These tests are not implemented on the pinned Logma revision; refusing to report a false pass." >&2
+  local tmp socket port pid
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/agni-fatline-redis.XXXXXXXX")"
+  socket="$tmp/redis.sock"
+  cleanup_redis() {
+    if [[ -n "${pid:-}" ]]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+    rm -rf -- "$tmp"
+  }
+  trap cleanup_redis EXIT
+  # No TCP listeners exposed by the test instance.
+  redis-server --port 0 --unixsocket "$socket" --save "" --appendonly no --maxmemory 40mb --maxmemory-policy noeviction --daemonize no --dir "$tmp" >"$tmp/redis.log" 2>&1 &
+  pid=$!
+  for _ in {1..100}; do
+    if redis-cli -s "$socket" ping >/dev/null 2>&1; then break; fi
+    if ! kill -0 "$pid" 2>/dev/null; then cat "$tmp/redis.log" >&2; return 1; fi
+    sleep 0.05
+  done
+  redis-cli -s "$socket" ping >/dev/null
+  echo "Isolated 40 MiB noeviction Redis ready: $socket"
+  # The current Logma integration harness expects TCP; this gate therefore
+  # requires the Redis test fixture to support Unix sockets before proceeding.
+  echo "Logma Redis integration currently requires a TCP address; isolated Unix-socket wiring is not yet qualified." >&2
   return 1
 }
 
