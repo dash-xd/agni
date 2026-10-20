@@ -30,6 +30,7 @@
           build = app "build";
           qualify = app "qualify";
           qualify-integration = app "qualify-integration";
+          advance-pin = app "advance-pin";
           default = app "preflight";
         });
     };
