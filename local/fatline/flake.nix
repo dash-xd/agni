@@ -13,7 +13,7 @@
           pkgs = import nixpkgs { inherit system; };
           runner = pkgs.writeShellApplication {
             name = "agni-fatline";
-            runtimeInputs = with pkgs; [ bash coreutils findutils git gnumake go_1_26 gnugrep gnused ];
+            runtimeInputs = with pkgs; [ bash coreutils findutils git gnumake go_1_26 stdenv.cc gnugrep gnused ];
             text = ''
               exec bash ${./scripts/fatline.sh} "$@"
             '';
