@@ -1,0 +1,19 @@
+[Unit]
+Description=Fatline Skymill provider
+Requires=fatline-redis.service
+After=fatline-redis.service
+ConditionPathExists=/etc/fatline/skymill.env
+
+[Container]
+# Image digest must be supplied by the existing Smoke/Agni qualification pipeline.
+Image=localhost/fatline-skymill:qualified
+ContainerName=fatline-skymill
+Network=none
+Volume=/run/fatline/redis:/run/redis:Z
+EnvironmentFile=/etc/fatline/skymill.env
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
