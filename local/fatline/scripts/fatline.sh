@@ -117,6 +117,21 @@ test_component() {
   (cd "$SOURCES/$component" && GOWORK=off go test -count=1 "$@")
 }
 
+test_workspace() {
+  local workspace="${2:-}"
+  shift 2 || return 2
+  [[ "$workspace" == /workspaces/* && -d "$workspace" && -f "$workspace/go.mod" ]] || {
+    echo "Usage: test-workspace /workspaces/repository ./package" >&2
+    return 2
+  }
+  [[ "$#" -gt 0 ]] || set -- ./...
+  local package
+  for package in "$@"; do
+    [[ "$package" == ./* ]] || { echo "Relative Go package required: $package" >&2; return 2; }
+  done
+  (cd "$workspace" && GOWORK=off go test -count=1 "$@")
+}
+
 qualify_integration() {
   preflight
   local tmp socket pid
@@ -153,5 +168,6 @@ case "${1:-}" in
   qualify-integration) qualify_integration ;;
   advance-pin) advance_pin "$@" ;;
   test) test_component "$@" ;;
+  test-workspace) test_workspace "$@" ;;
   *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration|advance-pin|test}" >&2; exit 2 ;;
 esac
