@@ -38,6 +38,7 @@
           check-quadlets = {
             type = "app";
             program = "${pkgs.writeShellScript "agni-check-quadlets" ''
+              export FATLINE_QUADLET_DIR=${./systemd}
               exec ${pkgs.bash}/bin/bash ${./scripts/check-quadlets.sh}
             ''}";
           };
