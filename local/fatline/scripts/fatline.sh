@@ -150,10 +150,8 @@ qualify_integration() {
     echo "Logma and Skymill cannot share a Redis principal" >&2
     return 1
   }
-  redis-cli -s "$socket" --user "$FATLINE_LOGMA_REDIS_USER" \
-    -a "$FATLINE_LOGMA_REDIS_PASSWORD" PING >/dev/null || return 1
-  redis-cli -s "$socket" --user "$FATLINE_SKYMILL_REDIS_USER" \
-    -a "$FATLINE_SKYMILL_REDIS_PASSWORD" PING >/dev/null || return 1
+  REDISCLI_AUTH="$FATLINE_LOGMA_REDIS_PASSWORD" redis-cli -s "$socket" --user "$FATLINE_LOGMA_REDIS_USER" PING >/dev/null || return 1
+  REDISCLI_AUTH="$FATLINE_SKYMILL_REDIS_PASSWORD" redis-cli -s "$socket" --user "$FATLINE_SKYMILL_REDIS_USER" PING >/dev/null || return 1
   echo "Managed Redis is reachable over Unix socket with both scoped identities."
   echo "Not qualified: provider tests still require credential-aware clients and a non-destructive namespaced test contract." >&2
   return 1
