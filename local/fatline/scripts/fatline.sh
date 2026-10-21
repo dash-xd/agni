@@ -99,7 +99,7 @@ qualify() {
 
 qualify_integration() {
   preflight
-  local tmp socket port pid
+  local tmp socket pid
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/agni-fatline-redis.XXXXXXXX")"
   socket="$tmp/redis.sock"
   cleanup_redis() {
@@ -117,9 +117,20 @@ qualify_integration() {
   done
   redis-cli -s "$socket" ping >/dev/null
   echo "Isolated 40 MiB noeviction Redis ready: $socket"
-  # The current Logma integration harness expects TCP; this gate therefore
-  # requires the Redis test fixture to support Unix sockets before proceeding.
-  echo "Logma Redis integration currently requires a TCP address; isolated Unix-socket wiring is not yet qualified." >&2
+  echo "Running Logma Redis graph tests with the isolated instance"
+  (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/pubsubmodel -run 'TestRedisStoreReconnectPersistence|TestRedisStoreGraphRoundTrip')
+  echo "Running Logma HTTP authorization boundary tests"
+  (cd "$SOURCES/logma" && GOWORK=off go test -count=1 ./internal/routes -run '^TestPubSubVerifiedProjectBoundary
+}
+
+case "${1:-}" in
+  bootstrap|preflight|build|qualify) "$1" ;;
+  qualify-integration) qualify_integration ;;
+  advance-pin) advance_pin "$@" ;;
+  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration|advance-pin}" >&2; exit 2 ;;
+esac
+)
+  echo "Graph and HTTP fixture tests passed; real Prajapati binding and project-scoped Redis store remain unqualified." >&2
   return 1
 }
 
