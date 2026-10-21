@@ -11,6 +11,16 @@
       devShells = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in { default = pkgs.mkShell { packages = with pkgs; [ go_1_26 git ]; }; });
+      packages = forAllSystems (system:
+        let pkgs = import nixpkgs { inherit system; };
+        in {
+          fatline = import ./composition.nix {
+            inherit pkgs;
+            lib = pkgs.lib;
+            config = import ./composition-config.nix;
+          };
+          default = self.packages.${system}.fatline;
+        });
       apps = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
@@ -35,13 +45,6 @@
           test = app "test";
           test-workspace = app "test-workspace";
           qualify-integration = app "qualify-integration";
-          check-quadlets = {
-            type = "app";
-            program = "${pkgs.writeShellScript "agni-check-quadlets" ''
-              export FATLINE_QUADLET_DIR=${./systemd}
-              exec ${pkgs.bash}/bin/bash ${./scripts/check-quadlets.sh}
-            ''}";
-          };
           advance-pin = app "advance-pin";
           default = app "preflight";
         });
