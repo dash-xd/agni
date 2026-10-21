@@ -8,6 +8,9 @@
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
     in {
+      # Build-only provider artifacts from the owning repositories. Their revisions
+      # must be recorded as flake.lock inputs before deployment authority exists.
+      # This build does not install Quadlets or start Redis.
       devShells = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in { default = pkgs.mkShell { packages = with pkgs; [ go_1_26 git ]; }; });
