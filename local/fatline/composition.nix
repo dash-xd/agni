@@ -1,6 +1,7 @@
 { pkgs, lib, config }:
 let
   inherit (config) redis images;
+  validMemory = assert lib.assertMsg (redis.memoryMiB == 40) "Only the 40 MiB Redis profile is qualified"; true;
   requireDigest = name: image:
     assert lib.assertMsg (builtins.isString image && builtins.match ".+@sha256:[0-9a-f]{64}" image != null)
       "${name} image must be pinned to an OCI sha256 digest";
@@ -61,7 +62,7 @@ let
     [Install]
     WantedBy=multi-user.target
   '';
-in pkgs.runCommand "fatline-quadlet-composition" { } ''
+in assert validMemory; pkgs.runCommand "fatline-quadlet-composition" { } ''
   mkdir -p "$out/quadlets" "$out/config"
   cat > "$out/quadlets/fatline-redis.container" <<'EOF'
 ${redisUnit}
@@ -75,4 +76,12 @@ EOF
   cat > "$out/config/redis.conf" <<'EOF'
 ${redisConf}
 EOF
+  grep -qx 'port 0' "$out/config/redis.conf"
+  grep -qx 'maxmemory 40mb' "$out/config/redis.conf"
+  grep -qx 'maxmemory-policy noeviction' "$out/config/redis.conf"
+  grep -qx 'aclfile /etc/redis/users.acl' "$out/config/redis.conf"
+  for provider in logma skymill; do
+    grep -qx 'Requires=fatline-redis.service' "$out/quadlets/fatline-$provider.container"
+    grep -qx 'After=fatline-redis.service' "$out/quadlets/fatline-$provider.container"
+  done
 '';
