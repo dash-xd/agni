@@ -106,7 +106,7 @@ qualify_integration() {
     if [[ -n "${pid:-}" ]]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
     rm -rf -- "$tmp"
   }
-  trap cleanup_redis EXIT
+  trap cleanup_redis RETURN
   redis-server --port 0 --unixsocket "$socket" --save "" --appendonly no --maxmemory 40mb --maxmemory-policy noeviction --daemonize no --dir "$tmp" >"$tmp/redis.log" 2>&1 &
   pid=$!
   for _ in {1..100}; do
