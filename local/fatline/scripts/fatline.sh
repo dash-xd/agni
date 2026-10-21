@@ -90,6 +90,8 @@ qualify() {
   preflight
   echo "Prajapati authorization package"
   (cd "$SOURCES/prajapati" && GOWORK=off go test -count=1 ./authz ./binding)
+  echo "Shared Logma/Skymill HTTP authentication middleware"
+  (cd "$SOURCES/logma" && GOWORK=off go test -count=1 ./serverless/authhttp ./internal/routes -run 'TestMiddleware|TestAuthenticateCallbackForSkymill|TestProtectedHTTPRouterRejectsUnverifiedRequests')
   echo "Logma graph model"
   (cd "$SOURCES/logma" && GOWORK=off go test ./internal/pubsubmodel)
   echo "Smoke package compilation"
