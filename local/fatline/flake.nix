@@ -29,6 +29,7 @@
           preflight = app "preflight";
           build = app "build";
           qualify = app "qualify";
+          test = app "test";
           qualify-integration = app "qualify-integration";
           advance-pin = app "advance-pin";
           default = app "preflight";
