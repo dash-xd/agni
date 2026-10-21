@@ -1,0 +1,26 @@
+[Unit]
+Description=Fatline shared Redis substrate
+After=local-fs.target
+RequiresMountsFor=/etc/fatline/redis /run/fatline/redis
+ConditionPathExists=/etc/fatline/redis/redis.conf
+ConditionPathExists=/etc/fatline/redis/users.acl
+
+[Container]
+Image=docker.io/library/redis:7.2.5-alpine
+ContainerName=fatline-redis
+Network=none
+ReadOnly=true
+Volume=/etc/fatline/redis/redis.conf:/etc/redis/redis.conf:ro,Z
+Volume=/etc/fatline/redis/users.acl:/etc/redis/users.acl:ro,Z
+Volume=/run/fatline/redis:/run/redis:Z
+Exec=redis-server /etc/redis/redis.conf
+NoNewPrivileges=true
+DropCapability=all
+
+[Service]
+ExecStartPre=/usr/bin/install -d -m 0770 /run/fatline/redis
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target
