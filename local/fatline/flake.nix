@@ -35,6 +35,12 @@
           test = app "test";
           test-workspace = app "test-workspace";
           qualify-integration = app "qualify-integration";
+          check-quadlets = {
+            type = "app";
+            program = "${pkgs.writeShellScript "agni-check-quadlets" ''
+              exec ${pkgs.bash}/bin/bash ${./scripts/check-quadlets.sh}
+            ''}";
+          };
           advance-pin = app "advance-pin";
           default = app "preflight";
         });
