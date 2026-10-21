@@ -89,12 +89,30 @@ build() {
 qualify() {
   preflight
   echo "Prajapati authorization package"
-  (cd "$SOURCES/prajapati" && GOWORK=off go test ./authz)
+  (cd "$SOURCES/prajapati" && GOWORK=off go test -count=1 ./authz ./binding)
   echo "Logma graph model"
   (cd "$SOURCES/logma" && GOWORK=off go test ./internal/pubsubmodel)
   echo "Smoke package compilation"
   (cd "$SOURCES/smoke" && GOWORK=off go build ./...)
-  echo "Baseline complete. Cross-project HTTP enforcement is NOT tested yet."
+  echo "Baseline complete. Redis-backed cross-project enforcement is checked by qualify-integration."
+}
+
+test_component() {
+  preflight
+  local component="${2:-}"
+  shift 2 || return 2
+  case "$component" in
+    logma|prajapati|smoke) ;;
+    *) echo "Usage: test {logma|prajapati|smoke} [go test package ...]" >&2; return 2 ;;
+  esac
+  if [[ "$#" -eq 0 ]]; then set -- ./...; fi
+  for package in "$@"; do
+    if [[ "$package" != ./... && "$package" != ./* ]]; then
+      echo "Package must be a relative Go package pattern: $package" >&2
+      return 2
+    fi
+  done
+  (cd "$SOURCES/$component" && GOWORK=off go test -count=1 "$@")
 }
 
 qualify_integration() {
@@ -130,5 +148,6 @@ case "${1:-}" in
   bootstrap|preflight|build|qualify) "$1" ;;
   qualify-integration) qualify_integration ;;
   advance-pin) advance_pin "$@" ;;
-  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration|advance-pin}" >&2; exit 2 ;;
+  test) test_component "$@" ;;
+  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration|advance-pin|test}" >&2; exit 2 ;;
 esac
