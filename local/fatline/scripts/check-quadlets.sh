@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-base="$(cd "$(dirname "${BASH_SOURCE[0]}")/../systemd" && pwd)"
+base="${FATLINE_QUADLET_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../systemd" && pwd)}"
 fail() { printf 'Fatline Quadlet preflight: %s\n' "$*" >&2; exit 1; }
 for file in fatline-redis.container fatline-logma.container fatline-skymill.container redis.conf; do
   [[ -s "$base/$file" ]] || fail "missing $file"
