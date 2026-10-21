@@ -2,7 +2,7 @@
 let
   inherit (config) redis images;
   requireDigest = name: image:
-    assert lib.assertMsg (builtins.match ".+@sha256:[0-9a-f]{64}" image != null)
+    assert lib.assertMsg (builtins.isString image && builtins.match ".+@sha256:[0-9a-f]{64}" image != null)
       "${name} image must be pinned to an OCI sha256 digest";
     image;
   service = name: image: ''
