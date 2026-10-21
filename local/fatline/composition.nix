@@ -52,7 +52,8 @@ let
     Volume=%h/.config/fatline/redis/redis.conf:/etc/redis/redis.conf:ro
     Volume=%h/.config/fatline/redis/users.acl:/etc/redis/users.acl:ro
     Volume=%t/fatline/redis:/run/redis
-    Exec=redis-server /etc/redis/redis.conf
+    # The Redis image entrypoint is redis-server; Exec supplies its config argument.
+    Exec=/etc/redis/redis.conf
     NoNewPrivileges=true
     DropCapability=all
 
