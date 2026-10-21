@@ -142,7 +142,20 @@ qualify_integration() {
   (cd "$SOURCES/logma" && GOWORK=off go test -count=1 ./internal/routes -run '^TestPubSubVerifiedProjectBoundary$')
   echo "Running cross-project HTTP/Redis isolation tests"
   (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/routes -run '^TestProjectRedisGraphIsolation$')
-  echo "Redis isolation tests finished; concrete Prajapati principal binding remains unqualified." >&2
+  echo "Running authenticated bearer HTTP/Redis isolation test (fixture resolver)"
+  (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/routes -run '^TestAuthenticatedProjectRedisIsolation
+  return 1
+}
+
+case "${1:-}" in
+  bootstrap|preflight|build|qualify) "$1" ;;
+  qualify-integration) qualify_integration ;;
+  advance-pin) advance_pin "$@" ;;
+  test) test_component "$@" ;;
+  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration|advance-pin|test}" >&2; exit 2 ;;
+esac
+)
+  echo "Fixture authentication passed; concrete Prajapati verifier and Skymill grant integration remain unqualified." >&2
   return 1
 }
 
