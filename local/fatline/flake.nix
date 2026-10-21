@@ -17,6 +17,16 @@
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in {
+          # Redis-only archive. Runtime configuration and ACLs are supplied by Agni Quadlets.
+          redis-image = pkgs.dockerTools.buildLayeredImage {
+            name = "localhost/fatline-redis";
+            tag = "candidate";
+            contents = [ pkgs.redis ];
+            config = {
+              Entrypoint = [ "${pkgs.redis}/bin/redis-server" ];
+              Cmd = [ "/etc/redis/redis.conf" ];
+            };
+          };
           fatline = import ./composition.nix {
             inherit pkgs;
             lib = pkgs.lib;
