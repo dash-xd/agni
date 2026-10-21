@@ -1,0 +1,19 @@
+[Unit]
+Description=Fatline Logma provider
+Requires=fatline-redis.service
+After=fatline-redis.service
+ConditionPathExists=/etc/fatline/logma.env
+
+[Container]
+# Image digest must be supplied by the existing Smoke/Agni qualification pipeline.
+Image=localhost/fatline-logma:qualified
+ContainerName=fatline-logma
+Network=none
+Volume=/run/fatline/redis:/run/redis:Z
+EnvironmentFile=/etc/fatline/logma.env
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
