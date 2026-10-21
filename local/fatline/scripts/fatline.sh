@@ -132,34 +132,30 @@ test_workspace() {
   (cd "$workspace" && GOWORK=off go test -count=1 "$@")
 }
 
+# Integration qualification must consume the deployed Fatline Unix socket.
+# Redis lifecycle and ACL provisioning belong to systemd-owned Fatline units.
 qualify_integration() {
   preflight
-  local tmp socket pid
-  tmp="$(mktemp -d "${TMPDIR:-/tmp}/agni-fatline-redis.XXXXXXXX")"
-  socket="$tmp/redis.sock"
-  cleanup_redis() {
-    if [[ -n "${pid:-}" ]]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
-    rm -rf -- "$tmp"
+  local socket="${FATLINE_REDIS_SOCKET:-}"
+  [[ -n "$socket" && "$socket" == /* && -S "$socket" ]] || {
+    echo "Fatline Redis Unix socket unavailable; start the systemd-managed composition first" >&2
+    return 1
   }
-  trap cleanup_redis RETURN
-  redis-server --port 0 --unixsocket "$socket" --save "" --appendonly no --maxmemory 40mb --maxmemory-policy noeviction --daemonize no --dir "$tmp" >"$tmp/redis.log" 2>&1 &
-  pid=$!
-  for _ in {1..100}; do
-    if redis-cli -s "$socket" ping >/dev/null 2>&1; then break; fi
-    if ! kill -0 "$pid" 2>/dev/null; then cat "$tmp/redis.log" >&2; return 1; fi
-    sleep 0.05
-  done
-  redis-cli -s "$socket" ping >/dev/null
-  echo "Isolated 40 MiB noeviction Redis ready: $socket"
-  echo "Running Logma Redis reconnect and graph tests"
-  (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/pubsubmodel -run 'TestRedisStoreReconnectPersistence|TestRedisStoreGraphRoundTrip')
-  echo "Running Logma HTTP authorization boundary tests"
-  (cd "$SOURCES/logma" && GOWORK=off go test -count=1 ./internal/routes -run '^TestPubSubVerifiedProjectBoundary$')
-  echo "Running cross-project HTTP/Redis isolation tests"
-  (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/routes -run '^TestProjectRedisGraphIsolation$')
-  echo "Running authenticated bearer HTTP/Redis isolation test (fixture resolver)"
-  (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/routes -run '^TestAuthenticatedProjectRedisIsolation$')
-  echo "Fixture authentication passed; concrete Prajapati verifier and Skymill grant integration remain unqualified." >&2
+  [[ -n "${FATLINE_LOGMA_REDIS_USER:-}" && -n "${FATLINE_LOGMA_REDIS_PASSWORD:-}" &&
+     -n "${FATLINE_SKYMILL_REDIS_USER:-}" && -n "${FATLINE_SKYMILL_REDIS_PASSWORD:-}" ]] || {
+    echo "Missing independently scoped Fatline Redis credentials" >&2
+    return 1
+  }
+  [[ "${FATLINE_LOGMA_REDIS_USER}" != "${FATLINE_SKYMILL_REDIS_USER}" ]] || {
+    echo "Logma and Skymill cannot share a Redis principal" >&2
+    return 1
+  }
+  redis-cli -s "$socket" --user "$FATLINE_LOGMA_REDIS_USER" \
+    -a "$FATLINE_LOGMA_REDIS_PASSWORD" PING >/dev/null || return 1
+  redis-cli -s "$socket" --user "$FATLINE_SKYMILL_REDIS_USER" \
+    -a "$FATLINE_SKYMILL_REDIS_PASSWORD" PING >/dev/null || return 1
+  echo "Managed Redis is reachable over Unix socket with both scoped identities."
+  echo "Not qualified: provider tests still require credential-aware clients and a non-destructive namespaced test contract." >&2
   return 1
 }
 
