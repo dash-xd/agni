@@ -2,29 +2,30 @@
 let
   inherit (config) redis images;
   validMemory = assert lib.assertMsg (redis.memoryMiB == 40) "Only the 40 MiB Redis profile is qualified"; true;
-  requireDigest = name: image:
-    assert lib.assertMsg (builtins.isString image && builtins.match ".+@sha256:[0-9a-f]{64}" image != null)
-      "${name} image must be pinned to an OCI sha256 digest";
+  requireLocalImage = name: image:
+    assert lib.assertMsg (builtins.isString image && builtins.match "sha256:[0-9a-f]{64}" image != null)
+      "${name} image must be a verified local Podman sha256 image ID";
     image;
   service = name: image: ''
     [Unit]
     Description=Fatline ${name}
     Requires=fatline-redis.service
     After=fatline-redis.service
-    ConditionPathExists=/etc/fatline/${name}.env
+    ConditionPathExists=%h/.config/fatline/${name}.env
 
     [Container]
-    Image=${requireDigest name image}
+    Image=${requireLocalImage name image}
+    Pull=never
     ContainerName=fatline-${name}
     Network=none
-    Volume=/run/fatline/redis:/run/redis
-    EnvironmentFile=/etc/fatline/${name}.env
+    Volume=%t/fatline/redis:/run/redis
+    EnvironmentFile=%h/.config/fatline/${name}.env
 
     [Service]
     Restart=always
 
     [Install]
-    WantedBy=multi-user.target
+    WantedBy=default.target
   '';
   redisConf = ''
     port 0
@@ -40,27 +41,27 @@ let
   redisUnit = ''
     [Unit]
     Description=Fatline shared Redis
-    ConditionPathExists=/etc/fatline/redis/users.acl
-    After=local-fs.target
+    ConditionPathExists=%h/.config/fatline/redis/users.acl
 
     [Container]
-    Image=${requireDigest "redis" images.redis}
+    Image=${requireLocalImage "redis" images.redis}
+    Pull=never
     ContainerName=fatline-redis
     Network=none
     ReadOnly=true
-    Volume=/etc/fatline/redis/redis.conf:/etc/redis/redis.conf:ro
-    Volume=/etc/fatline/redis/users.acl:/etc/redis/users.acl:ro
-    Volume=/run/fatline/redis:/run/redis
+    Volume=%h/.config/fatline/redis/redis.conf:/etc/redis/redis.conf:ro
+    Volume=%h/.config/fatline/redis/users.acl:/etc/redis/users.acl:ro
+    Volume=%t/fatline/redis:/run/redis
     Exec=redis-server /etc/redis/redis.conf
     NoNewPrivileges=true
     DropCapability=all
 
     [Service]
-    ExecStartPre=/usr/bin/install -d -m 0770 /run/fatline/redis
+    ExecStartPre=/usr/bin/install -d -m 0770 %t/fatline/redis
     Restart=always
 
     [Install]
-    WantedBy=multi-user.target
+    WantedBy=default.target
   '';
 in assert validMemory; pkgs.runCommand "fatline-quadlet-composition" { } ''
   mkdir -p "$out/quadlets" "$out/config"
@@ -76,11 +77,13 @@ EOF
   cat > "$out/config/redis.conf" <<'EOF'
 ${redisConf}
 EOF
+  grep -qx 'Pull=never' "$out/quadlets/fatline-redis.container"
   grep -qx 'port 0' "$out/config/redis.conf"
   grep -qx 'maxmemory 40mb' "$out/config/redis.conf"
   grep -qx 'maxmemory-policy noeviction' "$out/config/redis.conf"
   grep -qx 'aclfile /etc/redis/users.acl' "$out/config/redis.conf"
   for provider in logma skymill; do
+    grep -qx 'Pull=never' "$out/quadlets/fatline-$provider.container"
     grep -qx 'Requires=fatline-redis.service' "$out/quadlets/fatline-$provider.container"
     grep -qx 'After=fatline-redis.service' "$out/quadlets/fatline-$provider.container"
   done
