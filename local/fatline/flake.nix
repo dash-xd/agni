@@ -33,6 +33,7 @@
           build = app "build";
           qualify = app "qualify";
           test = app "test";
+          test-workspace = app "test-workspace";
           qualify-integration = app "qualify-integration";
           advance-pin = app "advance-pin";
           default = app "preflight";
