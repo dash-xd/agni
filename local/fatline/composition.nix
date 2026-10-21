@@ -84,4 +84,4 @@ EOF
     grep -qx 'Requires=fatline-redis.service' "$out/quadlets/fatline-$provider.container"
     grep -qx 'After=fatline-redis.service' "$out/quadlets/fatline-$provider.container"
   done
-'';
+''
