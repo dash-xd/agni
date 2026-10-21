@@ -107,7 +107,6 @@ qualify_integration() {
     rm -rf -- "$tmp"
   }
   trap cleanup_redis EXIT
-  # No TCP listeners exposed by the test instance.
   redis-server --port 0 --unixsocket "$socket" --save "" --appendonly no --maxmemory 40mb --maxmemory-policy noeviction --daemonize no --dir "$tmp" >"$tmp/redis.log" 2>&1 &
   pid=$!
   for _ in {1..100}; do
@@ -117,20 +116,11 @@ qualify_integration() {
   done
   redis-cli -s "$socket" ping >/dev/null
   echo "Isolated 40 MiB noeviction Redis ready: $socket"
-  echo "Running Logma Redis graph tests with the isolated instance"
+  echo "Running Logma Redis reconnect and graph tests"
   (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/pubsubmodel -run 'TestRedisStoreReconnectPersistence|TestRedisStoreGraphRoundTrip')
   echo "Running Logma HTTP authorization boundary tests"
-  (cd "$SOURCES/logma" && GOWORK=off go test -count=1 ./internal/routes -run '^TestPubSubVerifiedProjectBoundary
-}
-
-case "${1:-}" in
-  bootstrap|preflight|build|qualify) "$1" ;;
-  qualify-integration) qualify_integration ;;
-  advance-pin) advance_pin "$@" ;;
-  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration|advance-pin}" >&2; exit 2 ;;
-esac
-)
-  echo "Graph and HTTP fixture tests passed; real Prajapati binding and project-scoped Redis store remain unqualified." >&2
+  (cd "$SOURCES/logma" && GOWORK=off go test -count=1 ./internal/routes -run '^TestPubSubVerifiedProjectBoundary$')
+  echo "Fixture tests finished; real Prajapati binding and project-scoped Redis store remain unqualified." >&2
   return 1
 }
 
