@@ -120,7 +120,19 @@ qualify_integration() {
   (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/pubsubmodel -run 'TestRedisStoreReconnectPersistence|TestRedisStoreGraphRoundTrip')
   echo "Running Logma HTTP authorization boundary tests"
   (cd "$SOURCES/logma" && GOWORK=off go test -count=1 ./internal/routes -run '^TestPubSubVerifiedProjectBoundary$')
-  echo "Fixture tests finished; real Prajapati binding and project-scoped Redis store remain unqualified." >&2
+  echo "Running cross-project HTTP/Redis isolation tests"
+  (cd "$SOURCES/logma" && LOGMA_PUBSUBMODEL_REDIS_ADDR="$socket" GOWORK=off go test -count=1 ./internal/routes -run '^TestProjectRedisGraphIsolation
+  return 1
+}
+
+case "${1:-}" in
+  bootstrap|preflight|build|qualify) "$1" ;;
+  qualify-integration) qualify_integration ;;
+  advance-pin) advance_pin "$@" ;;
+  *) echo "Usage: fatline.sh {bootstrap|preflight|build|qualify|qualify-integration|advance-pin}" >&2; exit 2 ;;
+esac
+)
+  echo "Redis isolation tests finished; concrete Prajapati principal binding remains unqualified." >&2
   return 1
 }
 
