@@ -1,8 +1,8 @@
 # Local Fatline service composition (systemd user manager)
 
-This directory defines a persistent, systemd-owned Redis service for a Fatline scope. It is **not** a test-script-managed Redis process.
+This directory specifies the planned persistent, systemd-owned Redis service for a Fatline scope. It is **not** a test-script-managed Redis process.
 
-The following files are templates, not automatically installed or qualified on the host. A deployment must supply a scope-specific Redis configuration, socket directory, scoped ACL file and secrets using its existing Smoke/Quadlet authority path.
+No service units have been installed or qualified by this change. A deployment must supply a scope-specific Redis configuration, socket directory, scoped ACL file and secrets using its existing Smoke/Quadlet authority path.
 
 Service ordering:
 
