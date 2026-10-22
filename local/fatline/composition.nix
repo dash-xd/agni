@@ -10,8 +10,8 @@ let
   requireLocalImage = name: image:
     assert lib.assertMsg (
       builtins.isString image &&
-      (builtins.match ("localhost/fatline/" + name + ":[0-9]{4}\\\\.[0-9]{2}\\\\.[0-9]{2}(\\\\.[0-9]+)?") image != null ||
-       builtins.match ("localhost/nix-alpine/" + name + ":qualified-[0-9]{4}\\\\.[0-9]{2}\\\\.[0-9]{2}(\\\\.[0-9]+)?") image != null)
+      (builtins.match ("localhost/fatline/" + name + ":[0-9]{4}[.][0-9]{2}[.][0-9]{2}([.][0-9]+)?") image != null ||
+       builtins.match ("localhost/nix-alpine/" + name + ":qualified-[0-9]{4}[.][0-9]{2}[.][0-9]{2}([.][0-9]+)?") image != null)
     ) "${name} must use a Fatline CalVer tag or Nix-Alpine qualified release tag";
     image;
   service = name: image: ''
