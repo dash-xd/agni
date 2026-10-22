@@ -3,8 +3,8 @@ let
   inherit (config) redis images;
   validMemory = assert lib.assertMsg (redis.memoryMiB == 40) "Only the 40 MiB Redis profile is qualified"; true;
   requireLocalImage = name: image:
-    assert lib.assertMsg (builtins.isString image && builtins.match ("localhost/fatline/" + name + ":v0\\.0\\.[1-9][0-9]*") image != null)
-      "${name} image must use a canonical localhost/fatline/<component>:v0.0.x reference";
+    assert lib.assertMsg (builtins.isString image && builtins.match ("localhost/fatline/" + name + ":[0-9]{4}\\.(0[1-9]|1[0-2])\\.(0[1-9]|[12][0-9]|3[01])(\\.(0|[1-9][0-9]*))?") image != null)
+      "${name} image must use a canonical localhost/fatline/<component>:YYYY.0M.0D[.MICRO] reference";
     image;
   service = name: image: ''
     [Unit]
