@@ -36,10 +36,12 @@
               Cmd = [ "-g" "daemon off;" "-c" "/etc/nginx/nginx.conf" ];
             };
           };
-          fatline = import ./composition.nix {
-            inherit pkgs;
-            lib = pkgs.lib;
+          fatline = let
             config = import ./composition-config.nix;
+          in import ./composition.nix {
+            inherit pkgs config;
+            lib = pkgs.lib;
+            components = config.images;
           };
           default = self.packages.${system}.fatline;
         });
