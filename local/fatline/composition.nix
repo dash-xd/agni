@@ -1,6 +1,9 @@
-{ pkgs, lib, config }:
+{ pkgs, lib, config, components ? config.images }:
 let
-  inherit (config) redis images;
+  inherit (config) redis;
+  # Composition consumes caller-selected image references; Agni owns topology.
+  # The defaults remain reserved placeholders until release-ledger verification.
+  images = components;
   validMemory = assert lib.assertMsg (redis.memoryMiB == 40) "Only the 40 MiB Redis profile is qualified"; true;
   requireLocalImage = name: image:
     assert lib.assertMsg (builtins.isString image && builtins.match ("localhost/fatline/" + name + ":[0-9]{4}\\.(0[1-9]|1[0-2])\\.(0[1-9]|[12][0-9]|3[01])(\\.(0|[1-9][0-9]*))?") image != null)
@@ -108,7 +111,10 @@ let
     WantedBy=default.target
   '';
 in assert validMemory; pkgs.runCommand "fatline-quadlet-composition" { } ''
-  mkdir -p "$out/quadlets" "$out/config"
+  mkdir -p "$out/quadlets" "$out/config" "$out/metadata"
+  cat > "$out/metadata/components.json" <<'EOF'
+${builtins.toJSON images}
+EOF
   cat > "$out/quadlets/fatline-redis.container" <<'EOF'
 ${redisUnit}
 EOF
