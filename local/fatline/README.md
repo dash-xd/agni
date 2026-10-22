@@ -47,4 +47,4 @@ generating it to freeze the Nixpkgs revision too.
 
 ## Versioning ownership
 
-General-purpose CalVer release naming, candidate/qualified tag semantics and qualification identity belong to [Smoke's VERSIONING_IDIOMS.md](https://github.com/xd-dash/smoke/blob/codex/canonical-calver-versioning/VERSIONING_IDIOMS.md). Agni only declares Fatline component references and runtime topology. The currently configured CalVer references are reserved, not qualified or published; deployment requires externally authorized exact image-ID verification.
+CalVer release naming, candidate/qualified tag semantics and qualification identity for artifacts built by Nix-Alpine belong to [Nix-Alpine's VERSIONING_IDIOMS.md](https://github.com/dash-xd/nix-alpine/blob/codex/make-bash-local-orchestration/VERSIONING_IDIOMS.md). Agni only declares Fatline component references and runtime topology. The currently configured CalVer references are reserved, not qualified or published; deployment requires externally authorized exact image-ID verification.
