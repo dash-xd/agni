@@ -3,8 +3,8 @@ let
   inherit (config) redis images;
   validMemory = assert lib.assertMsg (redis.memoryMiB == 40) "Only the 40 MiB Redis profile is qualified"; true;
   requireLocalImage = name: image:
-    assert lib.assertMsg (builtins.isString image && builtins.match "sha256:[0-9a-f]{64}" image != null)
-      "${name} image must be a verified local Podman sha256 image ID";
+    assert lib.assertMsg (builtins.isString image && builtins.match "localhost/fatline/(redis|nginx|logma|skymill):v0\\.0\\.[1-9][0-9]*" image != null)
+      "${name} image must use a canonical localhost/fatline/<component>:v0.0.x reference";
     image;
   service = name: image: ''
     [Unit]
