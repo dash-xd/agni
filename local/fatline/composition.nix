@@ -5,9 +5,14 @@ let
   # The defaults remain reserved placeholders until release-ledger verification.
   images = components;
   validMemory = assert lib.assertMsg (redis.memoryMiB == 40) "Only the 40 MiB Redis profile is qualified"; true;
+  # Qualified release tags are selected and pinned by the Nix-Alpine ledger.
+  # Podman image availability is a separate deployment/runtime gate.
   requireLocalImage = name: image:
-    assert lib.assertMsg (builtins.isString image && builtins.match ("localhost/fatline/" + name + ":[0-9]{4}\\.(0[1-9]|1[0-2])\\.(0[1-9]|[12][0-9]|3[01])(\\.(0|[1-9][0-9]*))?") image != null)
-      "${name} image must use a canonical localhost/fatline/<component>:YYYY.0M.0D[.MICRO] reference";
+    assert lib.assertMsg (
+      builtins.isString image &&
+      (builtins.match ("localhost/fatline/" + name + ":[0-9]{4}\\\\.[0-9]{2}\\\\.[0-9]{2}(\\\\.[0-9]+)?") image != null ||
+       builtins.match ("localhost/nix-alpine/" + name + ":qualified-[0-9]{4}\\\\.[0-9]{2}\\\\.[0-9]{2}(\\\\.[0-9]+)?") image != null)
+    ) "${name} must use a Fatline CalVer tag or Nix-Alpine qualified release tag";
     image;
   service = name: image: ''
     [Unit]
