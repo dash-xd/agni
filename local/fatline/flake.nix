@@ -27,6 +27,15 @@
               Cmd = [ "/etc/redis/redis.conf" ];
             };
           };
+          nginx-image = pkgs.dockerTools.buildLayeredImage {
+            name = "localhost/fatline-nginx";
+            tag = "candidate";
+            contents = [ pkgs.nginx ];
+            config = {
+              Entrypoint = [ "${pkgs.nginx}/bin/nginx" ];
+              Cmd = [ "-g" "daemon off;" "-c" "/etc/nginx/nginx.conf" ];
+            };
+          };
           fatline = import ./composition.nix {
             inherit pkgs;
             lib = pkgs.lib;
