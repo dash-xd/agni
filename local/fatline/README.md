@@ -44,3 +44,7 @@ code changes; do not treat baseline success as security qualification.
 
 The flake uses a Nixpkgs input and Go 1.26. Commit `flake.lock` after
 generating it to freeze the Nixpkgs revision too.
+
+## Versioning ownership
+
+General-purpose CalVer release naming, candidate/qualified tag semantics and qualification identity belong to [Smoke's VERSIONING_IDIOMS.md](https://github.com/xd-dash/smoke/blob/codex/canonical-calver-versioning/VERSIONING_IDIOMS.md). Agni only declares Fatline component references and runtime topology. The currently configured CalVer references are reserved, not qualified or published; deployment requires externally authorized exact image-ID verification.
