@@ -69,6 +69,7 @@ let
     Network=fatline.network
     NetworkAlias=redis-proxy
     ReadOnly=true
+    User=65534:65534
     Tmpfs=/tmp:rw,noexec,nosuid,size=4m
     Volume=%h/.config/fatline/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     Volume=%t/fatline/redis:/run/redis
