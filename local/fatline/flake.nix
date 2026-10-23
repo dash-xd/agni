@@ -28,6 +28,47 @@
               Cmd = [ "-g" "daemon off;" "-c" "/etc/nginx/nginx.conf" ];
             };
           };
+          # Build-only template. Smoke substitutes the inspected immutable image ID
+          # into its disposable scope; no candidate can enter production composition.
+          redis-qualification = pkgs.runCommand "fatline-redis-qualification-template" { } ''
+            mkdir -p "$out/quadlets" "$out/config"
+            cat > "$out/quadlets/fatline-qualify-redis.container" <<'EOF'
+            [Unit]
+            Description=Disposable Fatline Redis candidate qualification
+            ConditionPathExists=%h/.config/fatline-qualify/redis/users.acl
+
+            [Container]
+            Image=__CANDIDATE_IMAGE_ID__
+            Pull=never
+            ContainerName=fatline-qualify-redis
+            Network=none
+            ReadOnly=true
+            Volume=%h/.config/fatline-qualify/redis/redis.conf:/etc/redis/redis.conf:ro
+            Volume=%h/.config/fatline-qualify/redis/users.acl:/etc/redis/users.acl:ro
+            Volume=%t/fatline-qualify/redis:/run/redis
+            Exec=/etc/redis/redis.conf
+            NoNewPrivileges=true
+            DropCapability=all
+
+            [Service]
+            ExecStartPre=/usr/bin/install -d -m 0700 %t/fatline-qualify/redis
+            Restart=on-failure
+            EOF
+            cat > "$out/config/redis.conf" <<'EOF'
+            port 0
+            unixsocket /run/redis/redis.sock
+            unixsocketperm 770
+            save ""
+            appendonly no
+            maxmemory 40mb
+            maxmemory-policy noeviction
+            aclfile /etc/redis/users.acl
+            protected-mode yes
+            EOF
+            grep -qx 'Image=__CANDIDATE_IMAGE_ID__' "$out/quadlets/fatline-qualify-redis.container"
+            grep -qx 'Network=none' "$out/quadlets/fatline-qualify-redis.container"
+            grep -qx 'maxmemory-policy noeviction' "$out/config/redis.conf"
+          '';
           fatline = let
             config = import ./composition-config.nix;
           in import ./composition.nix {
