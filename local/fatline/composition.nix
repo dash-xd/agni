@@ -42,6 +42,7 @@ let
     WantedBy=default.target
   '';
   nginxConf = ''
+    user root;
     worker_processes 1;
     pid /tmp/nginx.pid;
     error_log /dev/stderr warn;
@@ -69,6 +70,7 @@ let
     Network=fatline.network
     NetworkAlias=redis-proxy
     ReadOnly=true
+    Tmpfs=/tmp:rw,noexec,nosuid,size=4m
     Volume=%h/.config/fatline/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     Volume=%t/fatline/redis:/run/redis
     NoNewPrivileges=true
