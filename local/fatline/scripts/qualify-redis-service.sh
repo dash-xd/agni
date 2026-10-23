@@ -15,6 +15,13 @@ conf="${FATLINE_QUALIFY_REDIS_CONF:-}"
 }
 [[ -n "$conf" && -f "$conf" ]] || { echo "Agni Redis configuration missing" >&2; exit 1; }
 grep -Fxq "ContainerName=$container" "$quadlet" || { echo "Quadlet container identity differs from dedicated test scope" >&2; exit 1; }
+image_ref="$(sed -n 's/^Image=//p' "$quadlet")"
+[[ "$image_ref" =~ ^localhost/nix-alpine/redis:qualified-[0-9]{4}[.][0-9]{2}[.][0-9]{2}([.][0-9]+)?$ ]] || {
+  echo "Quadlet does not pin a versioned qualified Redis image reference" >&2; exit 1;
+}
+resolved="$(podman image inspect "$image_ref" --format '{{.Id}}')"
+[[ "$resolved" =~ ^[a-f0-9]{64}$ ]] && resolved="sha256:$resolved"
+[[ "$resolved" == "$expected" ]] || { echo "Qualified reference resolves to a different image" >&2; exit 1; }
 for line in 'Network=none' 'ReadOnly=true' 'Pull=never' 'DropCapability=all'; do
   grep -Fxq "$line" "$quadlet" || { echo "Quadlet invariant missing: $line" >&2; exit 1; }
 done
