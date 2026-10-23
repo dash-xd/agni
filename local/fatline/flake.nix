@@ -48,6 +48,7 @@
             Restart=no
             EOF
             cat > "$out/config/nginx.conf" <<'EOF'
+            user root;
             worker_processes 1;
             pid /tmp/nginx.pid;
             error_log /dev/stderr warn;
