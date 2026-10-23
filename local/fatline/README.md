@@ -48,3 +48,19 @@ generating it to freeze the Nixpkgs revision too.
 ## Versioning ownership
 
 CalVer release naming, candidate/qualified tag semantics and qualification identity for artifacts built by Nix-Alpine belong to [Nix-Alpine's VERSIONING_IDIOMS.md](https://github.com/dash-xd/nix-alpine/blob/codex/make-bash-local-orchestration/VERSIONING_IDIOMS.md). Agni only declares Fatline component references and runtime topology. The currently configured CalVer references are reserved, not qualified or published; deployment requires externally authorized exact image-ID verification.
+
+## Redis image ownership and service qualification
+
+Agni no longer builds a Redis OCI image. The Redis image is built, imported,
+and qualified by Nix-Alpine's `release/components/redis` flake and release
+ledger. `composition.nix` accepts only a versioned
+`localhost/nix-alpine/redis:qualified-YYYY.MM.DD[.MICRO]` reference for
+Redis. The reserved `composition-config.nix` references are deliberately
+not deployment-ready.
+
+The host-only `scripts/qualify-redis-service.sh` inspects an independently
+deployed Smoke-managed qualification unit. It refuses the production Fatline
+unit, records the observed Podman image ID and Agni Quadlet/configuration
+hashes, and **always fails** until socket ACL, lifecycle and restart recovery
+are implemented. Do not substitute this identity probe for service
+qualification or start a parallel ad-hoc Redis test container.
