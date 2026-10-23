@@ -53,6 +53,7 @@
             error_log /dev/stderr warn;
             events { worker_connections 128; }
             http {
+              access_log off;
               server {
                 listen 127.0.0.1:8080;
                 location /health { return 200 "ok"; }
