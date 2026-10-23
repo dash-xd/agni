@@ -14,6 +14,7 @@ conf="${FATLINE_QUALIFY_REDIS_CONF:-}"
   exit 1
 }
 [[ -n "$conf" && -f "$conf" ]] || { echo "Agni Redis configuration missing" >&2; exit 1; }
+grep -Fxq "ContainerName=$container" "$quadlet" || { echo "Quadlet container identity differs from dedicated test scope" >&2; exit 1; }
 for line in 'Network=none' 'ReadOnly=true' 'Pull=never' 'DropCapability=all'; do
   grep -Fxq "$line" "$quadlet" || { echo "Quadlet invariant missing: $line" >&2; exit 1; }
 done
