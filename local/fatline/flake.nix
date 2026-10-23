@@ -17,16 +17,8 @@
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in {
-          # Redis-only archive. Runtime configuration and ACLs are supplied by Agni Quadlets.
-          redis-image = pkgs.dockerTools.buildLayeredImage {
-            name = "localhost/fatline-redis";
-            tag = "candidate";
-            contents = [ pkgs.redis ];
-            config = {
-              Entrypoint = [ "${pkgs.redis}/bin/redis-server" ];
-              Cmd = [ "/etc/redis/redis.conf" ];
-            };
-          };
+          # Redis artifacts are produced and qualified by Nix-Alpine.
+          # Agni consumes only the release-ledger-selected image reference.
           nginx-image = pkgs.dockerTools.buildLayeredImage {
             name = "localhost/fatline-nginx";
             tag = "candidate";
