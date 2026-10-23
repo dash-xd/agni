@@ -40,6 +40,7 @@
             Network=none
             ReadOnly=true
             Volume=%h/.config/fatline-qualify/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+            Tmpfs=/tmp:rw,noexec,nosuid,size=4m
             NoNewPrivileges=true
             DropCapability=all
             [Service]
