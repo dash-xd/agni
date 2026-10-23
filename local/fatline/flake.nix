@@ -28,6 +28,38 @@
               Cmd = [ "-g" "daemon off;" "-c" "/etc/nginx/nginx.conf" ];
             };
           };
+          nginx-qualification = pkgs.runCommand "fatline-nginx-qualification-template" { } ''
+            mkdir -p "$out/quadlets" "$out/config"
+            cat > "$out/quadlets/fatline-qualify-nginx.container" <<'EOF'
+            [Unit]
+            Description=Disposable Fatline Nginx candidate qualification
+            [Container]
+            Image=__CANDIDATE_IMAGE_ID__
+            Pull=never
+            ContainerName=fatline-qualify-nginx
+            Network=none
+            ReadOnly=true
+            Volume=%h/.config/fatline-qualify/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+            NoNewPrivileges=true
+            DropCapability=all
+            [Service]
+            Restart=no
+            EOF
+            cat > "$out/config/nginx.conf" <<'EOF'
+            worker_processes 1;
+            pid /tmp/nginx.pid;
+            error_log /dev/stderr warn;
+            events { worker_connections 128; }
+            http {
+              server {
+                listen 127.0.0.1:8080;
+                location /health { return 200 "ok"; }
+              }
+            }
+            EOF
+            grep -qx 'Network=none' "$out/quadlets/fatline-qualify-nginx.container"
+            grep -qx 'Image=__CANDIDATE_IMAGE_ID__' "$out/quadlets/fatline-qualify-nginx.container"
+          '';
           # Build-only template. Smoke substitutes the inspected immutable image ID
           # into its disposable scope; no candidate can enter production composition.
           redis-qualification = pkgs.runCommand "fatline-redis-qualification-template" { } ''
