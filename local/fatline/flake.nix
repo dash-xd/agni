@@ -41,7 +41,7 @@
             ReadOnly=true
             Volume=%h/.config/fatline-qualify/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
             Tmpfs=/tmp:rw,noexec,nosuid,size=4m
-            Exec=-g daemon off; -c /etc/nginx/nginx.conf
+            Exec=-g "daemon off;" -c /etc/nginx/nginx.conf
             NoNewPrivileges=true
             DropCapability=all
             [Service]
