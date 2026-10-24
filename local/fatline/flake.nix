@@ -110,6 +110,21 @@
             grep -qx 'Network=none' "$out/quadlets/fatline-qualify-redis.container"
             grep -qx 'maxmemory-policy noeviction' "$out/config/redis.conf"
           '';
+          # Qualification-only topology artifact. Never deployed or promoted.
+          # Runtime selects and verifies actual immutable image IDs separately.
+          composition-qualification = let
+            config = import ./composition-config.nix;
+          in import ./composition.nix {
+            inherit pkgs;
+            lib = pkgs.lib;
+            config = config;
+            components = {
+              redis = "localhost/nix-alpine/redis:qualified-2026.10.23";
+              nginx = "localhost/nix-alpine/nginx:qualified-2026.10.23.1";
+              logma = "localhost/fatline/logma:2026.10.23";
+              skymill = "localhost/fatline/skymill:2026.10.23";
+            };
+          };
           fatline = let
             config = import ./composition-config.nix;
           in import ./composition.nix {
