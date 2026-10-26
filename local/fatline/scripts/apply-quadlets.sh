@@ -38,6 +38,8 @@ for file in "$bundle"/quadlets/*; do
     exit 1
   fi
 done
+# Validate shell syntax and bundle structure in a disposable environment before
+# any host unit is modified. Preflight explicitly does not start containers.
 # Fail closed on bundle prerequisites before installing any generated unit.
 # A missing health probe or reconciliation executable must never cause a
 # partially installed deployment.
