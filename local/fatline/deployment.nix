@@ -54,7 +54,8 @@ in pkgs.runCommand "fatline-deployment" {} ''
   DropCapability=all
 
   [Service]
-  ExecStartPre=/usr/bin/install -d -m 0700 %t/fatline/redis
+  ExecStartPre=/usr/bin/install -d -m 0700 %t/fatline
+  ExecStartPre=/usr/bin/podman unshare install -d -o 65534 -g 65534 -m 0770 %t/fatline/redis
   Restart=on-failure
   ExecStartPost=/usr/bin/systemctl --user --no-block start fatline-reconcile.service
 
