@@ -11,7 +11,7 @@ bundle=$1 state=$2
 command -v flock >/dev/null
 command -v systemctl >/dev/null
 command -v podman >/dev/null
-[[ "$preflight_only" == true ]] || mkdir -p "$state"
+mkdir -p "$state"
 exec 9>"$state/apply.lock"
 flock -n 9 || { echo "Fatline apply already running" >&2; exit 1; }
 dest="${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd"
