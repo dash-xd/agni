@@ -85,6 +85,18 @@ if (( ${#changed[@]} == 0 )); then
   echo "PASS: Fatline Quadlets already converged"
   exit 0
 fi
+# Existing network or volume definitions must be migrated separately. Reject
+# the change before installing any files, not after daemon-reload.
+for name in "${changed[@]}"; do
+  case "$name" in
+    *.network|*.volume)
+      target=$(unit_dest "$name")
+      if [[ -f "$target" ]]; then
+        echo "network/volume change requires an explicit migration: $name" >&2
+        exit 1
+      fi ;;
+  esac
+done
 # Record identities of unaffected running providers; a scoped upgrade must not
 # silently replace them through dependency propagation.
 declare -A before_ids=()
@@ -134,17 +146,6 @@ for name in "${changed[@]}"; do
   install -m 600 "$bundle/quadlets/$name" "$target"
 done
 systemctl --user daemon-reload
-# Network definition changes require an explicit migration, not an accidental
-# restart of every provider on a live host.
-for name in "${changed[@]}"; do
-  case "$name" in
-    *.network|*.volume)
-      if [[ -f "$backup/$name" ]]; then
-        echo "network/volume change requires an explicit migration: $name" >&2
-        exit 1
-      fi ;;
-  esac
-done
 # Restart only changed providers. No cascading PartOf/BindsTo relationships.
 for component in redis logma skymill; do
   for name in "${changed[@]}"; do
