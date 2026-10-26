@@ -53,6 +53,14 @@ if (( ${#changed[@]} == 0 )); then
   echo "PASS: Fatline Quadlets already converged"
   exit 0
 fi
+# Record identities of unaffected running providers; a scoped upgrade must not
+# silently replace them through dependency propagation.
+declare -A before_ids=()
+for component in redis logma skymill; do
+  if systemctl --user is-active --quiet "fatline-$component.service"; then
+    before_ids[$component]=$(podman inspect "fatline-$component" --format '{{.Id}}' 2>/dev/null || true)
+  fi
+done
 backup=$(mktemp -d "$state/backup.XXXXXXXX")
 rollback() {
   code=$?
@@ -98,6 +106,20 @@ for component in redis logma skymill; do
       { echo "failed to start fatline-$component" >&2; exit 1; }
     echo "PASS: updated fatline-$component without replacing other providers"
   done
+done
+for component in redis logma skymill; do
+  [[ -n "${before_ids[$component]:-}" ]] || continue
+  changed_provider=false
+  for name in "${changed[@]}"; do
+    [[ "$name" != "fatline-$component.container" ]] || changed_provider=true
+  done
+  if [[ "$changed_provider" == false ]]; then
+    after_id=$(podman inspect "fatline-$component" --format '{{.Id}}' 2>/dev/null || true)
+    [[ "$after_id" == "${before_ids[$component]}" ]] || {
+      echo "FAIL: unchanged fatline-$component was replaced during apply" >&2
+      exit 1
+    }
+  fi
 done
 printf '%s\n' "$bundle"/quadlets/* | sed 's|.*/||' > "$ledger.tmp"
 mv "$ledger.tmp" "$ledger"
