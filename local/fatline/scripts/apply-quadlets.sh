@@ -2,20 +2,22 @@
 # Apply a Nix-rendered Fatline Quadlet bundle, restarting only changed units.
 # Runs on the host as the same user that owns the rootless Podman systemd units.
 set -Eeuo pipefail
-[[ $# == 2 ]] || { echo "usage: $0 BUNDLE_DIR STATE_DIR" >&2; exit 2; }
+[[ $# == 2 || ( $# == 3 && "$3" == "--preflight" ) ]] || { echo "usage: $0 BUNDLE_DIR STATE_DIR [--preflight]" >&2; exit 2; }
+preflight_only=false
+[[ "${3:-}" != --preflight ]] || preflight_only=true
 bundle=$1 state=$2
 [[ -d "$bundle/quadlets" && -d "$bundle/config" && -f "$bundle/metadata/components.json" ]] ||
   { echo "invalid Fatline bundle" >&2; exit 2; }
 command -v flock >/dev/null
 command -v systemctl >/dev/null
 command -v podman >/dev/null
-mkdir -p "$state"
+[[ "$preflight_only" == true ]] || mkdir -p "$state"
 exec 9>"$state/apply.lock"
 flock -n 9 || { echo "Fatline apply already running" >&2; exit 1; }
 dest="${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd"
-mkdir -p "$dest"
+[[ "$preflight_only" == true ]] || mkdir -p "$dest"
 service_dest="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-mkdir -p "$service_dest"
+[[ "$preflight_only" == true ]] || mkdir -p "$service_dest"
 unit_dest() { case "$1" in *.service) printf "%s/%s" "$service_dest" "$1";; *) printf "%s/%s" "$dest" "$1";; esac; }
 # Never silently take ownership of another deployment's Quadlets.
 ledger="$state/managed-units"
@@ -43,6 +45,7 @@ for name in redis logma skymill; do
   image=$(sed -n 's/^Image=//p' "$file")
   [[ -n "$image" && "$image" != *$'\n'* ]] || { echo "invalid image for $name" >&2; exit 1; }
   podman image exists "$image" || { echo "image not loaded: $image" >&2; exit 1; }
+  [[ "$image" != localhost/fatline/*:2026.10.21 ]] || { echo "reserved image reference not deployable: $image" >&2; exit 1; }
   [[ "$image" != *:candidate && "$image" != *:latest ]] || { echo "mutable image tag forbidden: $image" >&2; exit 1; }
 done
 changed=()
@@ -54,6 +57,17 @@ for file in "$bundle"/quadlets/*; do
     changed+=("$name")
   fi
 done
+if [[ "$preflight_only" == true ]]; then
+  printf "Preflight changes: %s\n" "${changed[*]:-none}"
+  for component in redis logma skymill; do
+    readiness="${XDG_CONFIG_HOME:-$HOME/.config}/fatline/readiness/$component"
+    [[ -x "$readiness" ]] || { echo "missing readiness probe: $readiness" >&2; exit 1; }
+  done
+  reconcile="${XDG_CONFIG_HOME:-$HOME/.config}/fatline/reconcile"
+  [[ -x "$reconcile" ]] || { echo "missing reconciliation executable: $reconcile" >&2; exit 1; }
+  echo "PASS: preflight only; no units changed"
+  exit 0
+fi
 if (( ${#changed[@]} == 0 )); then
   echo "PASS: Fatline Quadlets already converged"
   exit 0
