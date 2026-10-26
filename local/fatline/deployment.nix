@@ -1,6 +1,6 @@
-{ pkgs, images }:
+{ pkgs, images, transports ? { logma = "unix"; skymill = "unix"; } }:
 let
-  provider = name: image: ''
+  provider = name: image: let transport = transports.${name} or "unix"; in assert builtins.elem transport [ "unix" "tcp-proxy" ]; ''
     [Unit]
     Description=Fatline ${name} provider
     Wants=fatline-redis.service
@@ -12,7 +12,8 @@ let
     Pull=never
     ContainerName=fatline-${name}
     Network=fatline.network
-    Volume=%t/fatline/redis:/run/redis
+    ${if transport == "unix" then "Volume=%t/fatline/redis:/run/redis" else ""}
+    Environment=FATLINE_REDIS_TRANSPORT=${transport}
     EnvironmentFile=%h/.config/fatline/${name}.env
     ReadOnly=true
     NoNewPrivileges=true
@@ -27,7 +28,7 @@ let
 in pkgs.runCommand "fatline-deployment" {} ''
   mkdir -p "$out/quadlets" "$out/config" "$out/metadata" "$out/readiness"
   cat > "$out/metadata/components.json" <<'EOF'
-  ${builtins.toJSON { inherit (images) redis logma skymill; }}
+  ${builtins.toJSON { inherit (images) redis logma skymill; inherit transports; }}
   EOF
   cat > "$out/quadlets/fatline.network" <<'EOF'
   [Network]
