@@ -85,6 +85,8 @@ if (( ${#changed[@]} == 0 )); then
   echo "PASS: Fatline Quadlets already converged"
   exit 0
 fi
+# No unit may be promoted unless provider images and readiness contracts
+# have already passed the isolated qualification gates.
 # Existing network or volume definitions must be migrated separately. Reject
 # the change before installing any files, not after daemon-reload.
 for name in "${changed[@]}"; do
