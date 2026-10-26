@@ -125,6 +125,10 @@
               skymill = "localhost/fatline/skymill:2026.10.23";
             };
           };
+          deployment = import ./deployment.nix {
+            inherit pkgs;
+            images = (import ./composition-config.nix).images;
+          };
           fatline = let
             config = import ./composition-config.nix;
           in import ./composition.nix {
