@@ -27,7 +27,7 @@ for file in "$bundle"/quadlets/*; do
   name=${file##*/}
   [[ "$name" =~ ^fatline-[a-z0-9-]+\.(container|network|volume)$ ]] ||
     { echo "unexpected Quadlet name: $name" >&2; exit 1; }
-  if [[ -e "$dest/$name" && ! -f "$ledger" ]]; then
+  if [[ -e "$dest/$name" ]] && { [[ ! -f "$ledger" ]] || ! grep -Fxq -- "$name" "$ledger"; }; then
     echo "refusing to overwrite unmanaged Quadlet $dest/$name" >&2
     exit 1
   fi
@@ -39,6 +39,7 @@ for name in redis logma skymill; do
   image=$(sed -n 's/^Image=//p' "$file")
   [[ -n "$image" && "$image" != *$'\n'* ]] || { echo "invalid image for $name" >&2; exit 1; }
   podman image exists "$image" || { echo "image not loaded: $image" >&2; exit 1; }
+  [[ "$image" != *:candidate && "$image" != *:latest ]] || { echo "mutable image tag forbidden: $image" >&2; exit 1; }
 done
 changed=()
 for file in "$bundle"/quadlets/*; do
@@ -61,6 +62,13 @@ rollback() {
       if [[ -f "$backup/$name" ]]; then cp "$backup/$name" "$dest/$name"; else rm -f "$dest/$name"; fi
     done
     systemctl --user daemon-reload || true
+    for component in redis logma skymill; do
+      for name in "${changed[@]}"; do
+        if [[ "$name" == "fatline-$component.container" && -f "$backup/$name" ]]; then
+          systemctl --user restart "fatline-$component.service" || echo "ROLLBACK FAILED: fatline-$component" >&2
+        fi
+      done
+    done
   fi
   rm -rf "$backup"
 }
