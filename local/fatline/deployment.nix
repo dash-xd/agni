@@ -55,6 +55,7 @@ in pkgs.runCommand "fatline-deployment" {} ''
   [Service]
   ExecStartPre=/usr/bin/install -d -m 0770 %t/fatline/redis
   Restart=on-failure
+  ExecStartPost=/usr/bin/systemctl --user --no-block start fatline-reconcile.service
 
   [Install]
   WantedBy=default.target
@@ -64,6 +65,17 @@ in pkgs.runCommand "fatline-deployment" {} ''
   EOF
   cat > "$out/quadlets/fatline-skymill.container" <<'EOF'
   ${provider "skymill" images.skymill}
+  EOF
+  cat > "$out/quadlets/fatline-reconcile.service" <<'EOF'
+  [Unit]
+  Description=Converge Fatline Redis derived state
+  After=fatline-redis.service
+  ConditionPathIsExecutable=%h/.config/fatline/reconcile
+
+  [Service]
+  Type=oneshot
+  ExecStart=%h/.config/fatline/reconcile
+  TimeoutStartSec=120
   EOF
   cat > "$out/config/redis.conf" <<'EOF'
   port 0
