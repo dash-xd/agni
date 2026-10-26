@@ -93,7 +93,7 @@ in pkgs.runCommand "fatline-deployment" {} ''
   cat > "$out/readiness/redis" <<'EOF'
   #!/usr/bin/env bash
   set -Eeuo pipefail
-  test -S "${XDG_RUNTIME_DIR:?}/fatline/redis/redis.sock"
+  test -S "''${XDG_RUNTIME_DIR:?}/fatline/redis/redis.sock"
   podman container inspect fatline-redis --format '{{.State.Running}}' | grep -Fx true
   EOF
   cat > "$out/readiness/logma" <<'EOF'
