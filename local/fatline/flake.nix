@@ -129,6 +129,12 @@
             inherit pkgs;
             inherit (config) images transports;
           };
+          # Disposable structural fixture: mixed transport without changing production defaults.
+          deployment-mixed = let config = import ./composition-config.nix; in import ./deployment.nix {
+            inherit pkgs;
+            inherit (config) images;
+            transports = { logma = "unix"; skymill = "tcp-proxy"; };
+          };
           fatline = let
             config = import ./composition-config.nix;
           in import ./composition.nix {
