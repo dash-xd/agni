@@ -14,6 +14,9 @@ exec 9>"$state/apply.lock"
 flock -n 9 || { echo "Fatline apply already running" >&2; exit 1; }
 dest="${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd"
 mkdir -p "$dest"
+service_dest="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+mkdir -p "$service_dest"
+unit_dest() { case "$1" in *.service) printf "%s/%s" "$service_dest" "$1";; *) printf "%s/%s" "$dest" "$1";; esac; }
 # Never silently take ownership of another deployment's Quadlets.
 ledger="$state/managed-units"
 if [[ -f "$ledger" ]]; then
@@ -25,10 +28,11 @@ fi
 for file in "$bundle"/quadlets/*; do
   [[ -f "$file" ]] || continue
   name=${file##*/}
-  [[ "$name" =~ ^fatline-[a-z0-9-]+\.(container|network|volume)$ ]] ||
+  [[ "$name" =~ ^fatline-[a-z0-9-]+\.(container|network|volume|service)$ ]] ||
     { echo "unexpected Quadlet name: $name" >&2; exit 1; }
-  if [[ -e "$dest/$name" ]] && { [[ ! -f "$ledger" ]] || ! grep -Fxq -- "$name" "$ledger"; }; then
-    echo "refusing to overwrite unmanaged Quadlet $dest/$name" >&2
+  target=$(unit_dest "$name")
+  if [[ -e "$target" ]] && { [[ ! -f "$ledger" ]] || ! grep -Fxq -- "$name" "$ledger"; }; then
+    echo "refusing to overwrite unmanaged unit $target" >&2
     exit 1
   fi
 done
@@ -45,7 +49,8 @@ changed=()
 for file in "$bundle"/quadlets/*; do
   [[ -f "$file" ]] || continue
   name=${file##*/}
-  if [[ ! -f "$dest/$name" ]] || ! cmp -s "$file" "$dest/$name"; then
+  target=$(unit_dest "$name")
+  if [[ ! -f "$target" ]] || ! cmp -s "$file" "$target"; then
     changed+=("$name")
   fi
 done
@@ -67,7 +72,8 @@ rollback() {
   if (( code != 0 )); then
     echo "FAIL: apply interrupted; restoring previous Quadlet files" >&2
     for name in "${changed[@]}"; do
-      if [[ -f "$backup/$name" ]]; then cp "$backup/$name" "$dest/$name"; else rm -f "$dest/$name"; fi
+      target=$(unit_dest "$name")
+      if [[ -f "$backup/$name" ]]; then cp "$backup/$name" "$target"; else rm -f "$target"; fi
     done
     systemctl --user daemon-reload || true
     for component in redis logma skymill; do
@@ -82,8 +88,9 @@ rollback() {
 }
 trap rollback EXIT
 for name in "${changed[@]}"; do
-  [[ ! -f "$dest/$name" ]] || cp "$dest/$name" "$backup/$name"
-  install -m 600 "$bundle/quadlets/$name" "$dest/$name"
+  target=$(unit_dest "$name")
+  [[ ! -f "$target" ]] || cp "$target" "$backup/$name"
+  install -m 600 "$bundle/quadlets/$name" "$target"
 done
 systemctl --user daemon-reload
 # Network definition changes require an explicit migration, not an accidental
