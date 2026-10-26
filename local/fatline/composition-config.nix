@@ -1,5 +1,7 @@
 {
   redis = { memoryMiB = 40; };
+  # Per-provider Redis transport. TCP requires a separately qualified proxy.
+  transports = { logma = "unix"; skymill = "unix"; };
   # Canonical CalVer references (YYYY.0M.0D[.MICRO], UTC). Published tags are immutable.
   # These initial date tags are RESERVED, not qualified or published yet.
   # Smoke must verify and publish the exact image IDs before activation.
