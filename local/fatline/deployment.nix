@@ -78,4 +78,4 @@ in pkgs.runCommand "fatline-deployment" {} ''
   EOF
   ! grep -q "fatline-nginx" "$out"/quadlets/*.container
   ! grep -Eq "PartOf=|BindsTo=" "$out"/quadlets/*.container
-'';
+''
