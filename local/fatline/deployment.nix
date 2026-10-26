@@ -70,10 +70,11 @@ in pkgs.runCommand "fatline-deployment" {} ''
   [Unit]
   Description=Converge Fatline Redis derived state
   After=fatline-redis.service
-  ConditionPathIsExecutable=%h/.config/fatline/reconcile
+  # Missing reconciliation implementation is an error, not a skipped success.
 
   [Service]
   Type=oneshot
+  ExecStartPre=/usr/bin/test -x %h/.config/fatline/reconcile
   ExecStart=%h/.config/fatline/reconcile
   TimeoutStartSec=120
   EOF
