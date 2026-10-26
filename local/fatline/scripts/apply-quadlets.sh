@@ -116,9 +116,11 @@ rollback() {
     done
     if (( rollback_failed )); then
       echo "ROLLBACK FAILED: manual reconciliation required; refusing success" >&2
+      code=1
     fi
   fi
   rm -rf "$backup"
+  return "$code"
 }
 trap rollback EXIT
 for name in "${changed[@]}"; do
