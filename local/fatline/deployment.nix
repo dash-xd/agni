@@ -1,10 +1,11 @@
 { pkgs, images, transports ? { logma = "unix"; skymill = "unix"; } }:
 let
+  needsProxy = builtins.any (name: (transports.${name} or "unix") == "tcp-proxy") [ "logma" "skymill" ];
   provider = name: image: let transport = transports.${name} or "unix"; in assert builtins.elem transport [ "unix" "tcp-proxy" ]; ''
     [Unit]
     Description=Fatline ${name} provider
-    Wants=fatline-redis.service
-    After=fatline-redis.service
+    Wants=${if transport == "tcp-proxy" then "fatline-redis-proxy.service" else "fatline-redis.service"}
+    After=${if transport == "tcp-proxy" then "fatline-redis-proxy.service" else "fatline-redis.service"}
     ConditionPathExists=%h/.config/fatline/${name}.env
 
     [Container]
@@ -14,6 +15,7 @@ let
     Network=fatline.network
     ${if transport == "unix" then "Volume=%t/fatline/redis:/run/redis" else ""}
     Environment=FATLINE_REDIS_TRANSPORT=${transport}
+    ${if transport == "tcp-proxy" then "Environment=FATLINE_REDIS_ENDPOINT=fatline-redis-proxy:6379" else "Environment=FATLINE_REDIS_ENDPOINT=/run/redis/redis.sock"}
     EnvironmentFile=%h/.config/fatline/${name}.env
     ReadOnly=true
     NoNewPrivileges=true
@@ -69,6 +71,48 @@ in pkgs.runCommand "fatline-deployment" {} ''
   cat > "$out/quadlets/fatline-skymill.container" <<'EOF'
   ${provider "skymill" images.skymill}
   EOF
+  ${if needsProxy then ''
+  cat > "$out/quadlets/fatline-redis-proxy.container" <<'EOF'
+  [Unit]
+  Description=Fatline Redis TCP-to-Unix transport adapter
+  Requires=fatline-redis.service
+  After=fatline-redis.service
+
+  [Container]
+  Image=${images.nginx}
+  Pull=never
+  ContainerName=fatline-redis-proxy
+  Network=fatline.network
+  NetworkAlias=fatline-redis-proxy
+  User=65534:65534
+  ReadOnly=true
+  Volume=%t/fatline/redis:/run/redis
+  Volume=%h/.config/fatline/nginx/redis-proxy.conf:/etc/nginx/nginx.conf:ro
+  Tmpfs=/tmp:rw,noexec,nosuid,size=4m
+  NoNewPrivileges=true
+  DropCapability=all
+
+  [Service]
+  Restart=on-failure
+
+  [Install]
+  WantedBy=default.target
+  EOF
+  cat > "$out/config/redis-proxy.conf" <<'EOF'
+  worker_processes 1;
+  pid /tmp/nginx.pid;
+  error_log /dev/stderr warn;
+  events { worker_connections 128; }
+  stream {
+    server {
+      listen 0.0.0.0:6379;
+      proxy_connect_timeout 3s;
+      proxy_timeout 7200s;
+      proxy_pass unix:/run/redis/redis.sock;
+    }
+  }
+  EOF
+  '' else ""}
   cat > "$out/quadlets/fatline-reconcile.service" <<'EOF'
   [Unit]
   Description=Converge Fatline Redis derived state
@@ -121,6 +165,6 @@ in pkgs.runCommand "fatline-deployment" {} ''
   chmod 755 "$out"/readiness/*
   # Probes fail closed without credentials or explicit loopback endpoints.
   # Endpoint semantics and socket permissions require runtime qualification.
-  ! grep -q "fatline-nginx" "$out"/quadlets/*.container
+  # Proxy is generated only when a provider selects TCP transport.
   ! grep -Eq "PartOf=|BindsTo=" "$out"/quadlets/*.container
 ''
