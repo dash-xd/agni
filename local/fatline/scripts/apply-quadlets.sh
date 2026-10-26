@@ -93,18 +93,30 @@ rollback() {
   code=$?
   if (( code != 0 )); then
     echo "FAIL: apply interrupted; restoring previous Quadlet files" >&2
+    local rollback_failed=0
+    # Newly installed services must be stopped before removing their generated
+    # definitions. Previously installed services are restarted after restore.
+    for name in "${changed[@]}"; do
+      if [[ "$name" == *.container && ! -f "$backup/$name" ]]; then
+        systemctl --user stop "${name%.container}.service" || rollback_failed=1
+      fi
+    done
     for name in "${changed[@]}"; do
       target=$(unit_dest "$name")
-      if [[ -f "$backup/$name" ]]; then cp "$backup/$name" "$target"; else rm -f "$target"; fi
+      if [[ -f "$backup/$name" ]]; then cp "$backup/$name" "$target" || rollback_failed=1
+      else rm -f "$target" || rollback_failed=1; fi
     done
-    systemctl --user daemon-reload || true
+    systemctl --user daemon-reload || rollback_failed=1
     for component in redis logma skymill; do
       for name in "${changed[@]}"; do
         if [[ "$name" == "fatline-$component.container" && -f "$backup/$name" ]]; then
-          systemctl --user restart "fatline-$component.service" || echo "ROLLBACK FAILED: fatline-$component" >&2
+          systemctl --user restart "fatline-$component.service" || rollback_failed=1
         fi
       done
     done
+    if (( rollback_failed )); then
+      echo "ROLLBACK FAILED: manual reconciliation required; refusing success" >&2
+    fi
   fi
   rm -rf "$backup"
 }
