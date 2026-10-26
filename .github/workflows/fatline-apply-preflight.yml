@@ -1,0 +1,23 @@
+name: Fatline apply preflight
+on:
+  push:
+    branches:
+      - codex/fatline-composition-qualification-config
+    paths:
+      - local/fatline/scripts/apply-quadlets.sh
+      - local/fatline/scripts/qualify-apply-preflight.sh
+      - .github/workflows/fatline-apply-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate Agni installer syntax without deploying
+        shell: bash
+        run: bash local/fatline/scripts/qualify-apply-preflight.sh
