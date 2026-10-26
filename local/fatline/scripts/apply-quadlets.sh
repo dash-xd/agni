@@ -56,7 +56,7 @@ done
 for file in "$bundle"/quadlets/*.container; do
   [[ -f "$file" ]] || continue
   image=$(sed -n 's/^Image=//p' "$file")
-  [[ -n "$image" && "$image" != * ]] ||
+  [[ "$image" =~ ^[a-zA-Z0-9_./:@-]+$ ]] ||
     { echo "invalid image in $file" >&2; exit 1; }
   podman image exists "$image" ||
     { echo "image not loaded: $image" >&2; exit 1; }
