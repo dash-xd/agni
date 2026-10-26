@@ -48,19 +48,22 @@ done
 reconcile="${XDG_CONFIG_HOME:-$HOME/.config}/fatline/reconcile"
 [[ -x "$reconcile" ]] || { echo "missing reconciliation executable: $reconcile" >&2; exit 1; }
 # Validate every image-bearing Quadlet, including the optional TCP proxy,
-# instead of allowing a missing proxy image to fail after other services restart.
+# rather than allowing missing images to fail after providers have restarted.
+for name in redis logma skymill; do
+  [[ -f "$bundle/quadlets/fatline-$name.container" ]] ||
+    { echo "missing provider Quadlet: $name" >&2; exit 1; }
+done
 for file in "$bundle"/quadlets/*.container; do
   [[ -f "$file" ]] || continue
   image=$(sed -n 's/^Image=//p' "$file")
-  [[ -n "$image" && "$image" != *
-for name in redis logma skymill; do
-  file="$bundle/quadlets/fatline-$name.container"
-  [[ -f "$file" ]] || { echo "missing $file" >&2; exit 1; }
-  image=$(sed -n 's/^Image=//p' "$file")
-  [[ -n "$image" && "$image" != *$'\n'* ]] || { echo "invalid image for $name" >&2; exit 1; }
-  podman image exists "$image" || { echo "image not loaded: $image" >&2; exit 1; }
-  [[ "$image" != localhost/fatline/*:2026.10.21 ]] || { echo "reserved image reference not deployable: $image" >&2; exit 1; }
-  [[ "$image" != *:candidate && "$image" != *:latest ]] || { echo "mutable image tag forbidden: $image" >&2; exit 1; }
+  [[ -n "$image" && "$image" != *$'\\n'* ]] ||
+    { echo "invalid image in $file" >&2; exit 1; }
+  podman image exists "$image" ||
+    { echo "image not loaded: $image" >&2; exit 1; }
+  [[ "$image" != *:candidate && "$image" != *:latest ]] ||
+    { echo "mutable image tag forbidden: $image" >&2; exit 1; }
+  [[ "$image" != localhost/fatline/*:2026.10.21 ]] ||
+    { echo "reserved image reference not deployable: $image" >&2; exit 1; }
 done
 changed=()
 for file in "$bundle"/quadlets/*; do
