@@ -111,6 +111,17 @@ for component in redis logma skymill; do
     systemctl --user restart "fatline-$component.service"
     systemctl --user is-active --quiet "fatline-$component.service" ||
       { echo "failed to start fatline-$component" >&2; exit 1; }
+    readiness="${XDG_CONFIG_HOME:-$HOME/.config}/fatline/readiness/$component"
+    [[ -x "$readiness" ]] || { echo "missing executable readiness probe: $readiness" >&2; exit 1; }
+    ready=false
+    for attempt in $(seq 1 20); do
+      if "$readiness"; then ready=true; break; fi
+      sleep 1
+    done
+    [[ "$ready" == true ]] || { echo "readiness failed: fatline-$component" >&2; exit 1; }
+    if [[ "$component" == redis ]]; then
+      systemctl --user start fatline-reconcile.service || { echo "Redis reconciliation failed" >&2; exit 1; }
+    fi
     echo "PASS: updated fatline-$component without replacing other providers"
   done
 done
