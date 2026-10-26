@@ -54,7 +54,7 @@ in pkgs.runCommand "fatline-deployment" {} ''
   DropCapability=all
 
   [Service]
-  ExecStartPre=/usr/bin/install -d -m 0777 %t/fatline/redis
+  ExecStartPre=/usr/bin/install -d -m 0700 %t/fatline/redis
   Restart=on-failure
   ExecStartPost=/usr/bin/systemctl --user --no-block start fatline-reconcile.service
 
@@ -93,22 +93,32 @@ in pkgs.runCommand "fatline-deployment" {} ''
   cat > "$out/readiness/redis" <<'EOF'
   #!/usr/bin/env bash
   set -Eeuo pipefail
-  test -S "''${XDG_RUNTIME_DIR:?}/fatline/redis/redis.sock"
-  podman container inspect fatline-redis --format '{{.State.Running}}' | grep -Fx true
+  socket="''${XDG_RUNTIME_DIR:?}/fatline/redis/redis.sock"
+  test -S "$socket"
+  : "''${FATLINE_REDIS_USER:?Redis user required}"
+  : "''${FATLINE_REDIS_PASSWORD_FILE:?Redis password file required}"
+  test -r "$FATLINE_REDIS_PASSWORD_FILE"
+  password=$(cat "$FATLINE_REDIS_PASSWORD_FILE")
+  test -n "$password"
+  REDISCLI_AUTH="$password" redis-cli -s "$socket" --user "$FATLINE_REDIS_USER" PING | grep -Fx PONG
   EOF
   cat > "$out/readiness/logma" <<'EOF'
   #!/usr/bin/env bash
   set -Eeuo pipefail
-  podman container inspect fatline-logma --format '{{.State.Running}}' | grep -Fx true
+  : "''${FATLINE_LOGMA_READINESS_URL:?Readiness URL required}"
+  case "$FATLINE_LOGMA_READINESS_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) exit 2;; esac
+  curl --fail --silent --show-error --max-time 3 "$FATLINE_LOGMA_READINESS_URL" >/dev/null
   EOF
   cat > "$out/readiness/skymill" <<'EOF'
   #!/usr/bin/env bash
   set -Eeuo pipefail
-  podman container inspect fatline-skymill --format '{{.State.Running}}' | grep -Fx true
+  : "''${FATLINE_SKYMILL_READINESS_URL:?Readiness URL required}"
+  case "$FATLINE_SKYMILL_READINESS_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) exit 2;; esac
+  curl --fail --silent --show-error --max-time 3 "$FATLINE_SKYMILL_READINESS_URL" >/dev/null
   EOF
   chmod 755 "$out"/readiness/*
-  # These are process-liveness probes only. Application-level readiness
-  # requires authenticated provider endpoints and remains unqualified.
+  # Probes fail closed without credentials or explicit loopback endpoints.
+  # Endpoint semantics and socket permissions require runtime qualification.
   ! grep -q "fatline-nginx" "$out"/quadlets/*.container
   ! grep -Eq "PartOf=|BindsTo=" "$out"/quadlets/*.container
 ''
