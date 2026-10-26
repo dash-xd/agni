@@ -12,6 +12,7 @@ let
     Pull=never
     ContainerName=fatline-${name}
     Network=fatline.network
+    Volume=%t/fatline/redis:/run/redis
     EnvironmentFile=%h/.config/fatline/${name}.env
     ReadOnly=true
     NoNewPrivileges=true
@@ -24,7 +25,7 @@ let
     WantedBy=default.target
   '';
 in pkgs.runCommand "fatline-deployment" {} ''
-  mkdir -p "$out/quadlets" "$out/config" "$out/metadata"
+  mkdir -p "$out/quadlets" "$out/config" "$out/metadata" "$out/readiness"
   cat > "$out/metadata/components.json" <<'EOF'
   ${builtins.toJSON { inherit (images) redis logma skymill; }}
   EOF
@@ -53,7 +54,7 @@ in pkgs.runCommand "fatline-deployment" {} ''
   DropCapability=all
 
   [Service]
-  ExecStartPre=/usr/bin/install -d -m 0770 %t/fatline/redis
+  ExecStartPre=/usr/bin/install -d -m 0777 %t/fatline/redis
   Restart=on-failure
   ExecStartPost=/usr/bin/systemctl --user --no-block start fatline-reconcile.service
 
@@ -89,6 +90,25 @@ in pkgs.runCommand "fatline-deployment" {} ''
   aclfile /etc/redis/users.acl
   protected-mode yes
   EOF
+  cat > "$out/readiness/redis" <<'EOF'
+  #!/usr/bin/env bash
+  set -Eeuo pipefail
+  test -S "${XDG_RUNTIME_DIR:?}/fatline/redis/redis.sock"
+  podman container inspect fatline-redis --format '{{.State.Running}}' | grep -Fx true
+  EOF
+  cat > "$out/readiness/logma" <<'EOF'
+  #!/usr/bin/env bash
+  set -Eeuo pipefail
+  podman container inspect fatline-logma --format '{{.State.Running}}' | grep -Fx true
+  EOF
+  cat > "$out/readiness/skymill" <<'EOF'
+  #!/usr/bin/env bash
+  set -Eeuo pipefail
+  podman container inspect fatline-skymill --format '{{.State.Running}}' | grep -Fx true
+  EOF
+  chmod 755 "$out"/readiness/*
+  # These are process-liveness probes only. Application-level readiness
+  # requires authenticated provider endpoints and remains unqualified.
   ! grep -q "fatline-nginx" "$out"/quadlets/*.container
   ! grep -Eq "PartOf=|BindsTo=" "$out"/quadlets/*.container
 ''
