@@ -1,4 +1,4 @@
-{ pkgs, images, transports ? { logma = "unix"; skymill = "unix"; } }:
+{ pkgs, images, scope, skymillStream, transports ? { logma = "unix"; skymill = "unix"; } }:
 let
   needsProxy = builtins.any (name: (transports.${name} or "unix") == "tcp-proxy") [ "logma" "skymill" ];
   provider = name: image: let transport = transports.${name} or "unix"; in assert builtins.elem transport [ "unix" "tcp-proxy" ]; ''
@@ -15,6 +15,8 @@ let
     Network=fatline.network
     ${if transport == "unix" then "Volume=%t/fatline/redis:/run/redis" else ""}
     Environment=FATLINE_REDIS_TRANSPORT=${transport}
+    Environment=FATLINE_SCOPE=${scope}
+    ${if name == "skymill" then "Environment=SKYMILL_SCOPED_PROVIDER=true\nEnvironment=SKYMILL_STREAM=${skymillStream}" else ""}
     ${if transport == "tcp-proxy" then "Environment=FATLINE_REDIS_ENDPOINT=fatline-redis-proxy:6379" else "Environment=FATLINE_REDIS_ENDPOINT=/run/redis/redis.sock"}
     EnvironmentFile=%h/.config/fatline/${name}.env
     ReadOnly=true
@@ -28,9 +30,11 @@ let
     WantedBy=default.target
   '';
 in pkgs.runCommand "fatline-deployment" {} ''
+  test -n '${scope}'
+  test '${skymillStream}' = '${scope}:skymill:stream:github.webhooks'
   mkdir -p "$out/quadlets" "$out/config" "$out/metadata" "$out/readiness"
   cat > "$out/metadata/components.json" <<'EOF'
-  ${builtins.toJSON { inherit (images) redis logma skymill; inherit transports; }}
+  ${builtins.toJSON { inherit (images) redis logma skymill; inherit transports scope skymillStream; }}
   EOF
   cat > "$out/quadlets/fatline.network" <<'EOF'
   [Network]
@@ -163,6 +167,10 @@ in pkgs.runCommand "fatline-deployment" {} ''
   curl --fail --silent --show-error --max-time 3 "$FATLINE_SKYMILL_READINESS_URL" >/dev/null
   EOF
   chmod 755 "$out"/readiness/*
+  grep -qx 'Environment=FATLINE_SCOPE=${scope}' "$out/quadlets/fatline-logma.container"
+  grep -qx 'Environment=FATLINE_SCOPE=${scope}' "$out/quadlets/fatline-skymill.container"
+  grep -qx 'Environment=SKYMILL_SCOPED_PROVIDER=true' "$out/quadlets/fatline-skymill.container"
+  grep -qx 'Environment=SKYMILL_STREAM=${skymillStream}' "$out/quadlets/fatline-skymill.container"
   # Probes fail closed without credentials or explicit loopback endpoints.
   # Endpoint semantics and socket permissions require runtime qualification.
   # Proxy is generated only when a provider selects TCP transport.

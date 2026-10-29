@@ -1,9 +1,11 @@
 { pkgs, lib, config, components ? config.images }:
 let
-  inherit (config) redis;
+  inherit (config) redis scope skymillStream;
   # Composition consumes caller-selected image references; Agni owns topology.
   # The defaults remain reserved placeholders until release-ledger verification.
   images = components;
+  validScope = assert lib.assertMsg (builtins.match "[A-Za-z0-9_.-]+" scope != null) "Fatline scope must be one non-empty Redis name segment";
+    assert lib.assertMsg (skymillStream == "${scope}:skymill:stream:github.webhooks") "Skymill stream must use the configured Fatline scope"; true;
   validMemory = assert lib.assertMsg (redis.memoryMiB == 40) "Only the 40 MiB Redis profile is qualified"; true;
   # Qualified release tags are selected and pinned by the Nix-Alpine ledger.
   # Podman image availability is a separate deployment/runtime gate.
@@ -34,6 +36,8 @@ let
     ContainerName=fatline-${name}
     Network=fatline.network
     EnvironmentFile=%h/.config/fatline/${name}.env
+    Environment=FATLINE_SCOPE=${scope}
+    ${if name == "skymill" then "Environment=SKYMILL_SCOPED_PROVIDER=true\nEnvironment=SKYMILL_STREAM=${skymillStream}" else ""}
 
     [Service]
     Restart=always
@@ -124,10 +128,10 @@ let
     [Install]
     WantedBy=default.target
   '';
-in assert validMemory; pkgs.runCommand "fatline-quadlet-composition" { } ''
+in assert validScope; assert validMemory; pkgs.runCommand "fatline-quadlet-composition" { } ''
   mkdir -p "$out/quadlets" "$out/config" "$out/metadata"
   cat > "$out/metadata/components.json" <<'EOF'
-${builtins.toJSON images}
+${builtins.toJSON (images // { inherit scope skymillStream; })}
 EOF
   cat > "$out/quadlets/fatline-redis.container" <<'EOF'
 ${redisUnit}
@@ -163,5 +167,8 @@ EOF
     grep -qx 'Network=fatline.network' "$out/quadlets/fatline-$provider.container"
     grep -qx 'Requires=fatline-nginx.service' "$out/quadlets/fatline-$provider.container"
     grep -qx 'After=fatline-nginx.service' "$out/quadlets/fatline-$provider.container"
+    grep -qx 'Environment=FATLINE_SCOPE=${scope}' "$out/quadlets/fatline-$provider.container"
   done
+  grep -qx 'Environment=SKYMILL_SCOPED_PROVIDER=true' "$out/quadlets/fatline-skymill.container"
+  grep -qx 'Environment=SKYMILL_STREAM=${skymillStream}' "$out/quadlets/fatline-skymill.container"
 ''

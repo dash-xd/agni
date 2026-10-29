@@ -1,4 +1,7 @@
 {
+  # Stable, non-secret Redis namespace shared by the Fatline providers.
+  scope = "fatline-prod";
+  skymillStream = "fatline-prod:skymill:stream:github.webhooks";
   redis = { memoryMiB = 40; };
   # Per-provider Redis transport. TCP requires a separately qualified proxy.
   transports = { logma = "unix"; skymill = "unix"; };
