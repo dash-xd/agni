@@ -3,7 +3,7 @@
   "scope": "fatline-prod",
   "skymillStream": "fatline-prod:skymill:stream:github.webhooks",
   "componentRevisions": {
-    "logma": "252784320d89c39ca6d84c7477b02f64f72b6f9b",
+    "logma": "fe8d0bba86f487898e02e0ec8019d226c538b86c",
     "skymill": "907346ecd74a4d39830347b2ea01dc2b1c6b8969",
     "ratelimiter": "f9dd9465d98be5be2277908091237186ef606ca1"
   },
@@ -13,27 +13,73 @@
         "{scope}:logma:pubsub:*",
         "{scope}:logma:lifecycle:*"
       ],
-      "channels": ["{scope}:*"],
+      "channels": [
+        "{scope}:*"
+      ],
       "commands": [
-        "ping", "hello", "client",
-        "hget", "hgetall", "hexists", "hset", "hdel",
-        "smembers", "scard", "exists", "sadd", "srem", "del",
-        "watch", "unwatch", "multi", "exec", "discard",
-        "fcall", "type", "time", "zadd", "zrangebyscore", "publish", "zrem"
+        "ping",
+        "hello",
+        "client",
+        "hget",
+        "hgetall",
+        "hexists",
+        "hset",
+        "hdel",
+        "smembers",
+        "scard",
+        "exists",
+        "sadd",
+        "srem",
+        "del",
+        "watch",
+        "unwatch",
+        "multi",
+        "exec",
+        "discard",
+        "fcall",
+        "type",
+        "time",
+        "zadd",
+        "zrangebyscore",
+        "publish",
+        "zrem"
       ]
     },
     "skymill": {
-      "keys": ["{stream}", "{scope}:skymill:idempotency:{encodedStream}:*"],
+      "keys": [
+        "{stream}",
+        "{scope}:skymill:idempotency:{encodedStream}:*"
+      ],
       "channels": [],
       "commands": [
-        "ping", "hello", "client", "select", "get", "set", "eval", "xadd",
-        "xread", "xreadgroup", "xgroup", "xpending", "xclaim", "xack", "xinfo"
+        "ping",
+        "hello",
+        "client",
+        "select",
+        "get",
+        "set",
+        "eval",
+        "xadd",
+        "xread",
+        "xreadgroup",
+        "xgroup",
+        "xpending",
+        "xclaim",
+        "xack",
+        "xinfo"
       ]
     },
     "bootstrap": {
       "keys": [],
       "channels": [],
-      "commands": ["hello", "client|setinfo", "function|load", "function|list", "acl|setuser", "ping"]
+      "commands": [
+        "hello",
+        "client|setinfo",
+        "function|load",
+        "function|list",
+        "acl|setuser",
+        "ping"
+      ]
     }
   }
 }
