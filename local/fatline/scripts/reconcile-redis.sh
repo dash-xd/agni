@@ -45,8 +45,14 @@ logma_result=$(podman run --rm --network none --read-only --user 65534:65534 \
   --entrypoint redis-cli "$redis_image" -s /run/redis/redis.sock \
   --user logma -a "$logma_password" --no-auth-warning \
   FCALL dashxd_ratelimit_lifecycle_timer_cancel_v1 0 2>&1 || true)
-[[ "$logma_result" == *"wrong number of arguments"* || "$logma_result" == *"wrong number of argument"* ]] || {
-  echo "Logma identity cannot execute the installed lifecycle Function: $logma_result" >&2
+[[ "$logma_result" != *NOPERM* && "$logma_result" != *NOAUTH* && "$logma_result" != *WRONGPASS* ]] || {
+  echo "Logma identity is denied lifecycle Function execution: $logma_result" >&2
+  exit 1
+}
+[[ "$logma_result" == *"wrong number of arguments"* ||
+   "$logma_result" == *"wrong number of argument"* ||
+   "$logma_result" == *"timer cancel requires timer and payload keys"* ]] || {
+  echo "Lifecycle Function returned an unexpected probe result: $logma_result" >&2
   exit 1
 }
 echo "PASS: Ratelimiter Functions reconciled; bootstrap revoked; scoped Logma Function access verified"
