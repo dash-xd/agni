@@ -3,25 +3,23 @@
   "scope": "fatline-prod",
   "skymillStream": "fatline-prod:skymill:stream:github.webhooks",
   "componentRevisions": {
-    "logma": "a651ec66d482f935d96d37375d3f84346a8a854b",
+    "logma": "252784320d89c39ca6d84c7477b02f64f72b6f9b",
     "skymill": "907346ecd74a4d39830347b2ea01dc2b1c6b8969",
     "ratelimiter": "f9dd9465d98be5be2277908091237186ef606ca1"
   },
   "users": {
     "logma": {
       "keys": [
-        "{scope}:logma:*",
-        "{scope}:active_subscriptions:*",
-        "{scope}:subscription_groups:*"
+        "{scope}:logma:pubsub:*",
+        "{scope}:logma:lifecycle:*"
       ],
       "channels": ["{scope}:*"],
       "commands": [
-        "ping", "hello", "client", "select", "set", "get", "del", "type",
-        "time", "zadd", "hset", "hexists", "zrangebyscore", "hget", "publish",
-        "zrem", "hdel", "fcall", "zscore", "zrange", "hgetall", "exists",
-        "smembers", "scard", "sadd", "srem", "watch", "unwatch",
-        "multi", "exec", "discard", "scan", "pubsub|channels", "subscribe",
-        "unsubscribe", "psubscribe", "punsubscribe"
+        "ping", "hello", "client",
+        "hget", "hgetall", "hexists", "hset", "hdel",
+        "smembers", "scard", "exists", "sadd", "srem", "del",
+        "watch", "unwatch", "multi", "exec", "discard",
+        "fcall", "type", "time", "zadd", "zrangebyscore", "publish", "zrem"
       ]
     },
     "skymill": {
