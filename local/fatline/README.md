@@ -1,5 +1,33 @@
 # Agni local Fatline bootstrap
 
+## Redis ACL policy
+
+`acl-policy.json` is Agni's tracked, non-secret policy for the production scope.
+It gives Logma and Skymill separate Redis users and pins the component revisions
+used to define the ACL. The bootstrap user can load/list Redis Functions, revoke
+itself with `ACL SETUSER`, and ping Redis; it has no key or channel patterns and
+no broad command categories. Agni's reconciliation unit must revoke it after
+Function installation. The ACL file re-enables bootstrap on Redis restart, so
+that unit is required on every start.
+
+Keep three password files named `logma`, `skymill`, and `bootstrap` in a private
+directory (`0700` directory, `0600` files). The passwords must match the
+provider environment files (`REDISCLI_AUTH` for Logma and `REDIS_PASSWORD` for
+Skymill) and be at least 32 characters. Agni's reconciler creates a one-time API
+key for its short-lived Logma bootstrap container. Render the ACL with:
+
+```sh
+make render-acl CREDENTIAL_DIR="$HOME/.config/fatline/redis/credentials" \
+  OUTPUT="$HOME/.config/fatline/redis/users.acl"
+```
+
+The renderer writes SHA-256 password hashes in Redis ACL syntax, sets the ACL
+file readable by the rootless Redis container, and writes a separate evidence
+JSON with the policy digest and component revisions. Keep the credentials
+directory private. Run `make test-acl` before changing this policy. The
+composition runtime gate must still exercise these exact generated users on
+the Podman/systemd topology; rendering alone is not qualification.
+
 This is an **Agni-owned local development composition**. It does not modify
 Agni's GCP/CoreOS placement paths or install host systemd units.
 

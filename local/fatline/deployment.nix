@@ -1,5 +1,11 @@
 { pkgs, images, scope, skymillStream, transports ? { logma = "unix"; skymill = "unix"; } }:
 let
+  reconcileCommand = pkgs.writeShellScript "fatline-reconcile" ''
+    exec ${pkgs.bash}/bin/bash ${./scripts/reconcile-redis.sh} \
+      '${images.logma}' '${images.redis}' '${scope}' \
+      "$HOME/.config/fatline/redis/credentials" \
+      "''${XDG_RUNTIME_DIR:?}/fatline/redis"
+  '';
   needsProxy = builtins.any (name: (transports.${name} or "unix") == "tcp-proxy") [ "logma" "skymill" ];
   provider = name: image: let transport = transports.${name} or "unix"; in assert builtins.elem transport [ "unix" "tcp-proxy" ]; ''
     [Unit]
@@ -126,7 +132,7 @@ in pkgs.runCommand "fatline-deployment" {} ''
   [Service]
   Type=oneshot
   ExecStartPre=/usr/bin/test -x %h/.config/fatline/reconcile
-  ExecStart=%h/.config/fatline/reconcile
+  ExecStart=${reconcileCommand}
   TimeoutStartSec=120
   EOF
   cat > "$out/config/redis.conf" <<'EOF'
@@ -140,6 +146,14 @@ in pkgs.runCommand "fatline-deployment" {} ''
   aclfile /etc/redis/users.acl
   protected-mode yes
   EOF
+  cat > "$out/config/users.acl.README" <<'EOF'
+  Render users.acl with local/fatline/scripts/render-users-acl.py and the host-only
+  credentials directory described in local/fatline/README.md.
+  EOF
+  cp ${./acl-policy.json} "$out/config/acl-policy.json"
+  cp ${./scripts/render-users-acl.py} "$out/config/render-users-acl.py"
+  cp ${./scripts/reconcile-redis.sh} "$out/config/reconcile-redis.sh"
+  chmod 755 "$out/config/render-users-acl.py" "$out/config/reconcile-redis.sh"
   cat > "$out/readiness/redis" <<'EOF'
   #!/usr/bin/env bash
   set -Eeuo pipefail
