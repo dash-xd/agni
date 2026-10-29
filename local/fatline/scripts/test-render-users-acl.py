@@ -35,6 +35,9 @@ class RenderACLTest(unittest.TestCase):
             self.assertIn("+function|load +function|list +acl|setuser", acl)
             self.assertNotIn("+@all", acl)
             self.assertNotIn("~*", acl)
+            logma_rules = next(line for line in acl.splitlines() if line.startswith("user logma "))
+            self.assertLess(logma_rules.index("resetchannels"), logma_rules.index("&fatline-prod:*"))
+            self.assertIn("+publish", logma_rules)
             for name, password in passwords.items():
                 digest = hashlib.sha256(password.encode()).hexdigest()
                 self.assertIn("user " + name + " on #" + digest, acl)
