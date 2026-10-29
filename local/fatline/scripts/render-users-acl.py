@@ -47,7 +47,7 @@ def main():
             fail(f"cannot read {name} credential: {exc}")
         if len(secret) < 32 or any(ch.isspace() for ch in secret):
             fail(f"{name} credential must be at least 32 non-whitespace characters")
-        rules = ["on", "#" + hashlib.sha256(secret.encode()).hexdigest(), "-@all", "resetkeys"]
+        rules = ["on", "#" + hashlib.sha256(secret.encode()).hexdigest(), "-@all", "resetkeys", "resetchannels"]
         for field, prefix in (("keys", "~"), ("channels", "&")):
             for pattern in spec.get(field, []):
                 for key, value in substitutions.items():
@@ -55,7 +55,6 @@ def main():
                 if "{" in pattern or "}" in pattern or any(ch.isspace() for ch in pattern):
                     fail(f"invalid {field} pattern in {name} policy")
                 rules.append(prefix + pattern)
-        rules.append("resetchannels")
         for command in spec.get("commands", []):
             if not COMMAND.fullmatch(command):
                 fail(f"invalid command {command!r} in {name} policy")
