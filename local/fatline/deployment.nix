@@ -191,9 +191,18 @@ in pkgs.runCommand "fatline-deployment" {} ''
   grep -qx 'Environment=FATLINE_SCOPE=${scope}' "$out/quadlets/fatline-skymill.container"
   grep -qx 'Environment=SKYMILL_SCOPED_PROVIDER=true' "$out/quadlets/fatline-skymill.container"
   grep -qx 'Environment=SKYMILL_STREAM=${skymillStream}' "$out/quadlets/fatline-skymill.container"
-  grep -qx 'Environment=REDIS_NETWORK=unix' "$out/quadlets/fatline-logma.container"
-  grep -qx 'Environment=REDIS_SOCKET=/run/redis/redis.sock' "$out/quadlets/fatline-logma.container"
-  grep -qx 'Environment=REDIS_URL=unix:///run/redis/redis.sock' "$out/quadlets/fatline-skymill.container"
+  ${if (transports.logma or "unix") == "unix" then ''
+    grep -qx 'Environment=REDIS_NETWORK=unix' "$out/quadlets/fatline-logma.container"
+    grep -qx 'Environment=REDIS_SOCKET=/run/redis/redis.sock' "$out/quadlets/fatline-logma.container"
+  '' else ''
+    grep -qx 'Environment=REDIS_NETWORK=tcp' "$out/quadlets/fatline-logma.container"
+    grep -qx 'Environment=REDIS_URI=fatline-redis-proxy:6379' "$out/quadlets/fatline-logma.container"
+  ''}
+  ${if (transports.skymill or "unix") == "unix" then ''
+    grep -qx 'Environment=REDIS_URL=unix:///run/redis/redis.sock' "$out/quadlets/fatline-skymill.container"
+  '' else ''
+    grep -qx 'Environment=REDIS_URL=redis://fatline-redis-proxy:6379' "$out/quadlets/fatline-skymill.container"
+  ''}
   # Probes fail closed without credentials or explicit loopback endpoints.
   # Endpoint semantics and socket permissions require runtime qualification.
   # Proxy is generated only when a provider selects TCP transport.
