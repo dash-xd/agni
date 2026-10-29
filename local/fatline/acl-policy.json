@@ -3,7 +3,7 @@
   "scope": "fatline-prod",
   "skymillStream": "fatline-prod:skymill:stream:github.webhooks",
   "componentRevisions": {
-    "logma": "8aae43acc851cb670deae3145a7e2ea7ce4be58d",
+    "logma": "a651ec66d482f935d96d37375d3f84346a8a854b",
     "skymill": "907346ecd74a4d39830347b2ea01dc2b1c6b8969",
     "ratelimiter": "f9dd9465d98be5be2277908091237186ef606ca1"
   },
@@ -18,7 +18,10 @@
       "commands": [
         "ping", "hello", "client", "select", "set", "get", "del", "type",
         "time", "zadd", "hset", "hexists", "zrangebyscore", "hget", "publish",
-        "zrem", "hdel", "fcall", "zscore", "zrange", "hgetall", "exists"
+        "zrem", "hdel", "fcall", "zscore", "zrange", "hgetall", "exists",
+        "smembers", "scard", "sadd", "srem", "watch", "unwatch",
+        "multi", "exec", "discard", "scan", "pubsub|channels", "subscribe",
+        "unsubscribe", "psubscribe", "punsubscribe"
       ]
     },
     "skymill": {

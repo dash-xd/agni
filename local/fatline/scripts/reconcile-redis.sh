@@ -15,16 +15,16 @@ cleanup() { podman rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 podman run -d --name "$name" --network none --read-only --user 65534:65534 \
   --cap-drop ALL --security-opt no-new-privileges \
-  --mount "type=bind,src=$socket_dir,dst=/run/redis,ro=false" \
+  -v "$socket_dir:/run/redis" \
   --mount type=tmpfs,destination=/var/lib/logma/lifecycle,tmpfs-size=4194304,tmpfs-mode=1777 \
-  -e REDIS_NETWORK=unix -e REDIS_URI=/run/redis/redis.sock \
+  -e REDIS_NETWORK=unix -e REDIS_URI=/run/redis/redis.sock -e REDIS_SOCKET=/run/redis/redis.sock \
   -e REDIS_USERNAME=bootstrap -e REDISCLI_AUTH="$bootstrap_password" \
   -e FATLINE_SCOPE="$scope" -e LOGMA_RATELIMITER_BOOTSTRAP=internal \
   -e API_KEY="$api_key" "$logma_image" >/dev/null
 cli() {
   podman run --rm --network none --read-only --user 65534:65534 \
     --cap-drop ALL --security-opt no-new-privileges \
-    --mount "type=bind,src=$socket_dir,dst=/run/redis,ro=false" \
+    -v "$socket_dir:/run/redis" \
     --entrypoint redis-cli "$redis_image" -s /run/redis/redis.sock \
     --user bootstrap -a "$bootstrap_password" --no-auth-warning "$@"
 }
@@ -41,7 +41,7 @@ disabled=$(cli PING 2>&1 || true)
 [[ "$disabled" == *WRONGPASS* ]] || { echo "Bootstrap identity still authenticates after revocation" >&2; exit 1; }
 logma_result=$(podman run --rm --network none --read-only --user 65534:65534 \
   --cap-drop ALL --security-opt no-new-privileges \
-  --mount "type=bind,src=$socket_dir,dst=/run/redis,ro=false" \
+  -v "$socket_dir:/run/redis" \
   --entrypoint redis-cli "$redis_image" -s /run/redis/redis.sock \
   --user logma -a "$logma_password" --no-auth-warning \
   FCALL dashxd_ratelimit_lifecycle_timer_cancel_v1 0 2>&1 || true)

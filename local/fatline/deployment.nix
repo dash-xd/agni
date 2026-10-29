@@ -1,5 +1,11 @@
 { pkgs, images, scope, skymillStream, transports ? { logma = "unix"; skymill = "unix"; } }:
 let
+  redisEnvironment = name: transport:
+    if name == "logma" then
+      if transport == "unix" then "Environment=REDIS_NETWORK=unix\nEnvironment=REDIS_SOCKET=/run/redis/redis.sock"
+      else "Environment=REDIS_NETWORK=tcp\nEnvironment=REDIS_URI=fatline-redis-proxy:6379"
+    else if transport == "unix" then "Environment=REDIS_URL=unix:///run/redis/redis.sock"
+    else "Environment=REDIS_URL=redis://fatline-redis-proxy:6379";
   reconcileCommand = pkgs.writeShellScript "fatline-reconcile" ''
     exec ${pkgs.bash}/bin/bash ${./scripts/reconcile-redis.sh} \
       '${images.logma}' '${images.redis}' '${scope}' \
@@ -23,7 +29,7 @@ let
     Environment=FATLINE_REDIS_TRANSPORT=${transport}
     Environment=FATLINE_SCOPE=${scope}
     ${if name == "skymill" then "Environment=SKYMILL_SCOPED_PROVIDER=true\nEnvironment=SKYMILL_STREAM=${skymillStream}" else ""}
-    ${if transport == "tcp-proxy" then "Environment=FATLINE_REDIS_ENDPOINT=fatline-redis-proxy:6379" else "Environment=FATLINE_REDIS_ENDPOINT=/run/redis/redis.sock"}
+    ${redisEnvironment name transport}
     EnvironmentFile=%h/.config/fatline/${name}.env
     ReadOnly=true
     NoNewPrivileges=true
@@ -185,6 +191,9 @@ in pkgs.runCommand "fatline-deployment" {} ''
   grep -qx 'Environment=FATLINE_SCOPE=${scope}' "$out/quadlets/fatline-skymill.container"
   grep -qx 'Environment=SKYMILL_SCOPED_PROVIDER=true' "$out/quadlets/fatline-skymill.container"
   grep -qx 'Environment=SKYMILL_STREAM=${skymillStream}' "$out/quadlets/fatline-skymill.container"
+  grep -qx 'Environment=REDIS_NETWORK=unix' "$out/quadlets/fatline-logma.container"
+  grep -qx 'Environment=REDIS_SOCKET=/run/redis/redis.sock' "$out/quadlets/fatline-logma.container"
+  grep -qx 'Environment=REDIS_URL=unix:///run/redis/redis.sock' "$out/quadlets/fatline-skymill.container"
   # Probes fail closed without credentials or explicit loopback endpoints.
   # Endpoint semantics and socket permissions require runtime qualification.
   # Proxy is generated only when a provider selects TCP transport.
