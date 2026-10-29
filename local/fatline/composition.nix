@@ -37,7 +37,7 @@ let
     Network=fatline.network
     EnvironmentFile=%h/.config/fatline/${name}.env
     Environment=FATLINE_SCOPE=${scope}
-    ${if name == "logma" then "Environment=REDIS_NETWORK=tcp\nEnvironment=REDIS_URI=redis-proxy:6379" else "Environment=REDIS_URL=redis://redis-proxy:6379"}
+    ${if name == "logma" then "Environment=LOGMA_BIND_ADDR=0.0.0.0\nEnvironment=REDIS_NETWORK=tcp\nEnvironment=REDIS_URI=redis-proxy:6379" else "Environment=REDIS_URL=redis://redis-proxy:6379"}
     ${if name == "skymill" then "Environment=SKYMILL_SCOPED_PROVIDER=true\nEnvironment=SKYMILL_STREAM=${skymillStream}" else ""}
 
     [Service]
@@ -173,6 +173,7 @@ EOF
   grep -qx 'Environment=SKYMILL_SCOPED_PROVIDER=true' "$out/quadlets/fatline-skymill.container"
   grep -qx 'Environment=SKYMILL_STREAM=${skymillStream}' "$out/quadlets/fatline-skymill.container"
   grep -qx 'Environment=REDIS_NETWORK=tcp' "$out/quadlets/fatline-logma.container"
+  grep -qx 'Environment=LOGMA_BIND_ADDR=0.0.0.0' "$out/quadlets/fatline-logma.container"
   grep -qx 'Environment=REDIS_URI=redis-proxy:6379' "$out/quadlets/fatline-logma.container"
   grep -qx 'Environment=REDIS_URL=redis://redis-proxy:6379' "$out/quadlets/fatline-skymill.container"
 ''
