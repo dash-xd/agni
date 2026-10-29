@@ -26,8 +26,10 @@ let
     ContainerName=fatline-${name}
     Network=fatline.network
     ${if transport == "unix" then "Volume=%t/fatline/redis:/run/redis" else ""}
+    ${if name == "logma" then "Volume=%h/.local/state/fatline/logma/lifecycle:/var/lib/logma/lifecycle" else ""}
     Environment=FATLINE_REDIS_TRANSPORT=${transport}
     Environment=FATLINE_SCOPE=${scope}
+    ${if name == "logma" then "Environment=LOGMA_LIFECYCLE_STATE_DIR=/var/lib/logma/lifecycle" else ""}
     ${if name == "skymill" then "Environment=SKYMILL_SCOPED_PROVIDER=true\nEnvironment=SKYMILL_STREAM=${skymillStream}" else ""}
     ${redisEnvironment name transport}
     EnvironmentFile=%h/.config/fatline/${name}.env
@@ -36,6 +38,7 @@ let
     DropCapability=all
 
     [Service]
+    ${if name == "logma" then "ExecStartPre=/usr/bin/install -d -m 0700 %h/.local/state/fatline/logma/lifecycle" else ""}
     Restart=on-failure
 
     [Install]
@@ -189,6 +192,9 @@ in pkgs.runCommand "fatline-deployment" {} ''
   chmod 755 "$out"/readiness/*
   grep -qx 'Environment=FATLINE_SCOPE=${scope}' "$out/quadlets/fatline-logma.container"
   grep -qx 'Environment=FATLINE_SCOPE=${scope}' "$out/quadlets/fatline-skymill.container"
+  grep -qx 'Volume=%h/.local/state/fatline/logma/lifecycle:/var/lib/logma/lifecycle' "$out/quadlets/fatline-logma.container"
+  grep -qx 'Environment=LOGMA_LIFECYCLE_STATE_DIR=/var/lib/logma/lifecycle' "$out/quadlets/fatline-logma.container"
+  grep -qx 'ExecStartPre=/usr/bin/install -d -m 0700 %h/.local/state/fatline/logma/lifecycle' "$out/quadlets/fatline-logma.container"
   grep -qx 'Environment=SKYMILL_SCOPED_PROVIDER=true' "$out/quadlets/fatline-skymill.container"
   grep -qx 'Environment=SKYMILL_STREAM=${skymillStream}' "$out/quadlets/fatline-skymill.container"
   ${if (transports.logma or "unix") == "unix" then ''
