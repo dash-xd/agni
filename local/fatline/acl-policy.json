@@ -3,7 +3,7 @@
   "scope": "fatline-prod",
   "skymillStream": "fatline-prod:skymill:stream:github.webhooks",
   "componentRevisions": {
-    "logma": "fe8d0bba86f487898e02e0ec8019d226c538b86c",
+    "logma": "8445a1e889af3f157ef39e87a991745aed34e0fb",
     "skymill": "907346ecd74a4d39830347b2ea01dc2b1c6b8969",
     "ratelimiter": "f9dd9465d98be5be2277908091237186ef606ca1"
   },
