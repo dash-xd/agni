@@ -1,7 +1,5 @@
-iso:
-	@echo "[+] Building CoreOS ISO..."
-	@./build-iso.sh
-
-ign:
-	@podman run --rm -i -v ${PWD}:/pwd:Z -w /pwd quay.io/coreos/butane:release --pretty --strict ./butane.yaml -o config.ign 
-
+.PHONY: help
+help:
+	@echo "CoreOS QEMU builds and qualification are owned by nix-alpine/local/Makefile."
+	@echo "Run: make -C /path/to/nix-alpine/local qualify-coreos-qemu LOG=1"
+	@echo "This Agni directory contains the pinned FCOS profile and Butane resources only."

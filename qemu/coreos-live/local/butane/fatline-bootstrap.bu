@@ -4,10 +4,12 @@ systemd:
   units:
     - name: fatline-qemu-bootstrap.service
       enabled: true
-      contents:
-        local: systemd/fatline-qemu-bootstrap.service
 storage:
   files:
+    - path: /etc/systemd/system/fatline-qemu-bootstrap.service
+      mode: 0644
+      contents:
+        local: systemd/fatline-qemu-bootstrap.service
     - path: /usr/local/libexec/fatline-qemu-bootstrap
       mode: 0755
       contents:
