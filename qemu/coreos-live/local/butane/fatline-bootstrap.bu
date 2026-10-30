@@ -1,0 +1,14 @@
+variant: fcos
+version: 1.7.0
+systemd:
+  units:
+    - name: fatline-qemu-bootstrap.service
+      enabled: true
+      contents:
+        local: systemd/fatline-qemu-bootstrap.service
+storage:
+  files:
+    - path: /usr/local/libexec/fatline-qemu-bootstrap
+      mode: 0755
+      contents:
+        local: scripts/fatline-qemu-bootstrap

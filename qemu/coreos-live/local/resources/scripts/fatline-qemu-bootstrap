@@ -1,0 +1,7 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+unit=fatline-qemu-podman-smoke
+systemd-run --quiet --unit="$unit" --wait /usr/bin/podman info --format '{{.Host.Arch}}'
+test "$(systemctl show --property=Transient --value "$unit.service")" = yes
+printf 'PASS: transient systemd unit ran Podman inside Fedora CoreOS\n' >/dev/ttyS0
