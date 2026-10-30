@@ -1,8 +1,5 @@
 [Unit]
 Description=Fatline CoreOS transient Podman bootstrap qualification
-Wants=network-online.target
-After=network-online.target
-
 [Service]
 Type=oneshot
 ExecStart=/usr/local/libexec/fatline-qemu-bootstrap
