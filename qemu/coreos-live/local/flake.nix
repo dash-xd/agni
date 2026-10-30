@@ -49,6 +49,32 @@
             exit "$rc"
           }
       '';
+      qemuEntrypoint = pkgs.writeShellScriptBin "fatline-qemu" ''
+        set -euo pipefail
+        case "${1:-}" in
+          img)
+            shift
+            exec ${pkgs.qemu}/bin/qemu-img "$@"
+            ;;
+          run)
+            shift
+            exec ${pkgs.qemu}/bin/qemu-system-x86_64 "$@"
+            ;;
+          *)
+            echo "Usage: fatline-qemu img|run [arguments...]" >&2
+            exit 2
+            ;;
+        esac
+      '';
+      qemuRunner = pkgs.dockerTools.buildLayeredImage {
+        name = "localhost/fatline-qemu-runner";
+        tag = release;
+        created = "1970-01-01T00:00:01Z";
+        contents = [ qemuEntrypoint pkgs.qemu ];
+        config = {
+          Entrypoint = [ "${qemuEntrypoint}/bin/fatline-qemu" ];
+        };
+      };
       bootstrap = pkgs.runCommand "fatline-coreos-qemu-bootstrap-${release}" { } ''
         mkdir -p "$out"
         cp "${qcow}/base.qcow2" "$out/base.qcow2"
@@ -57,7 +83,7 @@
       '';
     in {
       packages.${system} = {
-        inherit qcow ignition bootstrap;
+        inherit qcow ignition bootstrap qemuRunner;
         default = bootstrap;
       };
     };
