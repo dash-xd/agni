@@ -40,7 +40,7 @@
           exit 1
         fi
         mkdir -p "$out"
-        echo "Transpiling ${config} with workspace resources under ${resourcesDir}"
+        echo "Transpiling $config with workspace resources under ${resourcesDir}"
         butane --strict --pretty \
           --files-dir "${resourcesDir}" \
           "$config" > "$out/config.ign" || {
