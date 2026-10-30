@@ -88,10 +88,9 @@
             shift
             ${qemu}/bin/qemu-system-x86_64 "$@" -vnc 127.0.0.1:0 &
             qemu_pid=$!
-            ${pkgs.novnc}/bin/novnc \
-              --listen 0.0.0.0:6080 \
+            ${pkgs.python3Packages.websockify}/bin/websockify \
               --web ${pkgs.novnc}/share/webapps/novnc \
-              --vnc 127.0.0.1:5900 &
+              0.0.0.0:6080 127.0.0.1:5900 &
             web_pid=$!
             cleanup() {
               kill "$qemu_pid" "$web_pid" 2>/dev/null || true
@@ -117,7 +116,7 @@
         created = "1970-01-01T00:00:01Z";
         copyToRoot = pkgs.buildEnv {
           name = "fatline-qemu-runtime";
-          paths = [ qemuEntrypoint qemu pkgs.novnc ];
+          paths = [ qemuEntrypoint qemu pkgs.novnc pkgs.python3Packages.websockify ];
           pathsToLink = [ "/bin" ];
         };
         config = {
