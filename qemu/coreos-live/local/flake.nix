@@ -49,16 +49,39 @@
             exit "$rc"
           }
       '';
+      qemu = pkgs.qemu_kvm.override {
+        alsaSupport = false;
+        pulseSupport = false;
+        pipewireSupport = false;
+        sdlSupport = false;
+        jackSupport = false;
+        gtkSupport = false;
+        vncSupport = false;
+        smartcardSupport = false;
+        spiceSupport = false;
+        usbredirSupport = false;
+        openGLSupport = false;
+        virglSupport = false;
+        libiscsiSupport = false;
+        tpmSupport = false;
+        fuseSupport = false;
+        canokeySupport = false;
+        u2fEmuSupport = false;
+        brlttySupport = false;
+        pluginsSupport = false;
+        enableDocs = false;
+        enableBlobs = false;
+      };
       qemuEntrypoint = pkgs.writeShellScriptBin "fatline-qemu" ''
         set -euo pipefail
         case "${1:-}" in
           img)
             shift
-            exec ${pkgs.qemu}/bin/qemu-img "$@"
+            exec ${qemu}/bin/qemu-img "$@"
             ;;
           run)
             shift
-            exec ${pkgs.qemu}/bin/qemu-system-x86_64 "$@"
+            exec ${qemu}/bin/qemu-system-x86_64 "$@"
             ;;
           *)
             echo "Usage: fatline-qemu img|run [arguments...]" >&2
@@ -72,7 +95,7 @@
         created = "1970-01-01T00:00:01Z";
         copyToRoot = pkgs.buildEnv {
           name = "fatline-qemu-runtime";
-          paths = [ qemuEntrypoint pkgs.qemu ];
+          paths = [ qemuEntrypoint qemu ];
           pathsToLink = [ "/bin" ];
         };
         config = {
