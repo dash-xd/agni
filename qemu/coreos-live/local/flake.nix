@@ -25,7 +25,7 @@
       } ''
         mkdir -p "$out"
         xz --decompress --stdout "${compressedQcow}" > "$out/base.qcow2"
-        printf '%s  %s\\n' "efe134f167e22b3e21d8c3cb643e59e814286202d2f0350b080eebbc23bc31d8" "$out/base.qcow2" | sha256sum --check
+        echo "efe134f167e22b3e21d8c3cb643e59e814286202d2f0350b080eebbc23bc31d8  $out/base.qcow2" | sha256sum --check
       '';
       ignition = pkgs.runCommand "fatline-coreos-bootstrap-ignition" {
         nativeBuildInputs = [ pkgs.butane ];
@@ -53,7 +53,7 @@
         mkdir -p "$out"
         cp "${qcow}/base.qcow2" "$out/base.qcow2"
         cp "${ignition}/config.ign" "$out/config.ign"
-        printf '%s\\n' '${release}' > "$out/fcos-release"
+        echo '${release}' > "$out/fcos-release"
       '';
     in {
       packages.${system} = {
