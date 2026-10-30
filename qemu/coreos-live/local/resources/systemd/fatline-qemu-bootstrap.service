@@ -6,4 +6,4 @@ ExecStart=/usr/local/libexec/fatline-qemu-bootstrap
 RemainAfterExit=yes
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=basic.target
