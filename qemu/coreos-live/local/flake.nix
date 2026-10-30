@@ -70,7 +70,11 @@
         name = "localhost/fatline-qemu-runner";
         tag = release;
         created = "1970-01-01T00:00:01Z";
-        contents = [ qemuEntrypoint pkgs.qemu ];
+        copyToRoot = pkgs.buildEnv {
+          name = "fatline-qemu-runtime";
+          paths = [ qemuEntrypoint pkgs.qemu ];
+          pathsToLink = [ "/bin" ];
+        };
         config = {
           Entrypoint = [ "${qemuEntrypoint}/bin/fatline-qemu" ];
         };
