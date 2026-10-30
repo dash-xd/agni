@@ -30,12 +30,24 @@
       ignition = pkgs.runCommand "fatline-coreos-bootstrap-ignition" {
         nativeBuildInputs = [ pkgs.butane ];
       } ''
-        test -f "${configDir}/fatline-bootstrap.bu"
-        test -d "${resourcesDir}"
+        config="${configDir}/fatline-bootstrap.bu"
+        if [ ! -f "$config" ]; then
+          echo "Missing Butane configuration input: $config" >&2
+          exit 1
+        fi
+        if [ ! -d "${resourcesDir}" ]; then
+          echo "Missing Butane resource directory: ${resourcesDir}" >&2
+          exit 1
+        fi
         mkdir -p "$out"
+        echo "Transpiling ${config} with workspace resources under ${resourcesDir}"
         butane --strict --pretty \
           --files-dir "${resourcesDir}" \
-          "${configDir}/fatline-bootstrap.bu" > "$out/config.ign"
+          "$config" > "$out/config.ign" || {
+            rc=$?
+            echo "Butane transpilation failed (exit $rc)" >&2
+            exit "$rc"
+          }
       '';
       bootstrap = pkgs.runCommand "fatline-coreos-qemu-bootstrap-${release}" { } ''
         mkdir -p "$out"
