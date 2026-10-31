@@ -13,6 +13,10 @@ systemd:
             [Unit]
             Requires=fatline-console-user.service
             After=fatline-console-user.service
+            [Service]
+            EnvironmentFile=/run/fatline-console/getty.env
+            ExecStart=
+            ExecStart=-/usr/sbin/agetty --autologin ${FATLINE_CONSOLE_USER} --noclear %I $TERM
 storage:
   files:
     - path: /etc/systemd/system/fatline-qemu-bootstrap.service
