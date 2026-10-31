@@ -1,9 +1,11 @@
 [Unit]
 Description=Fatline CoreOS transient Podman bootstrap qualification
+After=multi-user.target
+
 [Service]
 Type=oneshot
 ExecStart=/usr/local/libexec/fatline-qemu-bootstrap
 RemainAfterExit=yes
 
 [Install]
-WantedBy=basic.target
+WantedBy=multi-user.target
