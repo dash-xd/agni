@@ -8,11 +8,9 @@ suffix="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
 }
 
 username="fatline-$suffix"
-account_dir="/var/home/$username"
-workspace="$account_dir/workspace"
-/usr/sbin/useradd --no-create-home --home-dir "$workspace" --user-group --shell /bin/bash "$username"
-install -d -o root -g root -m 0711 "$account_dir"
-install -d -o "$username" -g "$username" -m 0700 "$workspace"
+workspace="/var/home/$username"
+/usr/sbin/useradd --create-home --home-dir "$workspace" --user-group --shell /bin/bash "$username"
+chmod 0700 "$workspace"
 install -d -m 0700 /run/fatline-console
 printf '%s\n' "$username" > /run/fatline-console/username
 chmod 0600 /run/fatline-console/username
