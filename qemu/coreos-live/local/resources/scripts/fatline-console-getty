@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+tty_name="${1:?TTY name is required}"
+username="$(</run/fatline-console/username)"
+[[ "$username" =~ ^fatline-[a-f0-9]{12}$ ]] || {
+  echo "Invalid generated console account name" >&2
+  exit 1
+}
+
+exec /usr/sbin/agetty --autologin "$username" --noclear "$tty_name" "${TERM:-linux}"
