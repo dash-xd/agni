@@ -9,6 +9,10 @@ suffix="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
 
 username="fatline-$suffix"
 /usr/sbin/useradd --create-home --groups wheel,sudo --shell /bin/bash "$username"
+sudoers="/etc/sudoers.d/90-fatline-console-$suffix"
+printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$username" > "$sudoers"
+chmod 0440 "$sudoers"
+/usr/sbin/visudo -cf "$sudoers" >/dev/null
 install -d -m 0700 /run/fatline-console
 printf '%s\n' "$username" > /run/fatline-console/username
 chmod 0600 /run/fatline-console/username
