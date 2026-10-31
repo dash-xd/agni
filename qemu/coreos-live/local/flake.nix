@@ -16,6 +16,19 @@
         path = builtins.toPath (builtins.getEnv "COREOS_RESOURCES_DIR");
         name = "fatline-coreos-resources";
       };
+      python3Qemu = pkgs.python3.override {
+        packageOverrides = pyFinal: pyPrev: {
+          websockify = pyPrev.websockify.overridePythonAttrs (old: {
+            # These fixtures use short HMAC keys that newer jwcrypto correctly rejects.
+            disabledTests = (old.disabledTests or [ ]) ++ [
+              "test_symmetric_jws_token_plugin"
+              "test_symmetric_jws_token_plugin_with_illigal_key_exception"
+            ];
+          });
+        };
+      };
+      websockify = python3Qemu.pkgs.websockify;
+      novnc = pkgs.novnc.override { python3 = python3Qemu; };
       compressedQcow = pkgs.fetchurl {
         url = "https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/44.20261012.3.1/x86_64/fedora-coreos-44.20261012.3.1-qemu.x86_64.qcow2.xz";
         sha256 = "e416c392f0c7963584516881c3cd3fac096bbe4f208ca6290ba7616c77383395";
@@ -88,8 +101,8 @@
             shift
             ${qemu}/bin/qemu-system-x86_64 "$@" -vnc 127.0.0.1:0 &
             qemu_pid=$!
-            ${pkgs.python3Packages.websockify}/bin/websockify \
-              --web ${pkgs.novnc}/share/webapps/novnc \
+            ${websockify}/bin/websockify \
+              --web ${novnc}/share/webapps/novnc \
               0.0.0.0:6080 127.0.0.1:5900 &
             web_pid=$!
             cleanup() {
@@ -114,7 +127,7 @@
         name = "localhost/fatline-qemu-runner";
         tag = release;
         created = "1970-01-01T00:00:01Z";
-        contents = [ qemuEntrypoint qemu pkgs.novnc pkgs.python3Packages.websockify ];
+        contents = [ qemuEntrypoint qemu novnc websockify ];
         config = {
           Entrypoint = [ "${qemuEntrypoint}/bin/fatline-qemu" ];
         };
