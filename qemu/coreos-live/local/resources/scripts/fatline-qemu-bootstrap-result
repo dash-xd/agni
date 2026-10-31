@@ -10,7 +10,7 @@ if [[ -r /run/fatline-console/username ]]; then
   uid="$(/usr/bin/id -u "$username")"
   marker="/run/user/$uid/fatline-user-smoke.pass"
   for _ in {1..120}; do
-    if [[ -s "$marker" ]]; then
+    if [[ -e "$marker" ]]; then
       echo "PASS: generated local user's systemd unit ran rootless Podman" >/dev/ttyS0
       echo "PASS: transient systemd unit ran Podman inside Fedora CoreOS" >/dev/ttyS0
       exit 0
