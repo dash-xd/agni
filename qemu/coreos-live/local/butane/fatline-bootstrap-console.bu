@@ -13,10 +13,6 @@ systemd:
             [Unit]
             Requires=fatline-console-user.service
             After=fatline-console-user.service
-            [Service]
-            TTYVTDisallocate=no
-            ExecStart=
-            ExecStart=-/usr/local/libexec/fatline-console-getty %I
 storage:
   files:
     - path: /etc/systemd/system/fatline-qemu-bootstrap.service
@@ -27,15 +23,7 @@ storage:
       mode: 0644
       contents:
         local: systemd/fatline-console-user.service
-    - path: /usr/local/libexec/fatline-qemu-bootstrap
-      mode: 0755
-      contents:
-        local: scripts/fatline-qemu-bootstrap
     - path: /usr/local/libexec/fatline-console-user
       mode: 0755
       contents:
         local: scripts/fatline-console-user
-    - path: /usr/local/libexec/fatline-console-getty
-      mode: 0755
-      contents:
-        local: scripts/fatline-console-getty
