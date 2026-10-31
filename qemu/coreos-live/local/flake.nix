@@ -12,6 +12,8 @@
         path = builtins.toPath (builtins.getEnv "COREOS_CONFIG_DIR");
         name = "fatline-coreos-config";
       };
+      configNameEnv = builtins.getEnv "COREOS_CONFIG_NAME";
+      configName = if configNameEnv == "" then "fatline-bootstrap.bu" else configNameEnv;
       resourcesDir = builtins.path {
         path = builtins.toPath (builtins.getEnv "COREOS_RESOURCES_DIR");
         name = "fatline-coreos-resources";
@@ -40,10 +42,11 @@
         xz --decompress --stdout "${compressedQcow}" > "$out/base.qcow2"
         echo "efe134f167e22b3e21d8c3cb643e59e814286202d2f0350b080eebbc23bc31d8  $out/base.qcow2" | sha256sum --check
       '';
-      ignition = pkgs.runCommand "fatline-coreos-bootstrap-ignition" {
+      ignition = assert builtins.match "^[A-Za-z0-9][A-Za-z0-9._-]*\\.bu$" configName != null;
+        pkgs.runCommand "fatline-coreos-bootstrap-ignition" {
         nativeBuildInputs = [ pkgs.butane ];
       } ''
-        config="${configDir}/fatline-bootstrap.bu"
+        config="${configDir}/${configName}"
         if [ ! -f "$config" ]; then
           echo "Missing Butane configuration input: $config" >&2
           exit 1
