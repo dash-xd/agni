@@ -75,7 +75,7 @@
       };
       qemuEntrypoint = pkgs.writeShellScriptBin "fatline-qemu" ''
         set -euo pipefail
-        case "${1:-}" in
+        case ''${1:-} in
           img)
             shift
             exec ${qemu}/bin/qemu-img "$@"
