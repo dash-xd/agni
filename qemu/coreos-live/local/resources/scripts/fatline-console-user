@@ -7,7 +7,12 @@ suffix="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \\n')"
   exit 1
 }
 
-username="local-$suffix"
+composition="$(</etc/fatline/composition)"
+[[ "$composition" =~ ^[a-z_][a-z0-9_-]{0,18}$ ]] || {
+  echo "Invalid composition name in /etc/fatline/composition" >&2
+  exit 1
+}
+username="$composition-$suffix"
 workspace="/var/home/$username"
 /usr/sbin/useradd --create-home --home-dir "$workspace" --user-group --shell /bin/bash "$username"
 chmod 0700 "$workspace"

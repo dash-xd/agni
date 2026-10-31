@@ -14,3 +14,7 @@ storage:
       mode: 0755
       contents:
         local: scripts/fatline-qemu-bootstrap-result
+    - path: /etc/fatline/composition
+      mode: 0444
+      contents:
+        local: config/composition-name

@@ -3,8 +3,18 @@ set -Eeuo pipefail
 
 if [[ -r /run/fatline-console/username ]]; then
   username="$(</run/fatline-console/username)"
-  [[ "$username" =~ ^local-[a-f0-9]{12}$ ]] || {
-    echo "Invalid generated local account name" >&2
+  composition="$(</etc/fatline/composition)"
+  [[ "$composition" =~ ^[a-z_][a-z0-9_-]{0,18}$ ]] || {
+    echo "Invalid composition name in /etc/fatline/composition" >&2
+    exit 1
+  }
+  [[ "$username" == "$composition-"* ]] || {
+    echo "Generated account does not match the selected composition" >&2
+    exit 1
+  }
+  suffix="${username#"$composition-"}"
+  [[ "$suffix" =~ ^[a-f0-9]{12}$ ]] || {
+    echo "Invalid generated account suffix" >&2
     exit 1
   }
   uid="$(/usr/bin/id -u "$username")"

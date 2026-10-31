@@ -18,6 +18,9 @@
         path = builtins.toPath (builtins.getEnv "COREOS_RESOURCES_DIR");
         name = "fatline-coreos-resources";
       };
+      compositionNameEnv = builtins.getEnv "COREOS_COMPOSITION_NAME";
+      compositionName = if compositionNameEnv == "" then "fatline" else compositionNameEnv;
+      validCompositionName = builtins.match "^[a-z_][a-z0-9_-]{0,18}$" compositionName != null;
       python3Qemu = pkgs.python3.override {
         packageOverrides = pyFinal: pyPrev: {
           websockify = pyPrev.websockify.overridePythonAttrs (old: {
@@ -42,7 +45,8 @@
         xz --decompress --stdout "${compressedQcow}" > "$out/base.qcow2"
         echo "efe134f167e22b3e21d8c3cb643e59e814286202d2f0350b080eebbc23bc31d8  $out/base.qcow2" | sha256sum --check
       '';
-      ignition = assert builtins.match "^[A-Za-z0-9][A-Za-z0-9._-]*\\.bu$" configName != null;
+      ignition = assert validCompositionName;
+        assert builtins.match "^[A-Za-z0-9][A-Za-z0-9._-]*\\.bu$" configName != null;
         pkgs.runCommand "fatline-coreos-bootstrap-ignition" {
         nativeBuildInputs = [ pkgs.butane ];
       } ''
@@ -56,9 +60,14 @@
           exit 1
         fi
         mkdir -p "$out"
-        echo "Transpiling $config with workspace resources under ${resourcesDir}"
+        generated_resources="$TMPDIR/fatline-coreos-resources"
+        mkdir -p "$generated_resources"
+        cp -R "${resourcesDir}/." "$generated_resources/"
+        mkdir -p "$generated_resources/config"
+        printf '%s\n' "${compositionName}" > "$generated_resources/config/composition-name"
+        echo "Transpiling $config for composition ${compositionName} with workspace resources under ${resourcesDir}"
         butane --strict --pretty \
-          --files-dir "${resourcesDir}" \
+          --files-dir "$generated_resources" \
           "$config" > "$out/config.ign" || {
             rc=$?
             echo "Butane transpilation failed (exit $rc)" >&2
