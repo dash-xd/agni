@@ -1,6 +1,6 @@
 # Fatline Fedora CoreOS QEMU bootstrap
 
-Nix-Alpine's `local/Makefile` is the supported entrypoint. It builds the pinned FCOS QEMU disk and Butane Ignition artifact, starts QEMU as a transient systemd-user service, and checks the guest's transient Podman bootstrap unit through the serial log.
+Nix-Alpine's `local/Makefile` is the supported entrypoint. It builds the pinned FCOS QEMU disk and Butane Ignition artifact, starts QEMU as a transient systemd-user service, and checks a guest systemd transient Podman unit through the serial log.
 
 The profile in `butane/fatline-bootstrap.bu` refers to files under `resources/` with Butane `local` references. Set `COREOS_CONFIG_DIR` and `COREOS_RESOURCES` in Nix-Alpine Make to compose a workspace-owned Butane config and its local resource tree. The build copies both inputs into the Nix store, so edits produce a different artifact.
 
@@ -14,7 +14,7 @@ Keep host setup in root-owned systemd units. Run application containers as non-r
 
 ## Optional browser-console login
 
-Nix-Alpine Make selects `fatline-bootstrap-console.bu` with `COREOS_QEMU_CONSOLE_LOGIN=1`. At each guest boot, a systemd service generates a random `fatline-<hex>` account. The account is unprivileged, has no `wheel` or `sudo` membership, and uses its standard Fedora CoreOS `/var/home/<user>` directory as its private workspace and home. Creating the home with `useradd --create-home` gives it the expected ownership and SELinux home label. The noVNC virtual terminal autologs into it. The qualification guest has no SSH key configured by this profile.
+Nix-Alpine Make selects `fatline-bootstrap-console.bu` with `COREOS_QEMU_CONSOLE_LOGIN=1`. At each guest boot, a systemd service generates a random `fatline-<hex>` account. The account is unprivileged, has no `wheel` or `sudo` membership, and uses its standard Fedora CoreOS `/var/home/<user>` directory as its private workspace and home. Creating the home with `useradd --create-home` gives it the expected ownership and SELinux home label. The noVNC virtual terminal autologs into it through the stock `agetty` executable, preserving Fedora's SELinux login transition. The qualification guest has no SSH key configured by this profile.
 
 The account can read files permitted by their normal system permissions. Root-owned credentials and other protected files stay inaccessible; do not grant a global read ACL over the guest filesystem because that would expose secrets. The home directory is the account's persistent writable workspace. Standard ephemeral runtime locations such as the guest's temporary filesystem may also be writable.
 
