@@ -5,7 +5,6 @@ Before=getty@tty1.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/libexec/fatline-console-user
-ExecStartPost=/usr/bin/systemctl daemon-reload
 RemainAfterExit=yes
 
 [Install]
