@@ -4,21 +4,38 @@ systemd:
   units:
     - name: fatline-qemu-bootstrap.service
       enabled: true
+    - name: fatline-console-user.service
+      enabled: true
     - name: getty@tty1.service
       dropins:
         - name: 10-fatline-console-autologin.conf
           contents: |
+            [Unit]
+            Requires=fatline-console-user.service
+            After=fatline-console-user.service
             [Service]
             TTYVTDisallocate=no
             ExecStart=
-            ExecStart=-/usr/sbin/agetty --autologin core --noclear %I $TERM
+            ExecStart=-/usr/local/libexec/fatline-console-getty %I
 storage:
   files:
     - path: /etc/systemd/system/fatline-qemu-bootstrap.service
       mode: 0644
       contents:
         local: systemd/fatline-qemu-bootstrap.service
+    - path: /etc/systemd/system/fatline-console-user.service
+      mode: 0644
+      contents:
+        local: systemd/fatline-console-user.service
     - path: /usr/local/libexec/fatline-qemu-bootstrap
       mode: 0755
       contents:
         local: scripts/fatline-qemu-bootstrap
+    - path: /usr/local/libexec/fatline-console-user
+      mode: 0755
+      contents:
+        local: scripts/fatline-console-user
+    - path: /usr/local/libexec/fatline-console-getty
+      mode: 0755
+      contents:
+        local: scripts/fatline-console-getty
