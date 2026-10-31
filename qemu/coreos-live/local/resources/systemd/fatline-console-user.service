@@ -1,5 +1,5 @@
 [Unit]
-Description=Generate the per-boot Fatline qualification console account
+Description=Generate the per-boot qualification user
 Before=getty@tty1.service
 
 [Service]
