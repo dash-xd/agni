@@ -84,7 +84,7 @@
         brlttySupport = false;
         pluginsSupport = false;
         enableDocs = false;
-        enableBlobs = false;
+        enableBlobs = true;
       };
       qemuEntrypoint = pkgs.writeShellScriptBin "fatline-qemu" ''
         set -euo pipefail
