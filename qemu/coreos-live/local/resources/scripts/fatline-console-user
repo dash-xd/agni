@@ -11,6 +11,13 @@ username="fatline-$suffix"
 workspace="/var/home/$username"
 /usr/sbin/useradd --create-home --home-dir "$workspace" --user-group --shell /bin/bash "$username"
 chmod 0700 "$workspace"
+
+dropin_dir=/run/systemd/system/getty@tty1.service.d
+install -d -m 0755 "$dropin_dir"
+printf '[Service]\nExecStart=\nExecStart=-/usr/sbin/agetty --autologin %s --noclear %%I $TERM\n' \
+  "$username" > "$dropin_dir/90-fatline-console-autologin.conf"
+chmod 0644 "$dropin_dir/90-fatline-console-autologin.conf"
+
 install -d -m 0700 /run/fatline-console
 printf '%s\n' "$username" > /run/fatline-console/username
 chmod 0600 /run/fatline-console/username
