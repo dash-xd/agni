@@ -114,11 +114,7 @@
         name = "localhost/fatline-qemu-runner";
         tag = release;
         created = "1970-01-01T00:00:01Z";
-        copyToRoot = pkgs.buildEnv {
-          name = "fatline-qemu-runtime";
-          paths = [ qemuEntrypoint qemu pkgs.novnc pkgs.python3Packages.websockify ];
-          pathsToLink = [ "/bin" ];
-        };
+        contents = [ qemuEntrypoint qemu pkgs.novnc pkgs.python3Packages.websockify ];
         config = {
           Entrypoint = [ "${qemuEntrypoint}/bin/fatline-qemu" ];
         };
