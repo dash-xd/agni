@@ -1,0 +1,11 @@
+[Unit]
+Description=Generate the per-boot Fatline qualification console account
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/fatline-console-user
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
