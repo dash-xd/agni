@@ -1,17 +1,19 @@
 #!/usr/bin/bash
 set -Eeuo pipefail
 
-suffix="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \\n')"
+suffix="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
 [[ "$suffix" =~ ^[a-f0-9]{12}$ ]] || {
   echo "Could not generate a valid console account suffix" >&2
   exit 1
 }
 
 username="fatline-$suffix"
-workspace="/var/home/$username/workspace"
-/usr/sbin/useradd --create-home --home-dir "$workspace" --user-group --shell /bin/bash "$username"
-chmod 0700 "$workspace"
+account_dir="/var/home/$username"
+workspace="$account_dir/workspace"
+/usr/sbin/useradd --no-create-home --home-dir "$workspace" --user-group --shell /bin/bash "$username"
+install -d -o root -g root -m 0711 "$account_dir"
+install -d -o "$username" -g "$username" -m 0700 "$workspace"
 install -d -m 0700 /run/fatline-console
-printf '%s\\n' "$username" > /run/fatline-console/username
+printf '%s\n' "$username" > /run/fatline-console/username
 chmod 0600 /run/fatline-console/username
-printf 'Fatline qualification console account: %s\\nWorkspace: %s\\n' "$username" "$workspace" >/dev/ttyS0 2>/dev/null || true
+printf 'Fatline qualification console account: %s\nWorkspace: %s\n' "$username" "$workspace" >/dev/ttyS0 2>/dev/null || true
