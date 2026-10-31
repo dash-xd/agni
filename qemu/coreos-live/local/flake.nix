@@ -67,8 +67,8 @@
         pulseSupport = false;
         pipewireSupport = false;
         sdlSupport = false;
-        jackSupport = false;
         gtkSupport = false;
+        jackSupport = false;
         # Optional browser console uses QEMU's VNC server behind pinned noVNC.
         vncSupport = true;
         smartcardSupport = false;
@@ -95,11 +95,11 @@
             ;;
           run)
             shift
-            exec ${qemu}/bin/qemu-system-x86_64 "$@"
+            exec ${qemu}/bin/qemu-system-x86_64 -L ${qemu}/share/qemu "$@"
             ;;
           run-web)
             shift
-            ${qemu}/bin/qemu-system-x86_64 "$@" -vnc 127.0.0.1:0 &
+            ${qemu}/bin/qemu-system-x86_64 -L ${qemu}/share/qemu "$@" -vnc 127.0.0.1:0 &
             qemu_pid=$!
             ${websockify}/bin/websockify \
               --web ${novnc}/share/webapps/novnc \
