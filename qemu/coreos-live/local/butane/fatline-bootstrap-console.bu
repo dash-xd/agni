@@ -4,6 +4,12 @@ systemd:
   units:
     - name: fatline-qemu-bootstrap.service
       enabled: true
+      dropins:
+        - name: 10-require-qualification-user.conf
+          contents: |
+            [Unit]
+            Requires=fatline-console-user.service
+            After=fatline-console-user.service
     - name: fatline-console-user.service
       enabled: true
     - name: getty@tty1.service
@@ -31,3 +37,15 @@ storage:
       mode: 0755
       contents:
         local: scripts/fatline-console-user
+    - path: /usr/local/libexec/fatline-qemu-bootstrap-result
+      mode: 0755
+      contents:
+        local: scripts/fatline-qemu-bootstrap-result
+    - path: /etc/skel/.config/systemd/user/fatline-qualification-smoke.service
+      mode: 0644
+      contents:
+        local: systemd/fatline-qualification-smoke.service
+  links:
+    - path: /etc/skel/.config/systemd/user/default.target.wants/fatline-qualification-smoke.service
+      target: ../fatline-qualification-smoke.service
+      hard: false

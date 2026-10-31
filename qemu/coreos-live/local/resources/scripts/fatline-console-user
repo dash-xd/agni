@@ -3,15 +3,14 @@ set -Eeuo pipefail
 
 suffix="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \\n')"
 [[ "$suffix" =~ ^[a-f0-9]{12}$ ]] || {
-  echo "Could not generate a valid qualification account suffix" >&2
+  echo "Could not generate a valid local account suffix" >&2
   exit 1
 }
 
-username="qual-$suffix"
+username="local-$suffix"
 workspace="/var/home/$username"
 /usr/sbin/useradd --create-home --home-dir "$workspace" --user-group --shell /bin/bash "$username"
 chmod 0700 "$workspace"
-/usr/bin/loginctl enable-linger "$username"
 uid="$(/usr/bin/id -u "$username")"
 
 install -d -m 0700 /run/fatline-console
@@ -19,4 +18,6 @@ printf '%s\n' "$username" > /run/fatline-console/username
 printf 'FATLINE_CONSOLE_USER=%s\n' "$username" > /run/fatline-console/getty.env
 printf 'FATLINE_CONSOLE_UID=%s\n' "$uid" > /run/fatline-console/user.env
 chmod 0600 /run/fatline-console/username /run/fatline-console/getty.env /run/fatline-console/user.env
-printf 'Qualification console account: %s\nWorkspace: %s\n' "$username" "$workspace" >/dev/ttyS0 2>/dev/null || true
+
+/usr/bin/loginctl enable-linger "$username"
+printf 'Generated local login: %s\nWorkspace: %s\n' "$username" "$workspace" >/dev/ttyS0 2>/dev/null || true

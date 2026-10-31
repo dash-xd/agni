@@ -10,3 +10,7 @@ storage:
       mode: 0644
       contents:
         local: systemd/fatline-qemu-bootstrap.service
+    - path: /usr/local/libexec/fatline-qemu-bootstrap-result
+      mode: 0755
+      contents:
+        local: scripts/fatline-qemu-bootstrap-result

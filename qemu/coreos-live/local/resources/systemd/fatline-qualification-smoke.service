@@ -1,0 +1,11 @@
+[Unit]
+Description=Qualification-user rootless Podman systemd smoke
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman info --format {{.Host.Arch}}
+ExecStartPost=/usr/bin/touch %t/fatline-user-smoke.pass
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target
