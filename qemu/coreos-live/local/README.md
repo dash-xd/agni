@@ -6,8 +6,16 @@ The profile in `butane/fatline-bootstrap.bu` refers to files under `resources/` 
 
 The old ISO/compose launcher at the parent directory is deprecated. It has mutable inputs and is not part of this qualification path.
 
+## Host administration and service ownership
+
+Fedora CoreOS provides the privileged `core` account by default. It has no default password or SSH key. The bootstrap is a system-level systemd unit and runs as root; it does not depend on the console account or run application containers as root. Add a host-controlled SSH public key to the Ignition profile when SSH access is needed.
+
+Keep host setup in root-owned systemd units. Run application containers as non-root where their image and port configuration allow it. Podman's host-side privilege model and the process identity inside each container are separate settings and should be qualified separately.
+
 ## Optional browser-console login
 
-The Nix-Alpine Make target can select the `fatline-bootstrap-console.bu` profile with `COREOS_QEMU_CONSOLE_LOGIN=1`. On each boot, a systemd service creates a unique `fatline-<random>` account in the guest and the noVNC virtual terminal autologs into that account. It is a passwordless, wheel-group account intended only for this disposable local QEMU qualification guest; the host publishes noVNC only on loopback. SSH keys are not configured.
+Nix-Alpine Make selects `fatline-bootstrap-console.bu` with `COREOS_QEMU_CONSOLE_LOGIN=1`. At each guest boot, a systemd service generates a random `fatline-<hex>` account. The account is unprivileged, has no `wheel` or `sudo` membership, and uses its private `/var/home/<user>/workspace` directory as its home. The noVNC virtual terminal autologs into it. The qualification guest has no SSH key configured by this profile.
 
-The headless/default profile does not create this account or enable console autologin. By default, the qualification transient service stops after its smoke gate; its qcow2 overlay is removed during cleanup, so the generated account does not persist between runs. Set `COREOS_QEMU_HOLD=1` with console login enabled to keep the guest open after the smoke passes. Stop it with `systemctl --user stop fatline-coreos-qemu-<scope>.service`, or let the configured qualification timeout expire.
+The account can read files permitted by their normal system permissions. Root-owned credentials and other protected files stay inaccessible; do not grant a global read ACL over the guest filesystem because that would expose secrets. The workspace is the account's persistent writable home. Standard ephemeral runtime locations such as the guest's temporary filesystem may also be writable.
+
+The headless/default profile does not create the console account or enable console autologin. By default, the qualification transient service stops after its smoke gate; its qcow2 overlay is removed during cleanup, so the generated account does not persist between runs. Set `COREOS_QEMU_HOLD=1` with console login enabled to keep the guest open after the smoke passes. Stop it with `systemctl --user stop fatline-coreos-qemu-<scope>.service`, or let the configured qualification timeout expire.
