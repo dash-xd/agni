@@ -8,6 +8,6 @@ The old ISO/compose launcher at the parent directory is deprecated. It has mutab
 
 ## Optional browser-console login
 
-The Nix-Alpine Make target can select the `fatline-bootstrap-console.bu` profile with `COREOS_QEMU_CONSOLE_LOGIN=1`. It autologs the built-in `core` user onto the guest's virtual terminal so the noVNC console lands at a shell. This profile is intended for a disposable local QEMU qualification guest; the host publishes noVNC only on loopback. It does not configure SSH keys or a password, and the profile should not be used for a network-exposed or persistent guest.
+The Nix-Alpine Make target can select the `fatline-bootstrap-console.bu` profile with `COREOS_QEMU_CONSOLE_LOGIN=1`. On each boot, a systemd service creates a unique `fatline-<random>` account in the guest and the noVNC virtual terminal autologs into that account. It is a passwordless, wheel-group account intended only for this disposable local QEMU qualification guest; the host publishes noVNC only on loopback. SSH keys are not configured.
 
-The headless/default profile does not enable console autologin. The qualification transient service is stopped and cleaned up when its gate completes.
+The headless/default profile does not create this account or enable console autologin. The qualification transient service is stopped and its qcow2 overlay is removed when the gate completes, so the generated account does not persist between runs.
