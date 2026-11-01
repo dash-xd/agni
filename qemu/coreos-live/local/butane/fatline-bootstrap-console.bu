@@ -41,15 +41,19 @@ storage:
       mode: 0755
       contents:
         local: scripts/fatline-qemu-bootstrap-result
+    - path: /etc/profile.d/fatline-readonly-login.sh
+      mode: 0644
+      contents:
+        local: scripts/fatline-readonly-login
     - path: /etc/fatline/composition
       mode: 0444
       contents:
         local: config/composition-name
-    - path: /etc/skel/.config/systemd/user/fatline-qualification-smoke.service
+    - path: /etc/fatline/app-skel/.config/systemd/user/fatline-qualification-smoke.service
       mode: 0644
       contents:
         local: systemd/fatline-qualification-smoke.service
   links:
-    - path: /etc/skel/.config/systemd/user/default.target.wants/fatline-qualification-smoke.service
+    - path: /etc/fatline/app-skel/.config/systemd/user/default.target.wants/fatline-qualification-smoke.service
       target: ../fatline-qualification-smoke.service
       hard: false

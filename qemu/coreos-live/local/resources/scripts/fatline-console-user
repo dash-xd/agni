@@ -1,10 +1,8 @@
 #!/usr/bin/bash
 set -Eeuo pipefail
 
-suffix="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \\n')"
-[[ "$suffix" =~ ^[a-f0-9]{12}$ ]] || {
-  echo "Could not generate a valid local account suffix" >&2
-  exit 1
+random_suffix() {
+  od -An -N6 -tx1 /dev/urandom | tr -d '[:space:]'
 }
 
 composition="$(</etc/fatline/composition)"
@@ -12,17 +10,37 @@ composition="$(</etc/fatline/composition)"
   echo "Invalid composition name in /etc/fatline/composition" >&2
   exit 1
 }
-username="$composition-$suffix"
-workspace="/var/home/$username"
-/usr/sbin/useradd --create-home --home-dir "$workspace" --user-group --shell /bin/bash "$username"
-chmod 0700 "$workspace"
-uid="$(/usr/bin/id -u "$username")"
 
+app_suffix="$(random_suffix)"
+login_suffix="$(random_suffix)"
+[[ "$app_suffix" =~ ^[a-f0-9]{12}$ && "$login_suffix" =~ ^[a-f0-9]{12}$ ]] || {
+  echo "Could not generate valid account suffixes" >&2
+  exit 1
+}
+while [[ "$login_suffix" == "$app_suffix" ]]; do
+  login_suffix="$(random_suffix)"
+done
+
+app_user="$composition-$app_suffix"
+login_user="local-$login_suffix"
+app_home="/var/home/$app_user"
+login_home="/var/home/$login_user"
+
+/usr/sbin/useradd --create-home --home-dir "$app_home" --user-group \
+  --shell /usr/sbin/nologin --skel /etc/fatline/app-skel "$app_user"
+/usr/sbin/useradd --create-home --home-dir "$login_home" --user-group \
+  --shell /bin/bash "$login_user"
+chmod 0700 "$app_home" "$login_home"
+install -d -o "$login_user" -g "$login_user" -m 0700 "$login_home/.cache/tmp"
+
+app_uid="$(/usr/bin/id -u "$app_user")"
 install -d -m 0700 /run/fatline-console
-printf '%s\n' "$username" > /run/fatline-console/username
-printf 'FATLINE_CONSOLE_USER=%s\n' "$username" > /run/fatline-console/getty.env
-chmod 0600 /run/fatline-console/username /run/fatline-console/getty.env
+printf '%s\n' "$app_user" > /run/fatline-console/app-user
+printf '%s\n' "$login_user" > /run/fatline-console/login-user
+printf 'FATLINE_CONSOLE_USER=%s\n' "$login_user" > /run/fatline-console/getty.env
+chmod 0600 /run/fatline-console/app-user /run/fatline-console/login-user /run/fatline-console/getty.env
 
-/usr/bin/loginctl enable-linger "$username"
-/usr/bin/systemctl start "user@${uid}.service"
-printf 'Generated local login: %s\nWorkspace: %s\n' "$username" "$workspace" >/dev/ttyS0 2>/dev/null || true
+/usr/bin/loginctl enable-linger "$app_user"
+/usr/bin/systemctl start "user@${app_uid}.service"
+printf 'Generated app identity: %s\nApp workspace: %s\nGenerated local login: %s\nLogin workspace: %s\n' \
+  "$app_user" "$app_home" "$login_user" "$login_home" >/dev/ttyS0 2>/dev/null || true

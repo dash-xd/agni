@@ -3,34 +3,47 @@ set -Eeuo pipefail
 
 echo "PASS: CoreOS root systemd service ran Podman" >/dev/ttyS0
 
-if [[ -r /run/fatline-console/username ]]; then
-  username="$(</run/fatline-console/username)"
-  composition="$(</etc/fatline/composition)"
-  [[ "$composition" =~ ^[a-z_][a-z0-9_-]{0,18}$ ]] || {
-    echo "Invalid composition name in /etc/fatline/composition" >&2
-    exit 1
-  }
-  [[ "$username" == "$composition-"* ]] || {
-    echo "Generated account does not match the selected composition" >&2
-    exit 1
-  }
-  suffix="${username#"$composition-"}"
-  [[ "$suffix" =~ ^[a-f0-9]{12}$ ]] || {
-    echo "Invalid generated account suffix" >&2
-    exit 1
-  }
-  uid="$(/usr/bin/id -u "$username")"
-  marker="/run/user/$uid/fatline-user-smoke.pass"
-  for _ in {1..120}; do
-    if [[ -e "$marker" ]]; then
-      echo "PASS: generated composition user's systemd unit ran rootless Podman" >/dev/ttyS0
-      echo "PASS: CoreOS qualification bootstrap succeeded" >/dev/ttyS0
-      exit 0
-    fi
-    sleep 1
-  done
-  echo "Generated composition user's systemd rootless Podman smoke did not pass within 120 seconds" >&2
+[[ -r /run/fatline-console/app-user && -r /run/fatline-console/login-user ]] || {
+  echo "Generated Fatline app and local login identities are missing" >&2
   exit 1
-fi
+}
+app_user="$(</run/fatline-console/app-user)"
+login_user="$(</run/fatline-console/login-user)"
+composition="$(</etc/fatline/composition)"
+[[ "$composition" =~ ^[a-z_][a-z0-9_-]{0,18}$ ]] || {
+  echo "Invalid composition name in /etc/fatline/composition" >&2
+  exit 1
+}
+[[ "$app_user" =~ ^${composition}-[a-f0-9]{12}$ ]] || {
+  echo "Generated app identity does not match the selected composition" >&2
+  exit 1
+}
+[[ "$login_user" =~ ^local-[a-f0-9]{12}$ && "$login_user" != "$app_user" ]] || {
+  echo "Generated local login identity is invalid or not separate from the app identity" >&2
+  exit 1
+}
+app_shell="$(/usr/bin/getent passwd "$app_user" | cut -d: -f7)"
+login_shell="$(/usr/bin/getent passwd "$login_user" | cut -d: -f7)"
+[[ "$app_shell" == /usr/sbin/nologin && "$login_shell" == /bin/bash ]] || {
+  echo "Generated user shells do not match the app/login identity roles" >&2
+  exit 1
+}
+app_uid="$(/usr/bin/id -u "$app_user")"
+login_uid="$(/usr/bin/id -u "$login_user")"
+app_marker="/run/user/$app_uid/fatline-user-smoke.pass"
+login_home="$(/usr/bin/getent passwd "$login_user" | cut -d: -f6)"
+login_marker="$login_home/.fatline-readonly-login.pass"
 
-echo "PASS: CoreOS qualification bootstrap succeeded" >/dev/ttyS0
+for _ in {1..180}; do
+  if [[ -e "$app_marker" && -e "$login_marker" && "$(/usr/bin/stat -c %u "$login_marker" 2>/dev/null || true)" == "$login_uid" ]]; then
+    echo "PASS: generated composition user's systemd unit ran rootless Podman" >/dev/ttyS0
+    echo "PASS: generated local login is read-only outside its workspace" >/dev/ttyS0
+    echo "PASS: CoreOS qualification bootstrap succeeded" >/dev/ttyS0
+    exit 0
+  fi
+  sleep 1
+done
+
+[[ -e "$app_marker" ]] || echo "Generated composition user's rootless Podman smoke did not pass within 180 seconds" >&2
+[[ -e "$login_marker" && "$(/usr/bin/stat -c %u "$login_marker" 2>/dev/null || true)" == "$login_uid" ]] || echo "Generated local login did not pass read-only workspace checks within 180 seconds" >&2
+exit 1

@@ -1,0 +1,50 @@
+#!/usr/bin/bash
+case $- in
+  *i*) ;;
+  *) return 0 ;;
+esac
+
+login_user="$(/usr/bin/id -un 2>/dev/null || true)"
+[[ "$login_user" =~ ^local-[a-f0-9]{12}$ ]] || return 0
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(/usr/bin/id -u)}"
+[[ -d "$runtime_dir" ]] || { echo "FAIL: user systemd runtime is unavailable" >&2; exit 1; }
+
+if [[ "${FATLINE_READONLY_SESSION:-0}" == 1 ]]; then
+  test_file="$(/usr/bin/mktemp "$HOME/.cache/tmp/fatline-write.XXXXXX")" || {
+    echo "FAIL: local workspace is not writable" >&2
+    exit 1
+  }
+  /usr/bin/rm -f "$test_file"
+
+  for readonly_dir in /tmp /var/tmp; do
+    readonly_probe="$readonly_dir/fatline-readonly-probe-${UID}-$"
+    if (umask 077; : > "$readonly_probe") 2>/dev/null; then
+      /usr/bin/rm -f "$readonly_probe"
+      echo "FAIL: local login can write outside its workspace ($readonly_dir)" >&2
+      exit 1
+    fi
+  done
+
+  : > "$HOME/.fatline-readonly-login.pass" || {
+    echo "FAIL: local login could not record its read-only qualification result" >&2
+    exit 1
+  }
+  printf 'PASS: local login is read-only outside its workspace (%s)\n' "$HOME"
+  return 0
+fi
+
+exec /usr/bin/systemd-run \
+  --user --quiet --pty --wait --collect \
+  --unit=fatline-readonly-console \
+  --property=ProtectSystem=strict \
+  --property="ReadWritePaths=$HOME" \\\n  --property="ReadOnlyPaths=/tmp /var/tmp" \
+  --property="InaccessiblePaths=-$runtime_dir -/dev/shm -/dev/mqueue" \
+  --property="WorkingDirectory=$HOME" \
+  --setenv=FATLINE_READONLY_SESSION=1 \
+  --setenv="HOME=$HOME" \
+  --setenv="USER=$login_user" \
+  --setenv="LOGNAME=$login_user" \
+  --setenv="SHELL=/bin/bash" \
+  --setenv="XDG_RUNTIME_DIR=$runtime_dir" \
+  --setenv="TMPDIR=$HOME/.cache/tmp" \
+  /bin/bash --login
