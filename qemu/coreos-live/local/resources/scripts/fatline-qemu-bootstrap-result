@@ -39,6 +39,7 @@ for _ in {1..180}; do
     echo "PASS: generated composition user's systemd unit ran rootless Podman" >/dev/ttyS0
     echo "PASS: generated local login is read-only outside its workspace" >/dev/ttyS0
     echo "PASS: CoreOS qualification bootstrap succeeded" >/dev/ttyS0
+    echo "COREOS_QEMU_STATUS=PASS profile=fatline" >/dev/ttyS0
     exit 0
   fi
   sleep 1
