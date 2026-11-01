@@ -1,6 +1,7 @@
 [Unit]
 Description=Fatline CoreOS system Podman bootstrap qualification
 After=multi-user.target
+OnFailure=fatline-qemu-bootstrap-failure.service
 
 [Service]
 Type=oneshot
