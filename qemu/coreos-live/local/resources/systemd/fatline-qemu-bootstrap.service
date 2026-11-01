@@ -1,10 +1,10 @@
 [Unit]
-Description=Fatline CoreOS transient Podman bootstrap qualification
+Description=Fatline CoreOS system Podman bootstrap qualification
 After=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/systemd-run --quiet --pipe --wait --collect --unit=fatline-qemu-podman-smoke -- /usr/bin/podman info --format {{.Host.Arch}}
+ExecStart=/usr/bin/podman info --format {{.Host.Arch}}
 ExecStartPost=/usr/local/libexec/fatline-qemu-bootstrap-result
 StandardOutput=append:/dev/ttyS0
 StandardError=append:/dev/ttyS0

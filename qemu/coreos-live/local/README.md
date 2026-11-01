@@ -1,6 +1,6 @@
 # Fatline Fedora CoreOS QEMU bootstrap
 
-Nix-Alpine's `local/Makefile` is the supported entrypoint. It builds the pinned FCOS QEMU disk and Butane Ignition artifact, starts QEMU as a transient systemd-user service, and checks guest systemd and Podman through the serial log.
+Nix-Alpine's `local/Makefile` is the supported entrypoint. It builds the pinned FCOS QEMU disk and Butane Ignition artifact, starts QEMU in a host transient systemd-user service, and checks the guest root Podman bootstrap plus the generated user's rootless systemd Podman service through the serial log.
 
 The profile in `butane/fatline-bootstrap.bu` refers to files under `resources/` with Butane `local` references. Set `COREOS_CONFIG_DIR` and `COREOS_RESOURCES` in Nix-Alpine Make to compose a workspace-owned Butane config and its local resource tree. The build copies both inputs into the Nix store, so edits produce a different artifact.
 
@@ -10,7 +10,7 @@ The old ISO/compose launcher at the parent directory is deprecated. It has mutab
 
 Fedora CoreOS provides the privileged `core` account by default. It has no default password or SSH key. System-level bootstrap units run as root to provision the guest, prepare user homes, and verify the qualification-user smoke. They do not run the Fatline application as root. Add a host-controlled SSH public key to the Ignition profile when SSH access is needed.
 
-Podman and systemd are the runtime. The user-level Podman smoke runs inside the generated user's systemd manager with rootless Podman. The root bootstrap separately exercises Podman from a system transient unit. Container process identity remains an image and Quadlet configuration choice.
+Podman and systemd are the runtime. The host QEMU process runs in a transient systemd-user service. Inside CoreOS, a normal system unit runs the root bootstrap Podman check, then waits for the generated user's enabled systemd unit to complete a rootless Podman check. This avoids starting a second system manager job from inside a boot service. Fatline application Quadlets belong in the generated user's systemd manager. Container process identity remains an image and Quadlet configuration choice.
 
 ## Optional browser-console login
 

@@ -1,6 +1,8 @@
 #!/usr/bin/bash
 set -Eeuo pipefail
 
+echo "PASS: CoreOS root systemd service ran Podman" >/dev/ttyS0
+
 if [[ -r /run/fatline-console/username ]]; then
   username="$(</run/fatline-console/username)"
   composition="$(</etc/fatline/composition)"
@@ -21,14 +23,14 @@ if [[ -r /run/fatline-console/username ]]; then
   marker="/run/user/$uid/fatline-user-smoke.pass"
   for _ in {1..120}; do
     if [[ -e "$marker" ]]; then
-      echo "PASS: generated local user's systemd unit ran rootless Podman" >/dev/ttyS0
-      echo "PASS: transient systemd unit ran Podman inside Fedora CoreOS" >/dev/ttyS0
+      echo "PASS: generated composition user's systemd unit ran rootless Podman" >/dev/ttyS0
+      echo "PASS: CoreOS qualification bootstrap succeeded" >/dev/ttyS0
       exit 0
     fi
     sleep 1
   done
-  echo "Generated local user's systemd rootless Podman smoke did not pass within 120 seconds" >&2
+  echo "Generated composition user's systemd rootless Podman smoke did not pass within 120 seconds" >&2
   exit 1
 fi
 
-echo "PASS: transient systemd unit ran Podman inside Fedora CoreOS" >/dev/ttyS0
+echo "PASS: CoreOS qualification bootstrap succeeded" >/dev/ttyS0
