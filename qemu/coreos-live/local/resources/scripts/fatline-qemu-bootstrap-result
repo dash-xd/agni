@@ -3,6 +3,12 @@ set -Eeuo pipefail
 
 echo "PASS: CoreOS root systemd service ran Podman" >/dev/ttyS0
 
+if [[ ! -e /etc/fatline/console-enabled ]]; then
+  echo "PASS: CoreOS qualification bootstrap succeeded" >/dev/ttyS0
+  echo "COREOS_QEMU_STATUS=PASS profile=coreos" >/dev/ttyS0
+  exit 0
+fi
+
 [[ -r /run/fatline-console/app-user && -r /run/fatline-console/login-user ]] || {
   echo "Generated Fatline app and local login identities are missing" >&2
   exit 1
