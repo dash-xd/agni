@@ -14,6 +14,14 @@ storage:
       mode: 0755
       contents:
         local: scripts/fatline-qemu-bootstrap-result
+    - path: /etc/systemd/system/fatline-qemu-bootstrap-failure.service
+      mode: 0644
+      contents:
+        local: systemd/fatline-qemu-bootstrap-failure.service
+    - path: /usr/local/libexec/fatline-qemu-bootstrap-failure
+      mode: 0755
+      contents:
+        local: scripts/fatline-qemu-bootstrap-failure
     - path: /etc/fatline/composition
       mode: 0444
       contents:
