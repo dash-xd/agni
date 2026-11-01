@@ -17,7 +17,7 @@ if [[ "${FATLINE_READONLY_SESSION:-0}" == 1 ]]; then
   /usr/bin/rm -f "$test_file"
 
   for readonly_dir in /tmp /var/tmp; do
-    readonly_probe="$readonly_dir/fatline-readonly-probe-${UID}-$"
+    readonly_probe="$readonly_dir/fatline-readonly-probe-${UID}-$$"
     if (umask 077; : > "$readonly_probe") 2>/dev/null; then
       /usr/bin/rm -f "$readonly_probe"
       echo "FAIL: local login can write outside its workspace ($readonly_dir)" >&2
@@ -37,7 +37,8 @@ exec /usr/bin/systemd-run \
   --user --quiet --pty --wait --collect \
   --unit=fatline-readonly-console \
   --property=ProtectSystem=strict \
-  --property="ReadWritePaths=$HOME" \\\n  --property="ReadOnlyPaths=/tmp /var/tmp" \
+  --property="ReadWritePaths=$HOME" \
+  --property="ReadOnlyPaths=/tmp /var/tmp" \
   --property="InaccessiblePaths=-$runtime_dir -/dev/shm -/dev/mqueue" \
   --property="WorkingDirectory=$HOME" \
   --setenv=FATLINE_READONLY_SESSION=1 \
