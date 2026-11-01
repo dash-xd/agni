@@ -14,6 +14,8 @@
       };
       configNameEnv = builtins.getEnv "COREOS_CONFIG_NAME";
       configName = if configNameEnv == "" then "fatline-bootstrap.bu" else configNameEnv;
+      testSSHKey = builtins.getEnv "COREOS_TEST_SSH_PUBLIC_KEY";
+      validTestSSHKey = builtins.match "^ssh-ed25519 [A-Za-z0-9+/=]+$" testSSHKey != null;
       resourcesDir = builtins.path {
         path = builtins.toPath (builtins.getEnv "COREOS_RESOURCES_DIR");
         name = "fatline-coreos-resources";
@@ -49,6 +51,7 @@
         assert builtins.match "^[A-Za-z0-9][A-Za-z0-9._-]*\\.bu$" configName != null;
         pkgs.runCommand "fatline-coreos-bootstrap-ignition" {
         nativeBuildInputs = [ pkgs.butane ];
+        COREOS_TEST_SSH_PUBLIC_KEY = testSSHKey;
       } ''
         config="${configDir}/${configName}"
         if [ ! -f "$config" ]; then
@@ -60,6 +63,19 @@
           exit 1
         fi
         mkdir -p "$out"
+        config_to_use="$config"
+        if [ -n "$COREOS_TEST_SSH_PUBLIC_KEY" ]; then
+          if ! ${if validTestSSHKey then "true" else "false"}; then
+            echo "COREOS_TEST_SSH_PUBLIC_KEY must be an ssh-ed25519 public key without a comment" >&2
+            exit 1
+          fi
+          config_to_use="$TMPDIR/fatline-bootstrap-transient.bu"
+          substitute "$config" "$config_to_use" \
+            --replace-fail '@COREOS_TEST_SSH_PUBLIC_KEY@' "$COREOS_TEST_SSH_PUBLIC_KEY"
+        elif grep -q '@COREOS_TEST_SSH_PUBLIC_KEY@' "$config"; then
+          echo "The transient Butane profile requires a test SSH key" >&2
+          exit 1
+        fi
         generated_resources="$TMPDIR/fatline-coreos-resources"
         mkdir -p "$generated_resources"
         cp -R "${resourcesDir}/." "$generated_resources/"
@@ -68,7 +84,7 @@
         echo "Transpiling $config for composition ${compositionName} with workspace resources under ${resourcesDir}"
         butane --strict --pretty \
           --files-dir "$generated_resources" \
-          "$config" > "$out/config.ign" || {
+          "$config_to_use" > "$out/config.ign" || {
             rc=$?
             echo "Butane transpilation failed (exit $rc)" >&2
             exit "$rc"
