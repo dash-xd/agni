@@ -53,6 +53,10 @@ storage:
       mode: 0644
       contents:
         local: scripts/fatline-readonly-login
+    - path: /etc/fatline/console-enabled
+      mode: 0444
+      contents:
+        inline: enabled
     - path: /etc/fatline/composition
       mode: 0444
       contents:
