@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+set -u
+
+{
+  echo "DIAGNOSTIC: Fatline CoreOS bootstrap failure"
+  /usr/bin/systemctl --no-pager --full status fatline-qemu-bootstrap.service fatline-console-user.service || true
+  /usr/bin/journalctl -b --no-pager -n 200 -u fatline-qemu-bootstrap.service -u fatline-console-user.service || true
+  echo "COREOS_QEMU_STATUS=FAIL profile=fatline"
+} >/dev/ttyS0 2>&1
