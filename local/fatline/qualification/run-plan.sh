@@ -168,6 +168,7 @@ if (( check_only )); then
   printf '  %s\n' "${selected[@]}"
   exit 0
 fi
+python3 "$agni_root/local/fatline/scripts/test-render-users-acl.py"
 prepare_artifact redis
 prepare_artifact nginx
 logma_prepared=0
