@@ -63,13 +63,13 @@ source "$plan_dir/sources"
 for component in logma skymill; do
   branch_var="COMPOSITION_${component^^}_BRANCH"
   rev_var="COMPOSITION_${component^^}_REV"
-  checkout_var="COMPOSITION_${component^^}_CHECKOUT"
   repo=$(plan_read get "components.$component.repository")
   branch=$(plan_read get "components.$component.branch")
   revision=$(plan_read get "components.$component.revision")
+  checkout=$(plan_read get "components.$component.checkout")
   flake=$(plan_read get "components.$component.flake")
   image=$(plan_read get "components.$component.image")
-  checkout=${!checkout_var:-${component}-qualification}
+  [[ "$checkout" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "Invalid $component checkout name in plan" >&2; exit 2; }
   [[ "$branch" == "${!branch_var}" && "$revision" == "${!rev_var}" ]] || {
     echo "Plan pin mismatch for $component; update the plan and sources together" >&2; exit 2;
   }

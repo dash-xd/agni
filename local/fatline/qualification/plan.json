@@ -11,6 +11,7 @@
       "repository": "xd-dash/logma",
       "branch": "codex/fatline-keyspace-v2",
       "revision": "870c9f0c21796bb670cb6f1a142ca38fc21b653a",
+      "checkout": "logma",
       "flake": "#provider-image",
       "image": "localhost/logma-provider:candidate"
     },
@@ -18,6 +19,7 @@
       "repository": "xd-dash/skymill",
       "branch": "codex/scoped-requirements-qualification",
       "revision": "907346ecd74a4d39830347b2ea01dc2b1c6b8969",
+      "checkout": "skymill",
       "flake": "#provider-image",
       "image": "localhost/skymill-provider:scoped-qualification"
     }
