@@ -105,6 +105,7 @@ prepare_artifact() {
   flake=$(plan_read get "artifacts.$artifact.flake")
   target=$(plan_read get "artifacts.$artifact.target")
   image=$(plan_read get "artifacts.$artifact.image")
+  if [[ "$flake" == agni/* ]]; then flake="$checkout/${flake#agni/}"; fi
   make_nix build FLAKE="$flake" TARGET="$target"
   make_nix image-load FLAKE="$flake" TARGET="$target"
   podman image inspect "$image" --format "PASS: loaded $artifact image {{.Id}}"
