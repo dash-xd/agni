@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-plan= gate= workspaces= toolbox= nix_local= scope= check_only=0
+plan= gate= workspaces= toolbox= nix_local= scope= agni_checkout= check_only=0
 while (($#)); do
   case "$1" in
-    --plan|--gate|--workspaces|--toolbox|--nix-alpine-local|--scope)
+    --plan|--gate|--workspaces|--toolbox|--nix-alpine-local|--scope|--agni-checkout)
       (($# >= 2)) || { echo "Missing value for $1" >&2; exit 2; }
       key=${1#--}; value=$2; shift 2
       case "$key" in
         plan) plan=$value;; gate) gate=$value;; workspaces) workspaces=$value;;
-        toolbox) toolbox=$value;; nix-alpine-local) nix_local=$value;; scope) scope=$value;;
+        toolbox) toolbox=$value;; nix-alpine-local) nix_local=$value;; scope) scope=$value;; agni-checkout) agni_checkout=$value;;
       esac ;;
     --check-only) check_only=1; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2;;
   esac
 done
-[[ -f "$plan" && -n "$gate" && -d "$workspaces" && -n "$toolbox" && -d "$nix_local" && -n "$scope" ]] || {
-  echo "Usage: $0 --plan FILE --gate ID --workspaces DIR --toolbox NAME --nix-alpine-local DIR --scope NAME" >&2
+[[ -f "$plan" && -n "$gate" && -d "$workspaces" && -n "$toolbox" && -d "$nix_local" && -n "$scope" && -n "$agni_checkout" ]] || {
+  echo "Usage: $0 --plan FILE --gate ID --workspaces DIR --toolbox NAME --nix-alpine-local DIR --scope NAME --agni-checkout NAME" >&2
   exit 2
 }
 command -v python3 >/dev/null || { echo "python3 is required for qualification helpers" >&2; exit 2; }
@@ -84,7 +84,7 @@ agni_branch=$(plan_read get components.agni.branch)
 [[ "$agni_branch" == "$COMPOSITION_AGNI_BRANCH" ]] || { echo "Plan Agni branch does not match source pin" >&2; exit 2; }
 redis_image=$(plan_read get artifacts.redis.image)
 nginx_image=$(plan_read get artifacts.nginx.image)
-checkout=${COMPOSITION_AGNI_CHECKOUT:-agni-qualification}
+checkout=$agni_checkout
 export COMPOSITION_AGNI_CHECKOUT="$checkout" COMPOSITION_AGNI_SOURCE="$agni_root"
 export COMPOSITION_AGNI_REV="$repo_rev" COMPOSITION_AGNI_BRANCH="$agni_branch"
 export COMPOSITION_LOGMA_REV="$LOGMA_REV" COMPOSITION_SKYMILL_REV="$SKYMILL_REV"
