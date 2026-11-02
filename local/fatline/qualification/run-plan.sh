@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-plan= gate= workspaces= toolbox= nix_local= scope= agni_checkout= check_only=0
+plan= gate= workspaces= toolbox= nix_local= scope= agni_checkout= artifact_manifest= check_only=0
 while (($#)); do
   case "$1" in
-    --plan|--gate|--workspaces|--toolbox|--nix-alpine-local|--scope|--agni-checkout)
+    --plan|--gate|--workspaces|--toolbox|--nix-alpine-local|--scope|--agni-checkout|--artifact-manifest)
       (($# >= 2)) || { echo "Missing value for $1" >&2; exit 2; }
       key=${1#--}; value=$2; shift 2
       case "$key" in
         plan) plan=$value;; gate) gate=$value;; workspaces) workspaces=$value;;
-        toolbox) toolbox=$value;; nix-alpine-local) nix_local=$value;; scope) scope=$value;; agni-checkout) agni_checkout=$value;;
+        toolbox) toolbox=$value;; nix-alpine-local) nix_local=$value;; scope) scope=$value;; agni-checkout) agni_checkout=$value;; artifact-manifest) artifact_manifest=$value;;
       esac ;;
     --check-only) check_only=1; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2;;
@@ -105,6 +105,23 @@ prepare_artifact() {
   flake=$(plan_read get "artifacts.$artifact.flake")
   target=$(plan_read get "artifacts.$artifact.target")
   image=$(plan_read get "artifacts.$artifact.image")
+  if [[ -n "$artifact_manifest" ]]; then
+    local row expected_id filename archive_digest actual_id
+    row=$(awk -F '\t' -v image="$image" '$1 == image { print; count++ } END { if (count != 1) exit 1 }' "$artifact_manifest") || {
+      echo "FAIL: artifact manifest must contain exactly one row for $image" >&2; exit 1;
+    }
+    IFS=$'\t' read -r _ expected_id filename archive_digest <<< "$row"
+    [[ "$expected_id" =~ ^sha256:[a-f0-9]{64}$ && "$filename" =~ ^[a-f0-9]{64}\.tar\.gz$ && "$archive_digest" =~ ^[a-f0-9]{64}$ ]] || {
+      echo "FAIL: malformed artifact manifest row for $image" >&2; exit 1;
+    }
+    actual_id=$(podman image inspect "$image" --format '{{.Id}}')
+    actual_id="sha256:${actual_id#sha256:}"
+    [[ "$actual_id" == "$expected_id" ]] || {
+      echo "FAIL: loaded artifact identity mismatch for $image (expected $expected_id, got $actual_id)" >&2; exit 1;
+    }
+    echo "PASS: cached $artifact image identity $actual_id matches the verified archive manifest"
+    return
+  fi
   if [[ "$flake" == agni/* ]]; then flake="$checkout/${flake#agni/}"; fi
   make_nix build FLAKE="$flake" TARGET="$target"
   make_nix image-load FLAKE="$flake" TARGET="$target"
