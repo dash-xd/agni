@@ -111,7 +111,7 @@
       "image": "localhost/nix-alpine/redis:qualified-2026.10.23"
     },
     "nginx": {
-      "flake": "agni-qualification/local/fatline",
+      "flake": "agni/local/fatline",
       "target": "#nginx-image",
       "image": "localhost/nix-alpine/nginx:qualified-2026.10.23.1"
     }
