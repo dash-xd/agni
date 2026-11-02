@@ -1,5 +1,5 @@
 {
-  description = "Pinned Fedora CoreOS QEMU bootstrap artifacts for Fatline";
+  description = "Pinned Fedora CoreOS QEMU artifacts for Agni profiles";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/02c087f3fe673c9e317f206a627cb6b910336dbe";
 
@@ -8,20 +8,25 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
       release = "44.20261012.3.1";
+      astrochickenInputs = pkgs.writeShellApplication {
+        name = "agni-astrochicken-inputs";
+        runtimeInputs = with pkgs; [ bash coreutils findutils gawk git gzip gnugrep ];
+        text = builtins.readFile ../profiles/astrochicken/prepare-inputs.sh;
+      };
       configDir = builtins.path {
         path = builtins.toPath (builtins.getEnv "COREOS_CONFIG_DIR");
-        name = "fatline-coreos-config";
+        name = "coreos-profile-config";
       };
       configNameEnv = builtins.getEnv "COREOS_CONFIG_NAME";
-      configName = if configNameEnv == "" then "fatline-bootstrap.bu" else configNameEnv;
+      configName = if configNameEnv == "" then "profile.bu" else configNameEnv;
       testSSHKey = builtins.getEnv "COREOS_TEST_SSH_PUBLIC_KEY";
       validTestSSHKey = builtins.match "^ssh-ed25519 [A-Za-z0-9+/=]+$" testSSHKey != null;
       resourcesDir = builtins.path {
         path = builtins.toPath (builtins.getEnv "COREOS_RESOURCES_DIR");
-        name = "fatline-coreos-resources";
+        name = "coreos-profile-resources";
       };
       compositionNameEnv = builtins.getEnv "COREOS_COMPOSITION_NAME";
-      compositionName = if compositionNameEnv == "" then "fatline" else compositionNameEnv;
+      compositionName = if compositionNameEnv == "" then "guest" else compositionNameEnv;
       validCompositionName = builtins.match "^[a-z_][a-z0-9_-]{0,18}$" compositionName != null;
       python3Qemu = pkgs.python3.override {
         packageOverrides = pyFinal: pyPrev: {
@@ -49,7 +54,7 @@
       '';
       ignition = assert validCompositionName;
         assert builtins.match "^[A-Za-z0-9][A-Za-z0-9._-]*\\.bu$" configName != null;
-        pkgs.runCommand "fatline-coreos-bootstrap-ignition" {
+        pkgs.runCommand "coreos-profile-ignition" {
         nativeBuildInputs = [ pkgs.butane ];
         COREOS_TEST_SSH_PUBLIC_KEY = testSSHKey;
       } ''
@@ -69,14 +74,14 @@
             echo "COREOS_TEST_SSH_PUBLIC_KEY must be an ssh-ed25519 public key without a comment" >&2
             exit 1
           fi
-          config_to_use="$TMPDIR/fatline-bootstrap-transient.bu"
+          config_to_use="$TMPDIR/profile-transient.bu"
           substitute "$config" "$config_to_use" \
             --replace-fail '@COREOS_TEST_SSH_PUBLIC_KEY@' "$COREOS_TEST_SSH_PUBLIC_KEY"
         elif grep -q '@COREOS_TEST_SSH_PUBLIC_KEY@' "$config"; then
           echo "The transient Butane profile requires a test SSH key" >&2
           exit 1
         fi
-        generated_resources="$TMPDIR/fatline-coreos-resources"
+        generated_resources="$TMPDIR/coreos-profile-resources"
         mkdir -p "$generated_resources"
         cp -R "${resourcesDir}/." "$generated_resources/"
         mkdir -p "$generated_resources/config"
@@ -114,7 +119,7 @@
         enableDocs = false;
         enableBlobs = true;
       };
-      qemuEntrypoint = pkgs.writeShellScriptBin "fatline-qemu" ''
+      qemuEntrypoint = pkgs.writeShellScriptBin "agni-coreos-qemu" ''
         set -euo pipefail
         case ''${1:-} in
           img)
@@ -146,27 +151,31 @@
             exit "$rc"
             ;;
           *)
-            echo "Usage: fatline-qemu img|run|run-web [arguments...]" >&2
+            echo "Usage: agni-coreos-qemu img|run|run-web [arguments...]" >&2
             exit 2
             ;;
         esac
       '';
       qemuRunner = pkgs.dockerTools.buildLayeredImage {
-        name = "localhost/fatline-qemu-runner";
+        name = "localhost/agni-coreos-qemu-runner";
         tag = release;
         created = "1970-01-01T00:00:01Z";
         contents = [ qemuEntrypoint qemu novnc websockify ];
         config = {
-          Entrypoint = [ "${qemuEntrypoint}/bin/fatline-qemu" ];
+          Entrypoint = [ "${qemuEntrypoint}/bin/agni-coreos-qemu" ];
         };
       };
-      bootstrap = pkgs.runCommand "fatline-coreos-qemu-bootstrap-${release}" { } ''
+      bootstrap = pkgs.runCommand "agni-coreos-qemu-bootstrap-${release}" { } ''
         mkdir -p "$out"
         cp "${qcow}/base.qcow2" "$out/base.qcow2"
         cp "${ignition}/config.ign" "$out/config.ign"
         echo '${release}' > "$out/fcos-release"
       '';
     in {
+      apps.${system}.astrochicken-inputs = {
+        type = "app";
+        program = "${astrochickenInputs}/bin/agni-astrochicken-inputs";
+      };
       packages.${system} = {
         inherit qcow ignition bootstrap qemuRunner;
         default = bootstrap;

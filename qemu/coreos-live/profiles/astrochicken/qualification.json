@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "compositionName": "astrochicken",
+  "configName": "astrochicken-generated.bu",
+  "expectedMarker": "COREOS_QEMU_STATUS=PASS profile=astrochicken",
+  "prepareApp": "astrochicken-inputs",
+  "runtimeImage": "localhost/agni-coreos-qemu-runner:44.20261012.3.1",
+  "consoleLogin": false,
+  "transientTester": false
+}

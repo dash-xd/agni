@@ -147,6 +147,13 @@
       apps = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
+          checkAclPins = pkgs.writeShellApplication {
+            name = "agni-check-acl-pins";
+            runtimeInputs = [ pkgs.python3 ];
+            text = ''
+              exec ${pkgs.python3}/bin/python3 ${./scripts/check-acl-pins.py} "$@"
+            '';
+          };
           runner = pkgs.writeShellApplication {
             name = "agni-fatline";
             runtimeInputs = with pkgs; [ bash coreutils findutils git gnumake go_1_26 stdenv.cc redis gnugrep gnused ];
@@ -161,6 +168,10 @@
             ''}";
           };
         in {
+          check-acl-pins = {
+            type = "app";
+            program = "${checkAclPins}/bin/agni-check-acl-pins";
+          };
           bootstrap = app "bootstrap";
           preflight = app "preflight";
           build = app "build";
