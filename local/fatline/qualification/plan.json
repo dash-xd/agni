@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "name": "fatline",
+  "description": "Rootless Podman and systemd-user composition qualification.",
+  "components": {
+    "agni": {
+      "repository": "dash-xd/agni",
+      "branch": "codex/coreos-fatline-qemu"
+    },
+    "logma": {
+      "repository": "xd-dash/logma",
+      "branch": "codex/fatline-keyspace-v2",
+      "revision": "870c9f0c21796bb670cb6f1a142ca38fc21b653a",
+      "flake": "#provider-image",
+      "image": "localhost/logma-provider:candidate"
+    },
+    "skymill": {
+      "repository": "xd-dash/skymill",
+      "branch": "codex/scoped-requirements-qualification",
+      "revision": "907346ecd74a4d39830347b2ea01dc2b1c6b8969",
+      "flake": "#provider-image",
+      "image": "localhost/skymill-provider:scoped-qualification"
+    }
+  },
+  "gates": {
+    "baseline": {
+      "description": "Composition baseline runtime",
+      "runtimeModes": {}
+    },
+    "production-acl": {
+      "description": "Tenant isolation and Skymill ACL checks against the production policy topology",
+      "runtimeModes": {
+        "COMPOSITION_AGNI_RECONCILE_MODE": "1",
+        "COMPOSITION_ACL_ISOLATION_MODE": "1",
+        "COMPOSITION_SKYMILL_ACL_MODE": "1",
+        "COMPOSITION_NGINX_QUADLET_MODE": "1",
+        "COMPOSITION_REDIS_QUADLET_MODE": "1",
+        "COMPOSITION_QUADLET_MODE": "1"
+      }
+    },
+    "cold-start": {
+      "description": "Logma-only coordinated cold start",
+      "runtimeModes": {
+        "COMPOSITION_COLD_START_MODE": "1",
+        "COMPOSITION_NGINX_QUADLET_MODE": "1",
+        "COMPOSITION_REDIS_QUADLET_MODE": "1",
+        "COMPOSITION_QUADLET_MODE": "1"
+      }
+    },
+    "timer-recovery": {
+      "description": "Redis crash, Function reconciliation, lifecycle and readiness recovery",
+      "runtimeModes": {
+        "COMPOSITION_CRASH_WINDOW_MODE": "1",
+        "COMPOSITION_TIMER_STATE_MODE": "1",
+        "COMPOSITION_STRICT_READINESS_MODE": "1",
+        "COMPOSITION_LIFECYCLE_CRASH_MODE": "1",
+        "COMPOSITION_FUNCTION_RECONCILE_MODE": "1",
+        "COMPOSITION_REDIS_CRASH_BASELINE_MODE": "1",
+        "COMPOSITION_COORDINATED_RESTART_MODE": "1",
+        "COMPOSITION_BOOTSTRAP_UNIT_MODE": "1",
+        "COMPOSITION_COLD_START_MODE": "1",
+        "COMPOSITION_NGINX_QUADLET_MODE": "1",
+        "COMPOSITION_REDIS_QUADLET_MODE": "1",
+        "COMPOSITION_QUADLET_MODE": "1"
+      }
+    },
+    "lifecycle-dispatch": {
+      "description": "Lifecycle dispatch using the pinned Logma provider",
+      "runtimeModes": {
+        "COMPOSITION_DISPATCH_MODE": "1"
+      }
+    },
+    "skymill-provider": {
+      "description": "Skymill provider integration",
+      "runtimeModes": {
+        "COMPOSITION_SKYMILL_PROVIDER_MODE": "1",
+        "COMPOSITION_NGINX_QUADLET_MODE": "1",
+        "COMPOSITION_REDIS_QUADLET_MODE": "1",
+        "COMPOSITION_QUADLET_MODE": "1"
+      }
+    },
+    "strict-readiness": {
+      "description": "Readiness during Redis and Functions outage and recovery",
+      "runtimeModes": {
+        "COMPOSITION_CRASH_WINDOW_MODE": "1",
+        "COMPOSITION_STRICT_READINESS_MODE": "1",
+        "COMPOSITION_LIFECYCLE_CRASH_MODE": "1",
+        "COMPOSITION_FUNCTION_RECONCILE_MODE": "1",
+        "COMPOSITION_REDIS_CRASH_BASELINE_MODE": "1",
+        "COMPOSITION_COORDINATED_RESTART_MODE": "1",
+        "COMPOSITION_BOOTSTRAP_UNIT_MODE": "1",
+        "COMPOSITION_COLD_START_MODE": "1",
+        "COMPOSITION_NGINX_QUADLET_MODE": "1",
+        "COMPOSITION_REDIS_QUADLET_MODE": "1",
+        "COMPOSITION_QUADLET_MODE": "1"
+      }
+    }
+  },
+  "all": [
+    "baseline",
+    "production-acl",
+    "cold-start",
+    "timer-recovery",
+    "lifecycle-dispatch",
+    "skymill-provider",
+    "strict-readiness"
+  ],
+  "entrypoint": "local/fatline/qualification/run-plan.sh",
+  "artifacts": {
+    "redis": {
+      "flake": "nix-alpine/release/components/redis",
+      "target": "#image",
+      "image": "localhost/nix-alpine/redis:qualified-2026.10.23"
+    },
+    "nginx": {
+      "flake": "agni-qualification/local/fatline",
+      "target": "#nginx-image",
+      "image": "localhost/nix-alpine/nginx:qualified-2026.10.23.1"
+    }
+  }
+}
