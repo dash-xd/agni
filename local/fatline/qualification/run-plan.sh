@@ -133,6 +133,9 @@ run_runtime() {
   done < <(plan_read modes "$gate_name")
   if [[ "$gate_name" == production-acl ]]; then
     modes+=("COMPOSITION_AGNI_RECONCILE_MODE=1" "COMPOSITION_ACL_ISOLATION_MODE=1" "COMPOSITION_SKYMILL_ACL_MODE=1")
+    podman exec "$toolbox" nix run --no-write-lock-file \
+      "/workspaces/$checkout/local/fatline#check-acl-pins" -- \
+      "/workspaces/$checkout/local/fatline/acl-policy.json" "$LOGMA_REV" "$SKYMILL_REV"
   fi
   ((${#modes[@]} == 0)) || export "${modes[@]}"
   cd "$plan_dir"
