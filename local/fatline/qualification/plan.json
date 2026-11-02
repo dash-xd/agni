@@ -50,9 +50,7 @@
     "timer-recovery": {
       "description": "Redis crash, Function reconciliation, lifecycle and readiness recovery",
       "runtimeModes": {
-        "COMPOSITION_CRASH_WINDOW_MODE": "1",
         "COMPOSITION_TIMER_STATE_MODE": "1",
-        "COMPOSITION_STRICT_READINESS_MODE": "1",
         "COMPOSITION_LIFECYCLE_CRASH_MODE": "1",
         "COMPOSITION_FUNCTION_RECONCILE_MODE": "1",
         "COMPOSITION_REDIS_CRASH_BASELINE_MODE": "1",
