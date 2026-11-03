@@ -71,7 +71,14 @@ for component in logma skymill; do
   checkout=$(plan_read get "components.$component.checkout")
   flake=$(plan_read get "components.$component.flake")
   image=$(plan_read get "components.$component.image")
-  [[ "$checkout" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "Invalid $component checkout name in plan" >&2; exit 2; }
+  [[ "$checkout" != /* && "$checkout" != *//* ]] || { echo "Invalid $component checkout path in plan" >&2; exit 2; }
+  IFS=/ read -r -a checkout_parts <<< "$checkout"
+  for checkout_part in "${checkout_parts[@]}"; do
+    [[ "$checkout_part" =~ ^[A-Za-z0-9_.-]+$ && "$checkout_part" != "." && "$checkout_part" != ".." && "$checkout_part" != ".git" ]] || { echo "Invalid $component checkout path in plan" >&2; exit 2; }
+  done
+  checkout_root=$(realpath "$workspaces/$checkout")
+  checkout_rel=$(realpath --relative-to="$workspaces" "$checkout_root")
+  [[ "$checkout_rel" == "$checkout" ]] || { echo "$component checkout resolves outside workspace" >&2; exit 2; }
   [[ "$branch" == "${!branch_var}" && "$revision" == "${!rev_var}" ]] || {
     echo "Plan pin mismatch for $component; update the plan and sources together" >&2; exit 2;
   }
