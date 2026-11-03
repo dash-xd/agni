@@ -41,8 +41,13 @@ cleanup() {
     wait "$subscriber_pid" 2>/dev/null || true
     subscriber_pid=
   fi
+  if podman container exists "$dispatch_subscriber"; then
+    echo "CLEANUP: removing qualification-only subscriber $dispatch_subscriber" >&2
+    podman rm -f --time 2 "$dispatch_subscriber" >/dev/null || cleanup_failed=1
+  fi
   if [[ "$retain" == 1 ]]; then
     echo "RETAINED: run prefix=$scope scratch=$work"
+    (( cleanup_failed == 0 )) || return 1
     return "$original_status"
   fi
   if [[ "${COMPOSITION_FUNCTION_RECONCILE_MODE:-0}" == 1 ]]; then
