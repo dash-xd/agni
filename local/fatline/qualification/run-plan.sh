@@ -128,16 +128,18 @@ prepare_artifact() {
   podman image inspect "$image" --format "PASS: loaded $artifact image {{.Id}}"
 }
 prepare_component() {
-  local component=$1 key repo branch rev checkout flake image
+  local component=$1 key repo branch rev checkout flake image actual_rev
   key="${component^^}_REPO"; repo=${!key}
   key="${component^^}_BRANCH"; branch=${!key}
   key="${component^^}_REV"; rev=${!key}
   key="${component^^}_CHECKOUT"; checkout=${!key}
   key="${component^^}_FLAKE"; flake=${!key}
   key="${component^^}_IMAGE"; image=${!key}
-  make_nix sync REPO="$repo" BRANCH="$branch" SYNC_NAME="$checkout"
-  git -C "$workspaces/$checkout" rev-parse HEAD | grep -Fx -- "$rev" >/dev/null || {
-    echo "FAIL: $component source revision mismatch (expected $rev)" >&2; exit 1;
+  actual_rev=$(git -C "$workspaces/$checkout" rev-parse HEAD 2>/dev/null) || {
+    echo "FAIL: $component source checkout is missing; sync it through the host plan source manifest" >&2; exit 1;
+  }
+  [[ "$actual_rev" == "$rev" ]] || {
+    echo "FAIL: $component source revision mismatch (expected $rev, got $actual_rev)" >&2; exit 1;
   }
   make_nix build FLAKE="$checkout" TARGET="$flake"
   make_nix image-load FLAKE="$checkout" TARGET="$flake"
