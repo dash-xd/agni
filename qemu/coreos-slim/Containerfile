@@ -1,0 +1,15 @@
+FROM scratch
+RUN set -eux; \
+    remove=""; \
+    for pkg in moby-engine containerd runc cifs-utils btrfs-progs clevis clevis-luks clevis-dracut; do \
+      if rpm -q --quiet "$pkg"; then remove="$remove $pkg"; fi; \
+    done; \
+    if [ -n "$remove" ]; then dnf remove -y $remove; fi; \
+    for pkg in systemd podman crun ignition NetworkManager rpm-ostree afterburn; do \
+      rpm -q "$pkg"; \
+    done; \
+    for pkg in moby-engine containerd runc cifs-utils btrfs-progs clevis clevis-luks clevis-dracut; do \
+      if rpm -q --quiet "$pkg"; then echo "Unexpected installed package: $pkg" >&2; exit 1; fi; \
+    done; \
+    dnf clean all; \
+    ostree container commit
