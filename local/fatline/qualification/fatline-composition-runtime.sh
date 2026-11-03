@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 16302)
-Total output lines: 1191
-
 #!/usr/bin/env bash
 # Disposable runtime composition. Never installs units or promotes release tags.
 set -Eeuo pipefail
@@ -41,44 +38,42 @@ cleanup() {
     subscriber_pid=
   fi
   if [[ "${COMPOSITION_FUNCTION_RECONCILE_MODE:-0}" == 1 ]]; then
-    echo "CLEANUP: stopping lifecycle reconciliation units" >&2
     systemctl --user stop "$scope-reconcile.timer" "$scope-reconcile.service" >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/$scope-reconcile.timer" "$HOME/.config/systemd/user/$scope-reconcile.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   fi
   if [[ "$bootstrap_unit_mode" == 1 ]]; then
-    echo "CLEANUP: stopping $bootstrap_unit" >&2
     systemctl --user stop "$bootstrap_unit" >/dev/null 2>&1 || true
     rm -f "$bootstrap_unit_file"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   fi
   if [[ "$nginx_quadlet_mode" == 1 ]]; then
-    echo "CLEANUP: stopping $nginx_quadlet_service" >&2
     systemctl --user stop "$nginx_quadlet_service" >/dev/null 2>&1 || true
     rm -f "$nginx_quadlet_file"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   fi
   if [[ "$redis_quadlet_mode" == 1 ]]; then
-    echo "CLEANUP: stopping $redis_quadlet_service" >&2
     systemctl --user stop "$redis_quadlet_service" >/dev/null 2>&1 || true
     rm -f "$redis_quadlet_file"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   fi
   if [[ "$quadlet_mode" == 1 ]]; then
-    echo "CLEANUP: stopping $quadlet_service" >&2
     systemctl --user stop "$quadlet_service" >/dev/null 2>&1 || true
     rm -f "$quadlet_file"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   fi
-  # The long-lived dispatch subscriber is an explicitly owned test resource.
-  # Remove it before its network namespace provider instead of relying on
-  # Podman's recursive dependency cleanup to discover an anonymous --rm child.
+  # The dispatch subscriber has an explicit lifetime and is removed
+  # before its network namespace provider.
   if podman container exists "$dispatch_subscriber"; then
     echo "CLEANUP: force-stopping dispatch subscriber $dispatch_subscriber" >&2
     podman kill --signal KILL "$dispatch_subscriber" >/dev/null 2>&1 || true
-    podman rm -f "$dispatch_subscriber" >/dev/null || cleanup_failed=1
+    podman rm -f --time 2 "$dispatch_subscriber" >/dev/null || cleanup_failed=1
   fi
   local owned
+  if podman container exists "$dispatch_subscriber"; then
+    echo "FAIL: dispatch subscriber remains: $dispatch_subscriber" >&2
+    cleanup_failed=1
+  fi
   for owned in "$skymill_provider" "$logma" "$bootstrap" "$nginx" "$redis"; do
     if podman container exists "$owned"; then
       echo "CLEANUP: removing qualification container $owned" >&2
@@ -258,10 +253,6 @@ redis_sorted_set_score() {
   local key=$1 member=$2
   redis_cli --raw ZRANGEBYSCORE "$key" -inf +inf WITHSCORES |
     awk -v wanted="$member" 'NR % 2 { current=$0; next } current == wanted { print; found=1 } END { if (!found) exit 0 }'
-}
-subscriber_cli() {
-  podman run --rm --network "container:$nginx" --entrypoint "$cli" \
-    "$redis_image" -h 127.0.0.1 -p 6379 --user subscriber -a "$subscriber_pass" --no-auth-warning "$@"
 }
 skymill_cli() {
   podman run --rm --network "container:$nginx" --entrypoint "$cli" \
@@ -654,7 +645,83 @@ port=$(podman port "$logma" 8080/tcp | sed -n '1s/.*://p')
 [[ "$port" =~ ^[0-9]+$ ]] || { echo "Cannot resolve published Logma port" >&2; exit 1; }
 url="http://127.0.0.1:$port/lifecycle/policies"
 for i in $(seq 1 60); do
-  status=$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' -H "X-API-Key: $api_pass" "$url" 2>…1302 tokens truncated…fecycle policy for dispatch gate")
+  status=$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' -H "X-API-Key: $api_pass" "$url" 2>/dev/null || true)
+  [[ "$status" == 200 ]] && break
+  sleep .25
+done
+[[ "$status" == 200 ]] || { podman logs "$logma"; echo "Authenticated lifecycle policies HTTP $status" >&2; exit 1; }
+[[ "$(curl -sS -o /dev/null -w '%{http_code}' "$url")" == 401 ]]
+[[ "$(curl -sS -o /dev/null -w '%{http_code}' -H 'X-API-Key: incorrect' "$url")" == 401 ]]
+# Exercise actual lifecycle arming, ticking, and removal through Logma's Redis client.
+# This is deliberately fail-closed: the provisional ACL may need refinement.
+lifecycle_url="http://127.0.0.1:$port/lifecycle"
+readiness_url="$lifecycle_url/readyz"
+if [[ "${COMPOSITION_STRICT_READINESS_MODE:-0}" == 1 ]]; then
+  readiness_status=$(curl -sS --max-time 3 -o "$work/readiness-healthy.txt" -w '%{http_code}' "$readiness_url")
+  [[ "$readiness_status" == 200 && "$(cat "$work/readiness-healthy.txt")" == ready ]] || {
+    echo "FAIL: readiness did not report healthy Redis and lifecycle Functions (HTTP $readiness_status)" >&2; exit 1;
+  }
+  echo "PASS: readiness reports healthy Redis and lifecycle Functions"
+fi
+deployment="qualification-$"
+# Use a policy code returned by the running Logma build; do not guess enum strings.
+policy_code=$(curl -fsS --max-time 5 -H "X-API-Key: $api_pass" "$url" | python3 -c 'import json,sys; p=json.load(sys.stdin); assert isinstance(p,list) and p, "empty lifecycle policy catalog"; x=next((x for x in p if x.get("duration")=="720h0m0s"),p[-1]); assert str(x.get("policy_code","")).isdigit(), "missing policy code"; print(x["policy_code"])')
+payload=$(printf '{"deployment_id":"%s","policy_code":"%s","shutdown_channel":"%s:logma:qualification:shutdown"}' "$deployment" "$policy_code" "$fatline_scope")
+register_status=$(curl -sS --max-time 10 -o "$work/register.json" -w '%{http_code}' \
+  -H "X-API-Key: $api_pass" -H 'Content-Type: application/json' \
+  --data "$payload" "$lifecycle_url/")
+if [[ "$register_status" != 201 ]]; then
+  echo "Lifecycle registration failed: HTTP $register_status" >&2
+  cat "$work/register.json" >&2
+  podman logs --tail 40 "$logma" >&2
+  exit 1
+fi
+grep -Fq '"armed":true' "$work/register.json" || { echo "Lifecycle registration was not armed" >&2; cat "$work/register.json" >&2; exit 1; }
+tick_status=$(curl -sS --max-time 10 -o "$work/tick.json" -w '%{http_code}' \
+  -X POST -H "X-API-Key: $api_pass" "$lifecycle_url/tick")
+[[ "$tick_status" == 200 ]] || { echo "Lifecycle tick failed: HTTP $tick_status" >&2; cat "$work/tick.json" >&2; exit 1; }
+remove_status=$(curl -sS --max-time 10 -o "$work/remove.json" -w '%{http_code}' \
+  -X DELETE -H "X-API-Key: $api_pass" "$lifecycle_url/$deployment")
+[[ "$remove_status" == 200 ]] || { echo "Lifecycle remove failed: HTTP $remove_status" >&2; cat "$work/remove.json" >&2; exit 1; }
+echo "PASS: Logma lifecycle register/arm, tick and remove via Redis"
+# Live subscriber qualification: dispatch once, then fence reconciliation and restart.
+if [[ "${COMPOSITION_DISPATCH_MODE:-0}" == 1 ]]; then
+  echo "CHECK: live lifecycle expiration and duplicate-dispatch fence"
+  dispatch_id="dispatch-$"
+  dispatch_channel="$fatline_scope:logma:qualification:dispatch:$"
+  dispatch_key="$fatline_scope:logma:lifecycle:{deployment:$dispatch_id}:lifecycle:timers"
+  dispatch_log="$work/dispatch-subscriber.log"
+  # Keep the long-lived subscriber named so teardown owns it explicitly.
+  podman run -d --name "$dispatch_subscriber" --network "container:$nginx" \
+    --entrypoint "$cli" "$redis_image" -h 127.0.0.1 -p 6379 \
+    --user subscriber -a "$subscriber_pass" --no-auth-warning --raw SUBSCRIBE "$dispatch_channel" >/dev/null
+  podman logs -f "$dispatch_subscriber" >"$dispatch_log" 2>&1 &
+  subscriber_pid=$!
+  # Wait for Redis to confirm an actual subscriber before registering.
+  ready=0
+  for i in $(seq 1 40); do
+    if grep -Fxq "subscribe" "$dispatch_log" && grep -Fxq "$dispatch_channel" "$dispatch_log"; then ready=1; break; fi
+    if ! kill -0 "$subscriber_pid" 2>/dev/null; then break; fi
+    sleep .25
+  done
+  [[ "$ready" == 1 ]] || { echo "FAIL: Redis subscriber not ready" >&2; cat "$dispatch_log" >&2; exit 1; }
+  # Select a published policy with duration >= 30 seconds, and backdate
+  # activation to make its deadline approximately 8 seconds from now.
+  curl -fsS --max-time 5 -H "X-API-Key: $api_pass" "$url" > "$work/dispatch-policies.json"
+  python3 - "$work/dispatch-policies.json" "$work/dispatch-request.json" "$dispatch_id" "$dispatch_channel" <<'PY'
+import json, sys, re
+from datetime import datetime, timedelta, timezone
+policies = json.load(open(sys.argv[1]))
+def seconds(value):
+    match = re.fullmatch(r'(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?', value)
+    if not match:
+        return None
+    h, m, s = match.groups()
+    return int(h or 0)*3600 + int(m or 0)*60 + float(s or 0)
+candidates = [(seconds(p.get('duration','')),p) for p in policies]
+candidates = [(d,p) for d,p in candidates if d is not None and d >= 30 and str(p.get('policy_code','')).isdigit()]
+if not candidates:
+    raise SystemExit("FAIL: no suitable lifecycle policy for dispatch gate")
 duration, policy = min(candidates, key=lambda item: item[0])
 activated = datetime.now(timezone.utc) - timedelta(seconds=duration-8)
 json.dump({'deployment_id':sys.argv[3], 'policy_code':str(policy['policy_code']),
