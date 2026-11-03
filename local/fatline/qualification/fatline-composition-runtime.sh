@@ -309,7 +309,7 @@ write_bootstrap_entry() {
       [[ -n "${!name}" ]] || { echo "Missing bootstrap script context: $name" >&2; return 1; }
       printf '%s=%q\n' "$name" "${!name}"
     done
-    declare -f bootstrap_cli bootstrap_functions
+    declare -f redis_auth_cli redis_cli bootstrap_cli bootstrap_functions
   } > "$path"
   chmod 700 "$path"
 }
