@@ -245,22 +245,20 @@ else
 fi
 cli_entry=$(podman image inspect "$redis_image" --format '{{index .Config.Entrypoint 0}}')
 cli="${cli_entry%redis-server}redis-cli"
-redis_cli() {
+redis_auth_cli() {
+  local username=$1 password=$2
+  shift 2
   podman run --rm --network "container:$nginx" --entrypoint "$cli" \
-    "$redis_image" -h 127.0.0.1 -p 6379 --user logma -a "$redis_pass" --no-auth-warning "$@"
+    "$redis_image" -h 127.0.0.1 -p 6379 --user "$username" -a "$password" --no-auth-warning "$@"
 }
+redis_cli() { redis_auth_cli logma "$redis_pass" "$@"; }
+subscriber_cli() { redis_auth_cli subscriber "$subscriber_pass" "$@"; }
+skymill_cli() { redis_auth_cli skymill "$skymill_pass" "$@"; }
+bootstrap_cli() { redis_auth_cli bootstrap "$bootstrap_pass" "$@"; }
 redis_sorted_set_score() {
   local key=$1 member=$2
   redis_cli --raw ZRANGEBYSCORE "$key" -inf +inf WITHSCORES |
     awk -v wanted="$member" 'NR % 2 { current=$0; next } current == wanted { print; found=1 } END { if (!found) exit 0 }'
-}
-skymill_cli() {
-  podman run --rm --network "container:$nginx" --entrypoint "$cli" \
-    "$redis_image" -h 127.0.0.1 -p 6379 --user skymill -a "$skymill_pass" --no-auth-warning "$@"
-}
-bootstrap_cli() {
-  podman run --rm --network "container:$nginx" --entrypoint "$cli" \
-    "$redis_image" -h 127.0.0.1 -p 6379 --user bootstrap -a "$bootstrap_pass" --no-auth-warning "$@"
 }
 # Bootstrap the ratelimiter library with a disposable elevated identity.
 bootstrap_functions() {
