@@ -160,7 +160,11 @@ run_runtime() {
       "/workspaces/$checkout/local/fatline/acl-policy.json" "$LOGMA_REV" "$SKYMILL_REV"
   fi
   ((${#modes[@]} == 0)) || export "${modes[@]}"
-  export COMPOSITION_RUNTIME_ROOT="$workspaces/.nix-alpine-runtime"
+  local host_workspaces=${NIX_ALPINE_HOST_WORKSPACES:-}
+  [[ -n "$host_workspaces" ]] || { echo "NIX_ALPINE_HOST_WORKSPACES is required for host Podman bind mounts" >&2; return 2; }
+  [[ -d "$host_workspaces" ]] || { echo "Host-visible workspace is not mounted: $host_workspaces" >&2; return 2; }
+  host_workspaces=$(realpath "$host_workspaces")
+  export COMPOSITION_RUNTIME_ROOT="$host_workspaces/.nix-alpine-runtime"
   if [[ "$retain" == 1 && "$gate_name" == "${selected[-1]}" ]]; then
     export COMPOSITION_RETAIN=1
   else
