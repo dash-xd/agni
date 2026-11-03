@@ -53,6 +53,8 @@ PY
 }
 [[ "$(plan_read get schemaVersion)" == 1 ]] || { echo "Unsupported plan schema" >&2; exit 2; }
 name=$(plan_read get name)
+retain=${NIX_ALPINE_RETAIN:-0}
+[[ "$retain" == 0 || "$retain" == 1 ]] || { echo "NIX_ALPINE_RETAIN must be 0 or 1" >&2; exit 2; }
 [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "Invalid plan name" >&2; exit 2; }
 declared_entrypoint=$(plan_read get entrypoint)
 actual_entrypoint=$(realpath --relative-to="$agni_root" "${BASH_SOURCE[0]}")
@@ -158,10 +160,17 @@ run_runtime() {
       "/workspaces/$checkout/local/fatline/acl-policy.json" "$LOGMA_REV" "$SKYMILL_REV"
   fi
   ((${#modes[@]} == 0)) || export "${modes[@]}"
+  export COMPOSITION_RUNTIME_ROOT="$workspaces/.nix-alpine-runtime"
+  if [[ "$retain" == 1 && "$gate_name" == "${selected[-1]}" ]]; then
+    export COMPOSITION_RETAIN=1
+  else
+    unset COMPOSITION_RETAIN || true
+  fi
   cd "$plan_dir"
   bash ./fatline-composition-preflight.sh "$toolbox" "$redis_image" "$nginx_image" "$LOGMA_IMAGE"
   bash ./fatline-composition-runtime.sh "$toolbox" "$redis_image" "$nginx_image" "$LOGMA_IMAGE"
   for mode in "${modes[@]}"; do unset "${mode%%=*}"; done
+  unset COMPOSITION_RETAIN COMPOSITION_RUNTIME_ROOT || true
 }
 
 printf 'Plan: %s (%s)\nPlan SHA-256: %s\nAgni revision: %s\nGate selection: %s\n' "$name" "$plan" "$plan_hash" "$repo_rev" "$gate"

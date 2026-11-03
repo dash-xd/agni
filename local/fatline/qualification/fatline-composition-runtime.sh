@@ -4,7 +4,11 @@ set -Eeuo pipefail
 [[ $# == 4 ]] || { echo "usage: $0 BUILDER REDIS_IMAGE NGINX_IMAGE LOGMA_IMAGE" >&2; exit 2; }
 builder=$1 redis_image=$2 nginx_image=$3 logma_image=$4
 scope="fatline-composition-$$"
-work=$(mktemp -d)
+runtime_root=${COMPOSITION_RUNTIME_ROOT:-${TMPDIR:-/tmp}}
+mkdir -p "$runtime_root"
+work=$(mktemp -d "$runtime_root/$scope.XXXXXXXX")
+retain=${COMPOSITION_RETAIN:-0}
+[[ "$retain" == 0 || "$retain" == 1 ]] || { echo "COMPOSITION_RETAIN must be 0 or 1" >&2; exit 2; }
 net="$scope"
 socket="$work/socket"
 redis="$scope-redis"
@@ -36,6 +40,10 @@ cleanup() {
     kill "$subscriber_pid" 2>/dev/null || true
     wait "$subscriber_pid" 2>/dev/null || true
     subscriber_pid=
+  fi
+  if [[ "$retain" == 1 ]]; then
+    echo "RETAINED: run prefix=$scope scratch=$work"
+    return "$original_status"
   fi
   if [[ "${COMPOSITION_FUNCTION_RECONCILE_MODE:-0}" == 1 ]]; then
     systemctl --user stop "$scope-reconcile.timer" "$scope-reconcile.service" >/dev/null 2>&1 || true
