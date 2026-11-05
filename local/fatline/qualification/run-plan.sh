@@ -94,7 +94,7 @@ elif mode == "module-order":
         ordered.append(module_id)
     for module_id in gate_modules:
         visit(module_id)
-    print("\\n".join(ordered))
+    print("\n".join(ordered))
 else:
     raise SystemExit("unknown plan query")
 PY
@@ -265,13 +265,14 @@ run_module() {
 }
 for selected_gate in "${selected[@]}"; do
   echo "CHECK: $name qualification gate $selected_gate"
+  module_order=$(plan_read module-order "$selected_gate") || { echo "Invalid module graph for gate $selected_gate" >&2; exit 2; }
   while IFS= read -r module_id; do
     [[ -n "$module_id" ]] || continue
     [[ -n "${completed_modules[$module_id]:-}" ]] && continue
-    printf 'CHECK: qualification module %s (%s)\\n' "$module_id" "$(plan_read get "modules.$module_id.kind")"
+    printf 'CHECK: qualification module %s (%s)\n' "$module_id" "$(plan_read get "modules.$module_id.kind")"
     run_module "$module_id"
     completed_modules["$module_id"]=1
-    printf 'PASS: qualification module %s\\n' "$module_id"
-  done < <(plan_read module-order "$selected_gate")
+    printf 'PASS: qualification module %s\n' "$module_id"
+  done <<< "$module_order"
   echo "PASS: $name qualification gate $selected_gate"
 done
