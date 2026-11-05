@@ -76,11 +76,11 @@ elif mode == "module-order":
                 raise SystemExit(f"duplicate module output {output}: {output_owners[output]} and {module_id}")
             output_owners[output] = module_id
         cleanup = module.get("cleanup")
-        expected_cleanup = "always" if module["kind"] == "podman-systemd.composition-gate" else "preserve"
+        expected_cleanup = "retainable" if module["kind"] == "podman-systemd.composition-gate" else "preserve"
         if not isinstance(cleanup, dict) or cleanup.get("policy") != expected_cleanup:
             raise SystemExit(f"invalid module cleanup policy: {module_id}")
-        if cleanup["policy"] == "always" and cleanup.get("scope") != "module-run":
-            raise SystemExit(f"always-cleanup module must declare module-run scope: {module_id}")
+        if cleanup["policy"] == "retainable" and (cleanup.get("scope") != "module-run" or cleanup.get("override") != "RETAIN"):
+            raise SystemExit(f"retainable cleanup must declare scope and RETAIN override: {module_id}")
     for module_id, module in modules.items():
         missing = [dep for dep in module["dependsOn"] if dep not in modules]
         if missing:
@@ -294,8 +294,13 @@ for selected_gate in "${selected[@]}"; do
     [[ -n "${completed_modules[$module_id]:-}" ]] && continue
     printf 'CHECK: qualification module %s (%s)\n' "$module_id" "$(plan_read get "modules.$module_id.kind")"
     run_module "$module_id"
+    outputs=$(plan_read list "modules.$module_id.outputs") || { echo "Could not read module outputs: $module_id" >&2; exit 2; }
     completed_modules["$module_id"]=1
-    printf 'PASS: qualification module %s\n' "$module_id"
+    printf 'PASS: qualification module %s (outputs: %s)\n' "$module_id" "${outputs//
+  done <<< "$module_order"
+  echo "PASS: $name qualification gate $selected_gate"
+done
+\n'/,}"
   done <<< "$module_order"
   echo "PASS: $name qualification gate $selected_gate"
 done
