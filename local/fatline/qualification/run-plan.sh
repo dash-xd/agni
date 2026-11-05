@@ -114,6 +114,7 @@ prepare_artifact() {
   flake=$(plan_read get "artifacts.$artifact.flake")
   target=$(plan_read get "artifacts.$artifact.target")
   image=$(plan_read get "artifacts.$artifact.image")
+  build_image=$(plan_read get "artifacts.$artifact.buildImage")
   if [[ -n "$artifact_manifest" ]]; then
     local row expected_id filename archive_digest actual_id
     row=$(awk -F '\t' -v image="$image" '$1 == image { print; count++ } END { if (count != 1) exit 1 }' "$artifact_manifest") || {
@@ -134,6 +135,10 @@ prepare_artifact() {
   if [[ "$flake" == agni/* ]]; then flake="$checkout/${flake#agni/}"; fi
   make_nix build FLAKE="$flake" TARGET="$target"
   make_nix image-load FLAKE="$flake" TARGET="$target"
+  podman image inspect "$build_image" >/dev/null
+  if [[ "$build_image" != "$image" ]]; then
+    podman image tag "$build_image" "$image"
+  fi
   podman image inspect "$image" --format "PASS: loaded $artifact image {{.Id}}"
 }
 prepare_component() {
