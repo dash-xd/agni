@@ -1,46 +1,8 @@
 {
   "schema": 1,
-  "service": "dashxd-placeholders",
+  "service": "placeholder-sites-example",
   "hosts": [
-    {
-      "hostname": "console.dash.xd.run",
-      "zone": "xd.run",
-      "title": "Console"
-    },
-    {
-      "hostname": "logma.sh",
-      "zone": "logma.sh",
-      "title": "Logma"
-    },
-    {
-      "hostname": "chi.ninja",
-      "zone": "chi.ninja",
-      "title": "Chi"
-    },
-    {
-      "hostname": "gospace.cloud",
-      "zone": "gospace.cloud",
-      "title": "Gospace"
-    },
-    {
-      "hostname": "gateway.us-west1.farcaster.world",
-      "zone": "farcaster.world",
-      "title": "Farcaster Gateway"
-    },
-    {
-      "hostname": "deploy.fatline.to",
-      "zone": "fatline.to",
-      "title": "Fatline"
-    },
-    {
-      "hostname": "firekv.com",
-      "zone": "firekv.com",
-      "title": "FireKV"
-    },
-    {
-      "hostname": "oidc.auth.net.im",
-      "zone": "net.im",
-      "title": "OIDC"
-    }
+    {"hostname":"example.com","zone":"example.com","title":"Example"},
+    {"hostname":"test.example.com","zone":"example.com","title":"Test Example"}
   ]
 }
