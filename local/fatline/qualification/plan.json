@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "name": "fatline",
   "description": "Rootless Podman and systemd-user composition qualification.",
   "components": {
@@ -27,73 +27,45 @@
   "gates": {
     "baseline": {
       "description": "Composition baseline runtime",
-      "runtimeModes": {}
+      "modules": [
+        "runtime.baseline"
+      ]
     },
     "production-acl": {
       "description": "Tenant isolation and Skymill ACL checks against the production policy topology",
-      "runtimeModes": {
-        "COMPOSITION_AGNI_RECONCILE_MODE": "1",
-        "COMPOSITION_ACL_ISOLATION_MODE": "1",
-        "COMPOSITION_SKYMILL_ACL_MODE": "1",
-        "COMPOSITION_NGINX_QUADLET_MODE": "1",
-        "COMPOSITION_REDIS_QUADLET_MODE": "1",
-        "COMPOSITION_QUADLET_MODE": "1"
-      }
+      "modules": [
+        "runtime.production-acl"
+      ]
     },
     "cold-start": {
       "description": "Logma-only coordinated cold start",
-      "runtimeModes": {
-        "COMPOSITION_COLD_START_MODE": "1",
-        "COMPOSITION_NGINX_QUADLET_MODE": "1",
-        "COMPOSITION_REDIS_QUADLET_MODE": "1",
-        "COMPOSITION_QUADLET_MODE": "1"
-      }
+      "modules": [
+        "runtime.cold-start"
+      ]
     },
     "timer-recovery": {
       "description": "Redis crash, Function reconciliation, lifecycle and readiness recovery",
-      "runtimeModes": {
-        "COMPOSITION_TIMER_STATE_MODE": "1",
-        "COMPOSITION_LIFECYCLE_CRASH_MODE": "1",
-        "COMPOSITION_FUNCTION_RECONCILE_MODE": "1",
-        "COMPOSITION_REDIS_CRASH_BASELINE_MODE": "1",
-        "COMPOSITION_COORDINATED_RESTART_MODE": "1",
-        "COMPOSITION_BOOTSTRAP_UNIT_MODE": "1",
-        "COMPOSITION_COLD_START_MODE": "1",
-        "COMPOSITION_NGINX_QUADLET_MODE": "1",
-        "COMPOSITION_REDIS_QUADLET_MODE": "1",
-        "COMPOSITION_QUADLET_MODE": "1"
-      }
+      "modules": [
+        "runtime.timer-recovery"
+      ]
     },
     "lifecycle-dispatch": {
       "description": "Lifecycle dispatch using the pinned Logma provider",
-      "runtimeModes": {
-        "COMPOSITION_DISPATCH_MODE": "1"
-      }
+      "modules": [
+        "runtime.lifecycle-dispatch"
+      ]
     },
     "skymill-provider": {
       "description": "Skymill provider integration",
-      "runtimeModes": {
-        "COMPOSITION_SKYMILL_PROVIDER_MODE": "1",
-        "COMPOSITION_NGINX_QUADLET_MODE": "1",
-        "COMPOSITION_REDIS_QUADLET_MODE": "1",
-        "COMPOSITION_QUADLET_MODE": "1"
-      }
+      "modules": [
+        "runtime.skymill-provider"
+      ]
     },
     "strict-readiness": {
       "description": "Readiness during Redis and Functions outage and recovery",
-      "runtimeModes": {
-        "COMPOSITION_CRASH_WINDOW_MODE": "1",
-        "COMPOSITION_STRICT_READINESS_MODE": "1",
-        "COMPOSITION_LIFECYCLE_CRASH_MODE": "1",
-        "COMPOSITION_FUNCTION_RECONCILE_MODE": "1",
-        "COMPOSITION_REDIS_CRASH_BASELINE_MODE": "1",
-        "COMPOSITION_COORDINATED_RESTART_MODE": "1",
-        "COMPOSITION_BOOTSTRAP_UNIT_MODE": "1",
-        "COMPOSITION_COLD_START_MODE": "1",
-        "COMPOSITION_NGINX_QUADLET_MODE": "1",
-        "COMPOSITION_REDIS_QUADLET_MODE": "1",
-        "COMPOSITION_QUADLET_MODE": "1"
-      }
+      "modules": [
+        "runtime.strict-readiness"
+      ]
     }
   },
   "all": [
@@ -118,6 +90,317 @@
       "target": "#nginx-image",
       "buildImage": "localhost/fatline-nginx:candidate",
       "image": "localhost/nix-alpine/nginx:qualified-2026.10.23.1"
+    }
+  },
+  "protocolVersion": 1,
+  "modules": {
+    "artifact.redis": {
+      "kind": "nix.build-image",
+      "phases": [
+        "prepare",
+        "verify"
+      ],
+      "inputs": {
+        "artifact": "redis"
+      },
+      "outputs": [
+        "image:redis"
+      ],
+      "dependsOn": [],
+      "cleanup": {
+        "policy": "preserve"
+      }
+    },
+    "artifact.nginx": {
+      "kind": "nix.build-image",
+      "phases": [
+        "prepare",
+        "verify"
+      ],
+      "inputs": {
+        "artifact": "nginx"
+      },
+      "outputs": [
+        "image:nginx"
+      ],
+      "dependsOn": [],
+      "cleanup": {
+        "policy": "preserve"
+      }
+    },
+    "provider.logma": {
+      "kind": "nix.build-provider",
+      "phases": [
+        "prepare",
+        "verify"
+      ],
+      "inputs": {
+        "component": "logma"
+      },
+      "outputs": [
+        "image:logma"
+      ],
+      "dependsOn": [],
+      "cleanup": {
+        "policy": "preserve"
+      }
+    },
+    "provider.skymill": {
+      "kind": "nix.build-provider",
+      "phases": [
+        "prepare",
+        "verify"
+      ],
+      "inputs": {
+        "component": "skymill"
+      },
+      "outputs": [
+        "image:skymill"
+      ],
+      "dependsOn": [],
+      "cleanup": {
+        "policy": "preserve"
+      }
+    },
+    "acl.policy": {
+      "kind": "acl.verify-policy",
+      "phases": [
+        "prepare",
+        "verify"
+      ],
+      "inputs": {
+        "policy": "acl-policy.json"
+      },
+      "outputs": [
+        "acl:policy-verified"
+      ],
+      "dependsOn": [
+        "provider.logma",
+        "provider.skymill"
+      ],
+      "cleanup": {
+        "policy": "preserve"
+      }
+    },
+    "runtime.baseline": {
+      "kind": "podman-systemd.composition-gate",
+      "phases": [
+        "prepare",
+        "execute",
+        "verify",
+        "cleanup"
+      ],
+      "inputs": {
+        "gate": "baseline",
+        "runtimeModes": {}
+      },
+      "outputs": [
+        "gate:baseline:passed"
+      ],
+      "dependsOn": [
+        "artifact.redis",
+        "artifact.nginx",
+        "provider.logma"
+      ],
+      "cleanup": {
+        "policy": "always",
+        "scope": "module-run"
+      }
+    },
+    "runtime.production-acl": {
+      "kind": "podman-systemd.composition-gate",
+      "phases": [
+        "prepare",
+        "execute",
+        "verify",
+        "cleanup"
+      ],
+      "inputs": {
+        "gate": "production-acl",
+        "runtimeModes": {
+          "COMPOSITION_AGNI_RECONCILE_MODE": "1",
+          "COMPOSITION_ACL_ISOLATION_MODE": "1",
+          "COMPOSITION_SKYMILL_ACL_MODE": "1",
+          "COMPOSITION_NGINX_QUADLET_MODE": "1",
+          "COMPOSITION_REDIS_QUADLET_MODE": "1",
+          "COMPOSITION_QUADLET_MODE": "1"
+        }
+      },
+      "outputs": [
+        "gate:production-acl:passed"
+      ],
+      "dependsOn": [
+        "artifact.redis",
+        "artifact.nginx",
+        "provider.logma",
+        "provider.skymill",
+        "acl.policy"
+      ],
+      "cleanup": {
+        "policy": "always",
+        "scope": "module-run"
+      }
+    },
+    "runtime.cold-start": {
+      "kind": "podman-systemd.composition-gate",
+      "phases": [
+        "prepare",
+        "execute",
+        "verify",
+        "cleanup"
+      ],
+      "inputs": {
+        "gate": "cold-start",
+        "runtimeModes": {
+          "COMPOSITION_COLD_START_MODE": "1",
+          "COMPOSITION_NGINX_QUADLET_MODE": "1",
+          "COMPOSITION_REDIS_QUADLET_MODE": "1",
+          "COMPOSITION_QUADLET_MODE": "1"
+        }
+      },
+      "outputs": [
+        "gate:cold-start:passed"
+      ],
+      "dependsOn": [
+        "artifact.redis",
+        "artifact.nginx",
+        "provider.logma"
+      ],
+      "cleanup": {
+        "policy": "always",
+        "scope": "module-run"
+      }
+    },
+    "runtime.timer-recovery": {
+      "kind": "podman-systemd.composition-gate",
+      "phases": [
+        "prepare",
+        "execute",
+        "verify",
+        "cleanup"
+      ],
+      "inputs": {
+        "gate": "timer-recovery",
+        "runtimeModes": {
+          "COMPOSITION_TIMER_STATE_MODE": "1",
+          "COMPOSITION_LIFECYCLE_CRASH_MODE": "1",
+          "COMPOSITION_FUNCTION_RECONCILE_MODE": "1",
+          "COMPOSITION_REDIS_CRASH_BASELINE_MODE": "1",
+          "COMPOSITION_COORDINATED_RESTART_MODE": "1",
+          "COMPOSITION_BOOTSTRAP_UNIT_MODE": "1",
+          "COMPOSITION_COLD_START_MODE": "1",
+          "COMPOSITION_NGINX_QUADLET_MODE": "1",
+          "COMPOSITION_REDIS_QUADLET_MODE": "1",
+          "COMPOSITION_QUADLET_MODE": "1"
+        }
+      },
+      "outputs": [
+        "gate:timer-recovery:passed"
+      ],
+      "dependsOn": [
+        "artifact.redis",
+        "artifact.nginx",
+        "provider.logma"
+      ],
+      "cleanup": {
+        "policy": "always",
+        "scope": "module-run"
+      }
+    },
+    "runtime.lifecycle-dispatch": {
+      "kind": "podman-systemd.composition-gate",
+      "phases": [
+        "prepare",
+        "execute",
+        "verify",
+        "cleanup"
+      ],
+      "inputs": {
+        "gate": "lifecycle-dispatch",
+        "runtimeModes": {
+          "COMPOSITION_DISPATCH_MODE": "1"
+        }
+      },
+      "outputs": [
+        "gate:lifecycle-dispatch:passed"
+      ],
+      "dependsOn": [
+        "artifact.redis",
+        "artifact.nginx",
+        "provider.logma"
+      ],
+      "cleanup": {
+        "policy": "always",
+        "scope": "module-run"
+      }
+    },
+    "runtime.skymill-provider": {
+      "kind": "podman-systemd.composition-gate",
+      "phases": [
+        "prepare",
+        "execute",
+        "verify",
+        "cleanup"
+      ],
+      "inputs": {
+        "gate": "skymill-provider",
+        "runtimeModes": {
+          "COMPOSITION_SKYMILL_PROVIDER_MODE": "1",
+          "COMPOSITION_NGINX_QUADLET_MODE": "1",
+          "COMPOSITION_REDIS_QUADLET_MODE": "1",
+          "COMPOSITION_QUADLET_MODE": "1"
+        }
+      },
+      "outputs": [
+        "gate:skymill-provider:passed"
+      ],
+      "dependsOn": [
+        "artifact.redis",
+        "artifact.nginx",
+        "provider.logma",
+        "provider.skymill"
+      ],
+      "cleanup": {
+        "policy": "always",
+        "scope": "module-run"
+      }
+    },
+    "runtime.strict-readiness": {
+      "kind": "podman-systemd.composition-gate",
+      "phases": [
+        "prepare",
+        "execute",
+        "verify",
+        "cleanup"
+      ],
+      "inputs": {
+        "gate": "strict-readiness",
+        "runtimeModes": {
+          "COMPOSITION_CRASH_WINDOW_MODE": "1",
+          "COMPOSITION_STRICT_READINESS_MODE": "1",
+          "COMPOSITION_LIFECYCLE_CRASH_MODE": "1",
+          "COMPOSITION_FUNCTION_RECONCILE_MODE": "1",
+          "COMPOSITION_REDIS_CRASH_BASELINE_MODE": "1",
+          "COMPOSITION_COORDINATED_RESTART_MODE": "1",
+          "COMPOSITION_BOOTSTRAP_UNIT_MODE": "1",
+          "COMPOSITION_COLD_START_MODE": "1",
+          "COMPOSITION_NGINX_QUADLET_MODE": "1",
+          "COMPOSITION_REDIS_QUADLET_MODE": "1",
+          "COMPOSITION_QUADLET_MODE": "1"
+        }
+      },
+      "outputs": [
+        "gate:strict-readiness:passed"
+      ],
+      "dependsOn": [
+        "artifact.redis",
+        "artifact.nginx",
+        "provider.logma"
+      ],
+      "cleanup": {
+        "policy": "always",
+        "scope": "module-run"
+      }
     }
   }
 }
