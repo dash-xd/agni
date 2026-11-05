@@ -42,16 +42,64 @@ if mode in ("get", "list"):
         raise SystemExit("expected a scalar string or integer")
 elif mode == "modes":
     gate = args[0]
-    modes = plan["gates"][gate]["runtimeModes"]
+    module_id = f"runtime-{gate}"
+    modes = plan["modules"][module_id]["inputs"].get("runtimeModes", {})
     for key, value in modes.items():
         if not key.startswith("COMPOSITION_") or value not in ("0", "1"):
             raise SystemExit("invalid runtime mode")
         print(f"{key}={value}")
+elif mode == "module-order":
+    gate = args[0]
+    modules = plan.get("modules")
+    if not isinstance(modules, dict) or not modules:
+        raise SystemExit("plan must declare qualification modules")
+    allowed_kinds = {"nix.build-image", "nix.build-provider", "acl.verify-policy", "podman-systemd.composition-gate"}
+    allowed_phases = {"prepare", "execute", "verify", "cleanup"}
+    for module_id, module in modules.items():
+        if not isinstance(module, dict) or module.get("kind") not in allowed_kinds:
+            raise SystemExit(f"invalid module kind: {module_id}")
+        if not isinstance(module.get("phases"), list) or not module["phases"] or not set(module["phases"]) <= allowed_phases:
+            raise SystemExit(f"invalid module phases: {module_id}")
+        if not isinstance(module.get("inputs"), dict) or not isinstance(module.get("outputs"), list) or not all(isinstance(x, str) and x for x in module["outputs"]):
+            raise SystemExit(f"invalid module inputs or outputs: {module_id}")
+        if not isinstance(module.get("dependsOn"), list) or not all(isinstance(x, str) for x in module["dependsOn"]):
+            raise SystemExit(f"invalid module dependencies: {module_id}")
+        cleanup = module.get("cleanup")
+        if not isinstance(cleanup, dict) or cleanup.get("policy") not in {"preserve", "always"}:
+            raise SystemExit(f"invalid module cleanup policy: {module_id}")
+        if cleanup["policy"] == "always" and cleanup.get("scope") != "module-run":
+            raise SystemExit(f"always-cleanup module must declare module-run scope: {module_id}")
+    for module_id, module in modules.items():
+        missing = [dep for dep in module["dependsOn"] if dep not in modules]
+        if missing:
+            raise SystemExit(f"unknown dependency for {module_id}: {missing[0]}")
+    gate_modules = plan["gates"][gate].get("modules")
+    if not isinstance(gate_modules, list) or not gate_modules:
+        raise SystemExit(f"gate has no entry modules: {gate}")
+    ordered = []
+    visiting = set()
+    visited = set()
+    def visit(module_id):
+        if module_id not in modules:
+            raise SystemExit(f"unknown gate module: {module_id}")
+        if module_id in visiting:
+            raise SystemExit(f"module dependency cycle at: {module_id}")
+        if module_id in visited:
+            return
+        visiting.add(module_id)
+        for dep in modules[module_id]["dependsOn"]:
+            visit(dep)
+        visiting.remove(module_id)
+        visited.add(module_id)
+        ordered.append(module_id)
+    for module_id in gate_modules:
+        visit(module_id)
+    print("\\n".join(ordered))
 else:
     raise SystemExit("unknown plan query")
 PY
 }
-[[ "$(plan_read get schemaVersion)" == 1 ]] || { echo "Unsupported plan schema" >&2; exit 2; }
+[[ "$(plan_read get schemaVersion)" == 2 && "$(plan_read get protocolVersion)" == 1 ]] || { echo "Unsupported qualification plan protocol" >&2; exit 2; }
 name=$(plan_read get name)
 retain=${NIX_ALPINE_RETAIN:-0}
 [[ "$retain" == 0 || "$retain" == 1 ]] || { echo "NIX_ALPINE_RETAIN must be 0 or 1" >&2; exit 2; }
@@ -165,13 +213,7 @@ run_runtime() {
   while IFS='=' read -r key value; do
     [[ -n "$key" ]] && modes+=("$key=$value")
   done < <(plan_read modes "$gate_name")
-  if [[ "$gate_name" == production-acl ]]; then
-    modes+=("COMPOSITION_AGNI_RECONCILE_MODE=1" "COMPOSITION_ACL_ISOLATION_MODE=1" "COMPOSITION_SKYMILL_ACL_MODE=1")
-    podman exec "$toolbox" nix run --no-write-lock-file \
-      "/workspaces/$checkout/local/fatline#check-acl-pins" -- \
-      "/workspaces/$checkout/local/fatline/acl-policy.json" "$LOGMA_REV" "$SKYMILL_REV"
-  fi
-  ((${#modes[@]} == 0)) || export "${modes[@]}"
+   ((${#modes[@]} == 0)) || export "${modes[@]}"
   local host_workspaces=${NIX_ALPINE_HOST_WORKSPACES:-}
   [[ -n "$host_workspaces" ]] || { echo "NIX_ALPINE_HOST_WORKSPACES is required for host Podman bind mounts" >&2; return 2; }
   [[ -d "$host_workspaces" ]] || { echo "Host-visible workspace is not mounted: $host_workspaces" >&2; return 2; }
@@ -195,18 +237,41 @@ if (( check_only )); then
   printf '  %s\n' "${selected[@]}"
   exit 0
 fi
-python3 "$agni_root/local/fatline/scripts/test-render-users-acl.py"
-prepare_artifact redis
-prepare_artifact nginx
-logma_prepared=0
-skymill_prepared=0
+declare -A completed_modules=()
+run_module() {
+  local module_id=$1 kind input
+  kind=$(plan_read get "modules.$module_id.kind")
+  case "$kind" in
+    nix.build-image)
+      input=$(plan_read get "modules.$module_id.inputs.artifact")
+      prepare_artifact "$input"
+      ;;
+    nix.build-provider)
+      input=$(plan_read get "modules.$module_id.inputs.component")
+      prepare_component "$input"
+      ;;
+    acl.verify-policy)
+      python3 "$agni_root/local/fatline/scripts/test-render-users-acl.py"
+      podman exec "$toolbox" nix run --no-write-lock-file \
+        "/workspaces/$checkout/local/fatline#check-acl-pins" -- \
+        "/workspaces/$checkout/local/fatline/acl-policy.json" "$LOGMA_REV" "$SKYMILL_REV"
+      ;;
+    podman-systemd.composition-gate)
+      input=$(plan_read get "modules.$module_id.inputs.gate")
+      run_runtime "$input"
+      ;;
+    *) echo "Unsupported qualification module kind: $kind" >&2; return 2;;
+  esac
+}
 for selected_gate in "${selected[@]}"; do
   echo "CHECK: $name qualification gate $selected_gate"
-  if (( ! logma_prepared )); then prepare_component logma; logma_prepared=1; fi
-  if [[ "$selected_gate" == skymill-provider || "$selected_gate" == production-acl ]] && (( ! skymill_prepared )); then
-    prepare_component skymill
-    skymill_prepared=1
-  fi
-  run_runtime "$selected_gate"
+  while IFS= read -r module_id; do
+    [[ -n "$module_id" ]] || continue
+    [[ -n "${completed_modules[$module_id]:-}" ]] && continue
+    printf 'CHECK: qualification module %s (%s)\\n' "$module_id" "$(plan_read get "modules.$module_id.kind")"
+    run_module "$module_id"
+    completed_modules["$module_id"]=1
+    printf 'PASS: qualification module %s\\n' "$module_id"
+  done < <(plan_read module-order "$selected_gate")
   echo "PASS: $name qualification gate $selected_gate"
 done
