@@ -53,19 +53,31 @@ elif mode == "module-order":
     modules = plan.get("modules")
     if not isinstance(modules, dict) or not modules:
         raise SystemExit("plan must declare qualification modules")
-    allowed_kinds = {"nix.build-image", "nix.build-provider", "acl.verify-policy", "podman-systemd.composition-gate"}
+    expected_phases = {
+        "nix.build-image": ["prepare", "verify"],
+        "nix.build-provider": ["prepare", "verify"],
+        "acl.verify-policy": ["prepare", "verify"],
+        "podman-systemd.composition-gate": ["prepare", "execute", "verify", "cleanup"],
+    }
+    allowed_kinds = set(expected_phases)
     allowed_phases = {"prepare", "execute", "verify", "cleanup"}
+    output_owners = {}
     for module_id, module in modules.items():
         if not isinstance(module, dict) or module.get("kind") not in allowed_kinds:
             raise SystemExit(f"invalid module kind: {module_id}")
-        if not isinstance(module.get("phases"), list) or not module["phases"] or not set(module["phases"]) <= allowed_phases:
+        if not isinstance(module.get("phases"), list) or not set(module["phases"]) <= allowed_phases or module["phases"] != expected_phases[module["kind"]]:
             raise SystemExit(f"invalid module phases: {module_id}")
         if not isinstance(module.get("inputs"), dict) or not isinstance(module.get("outputs"), list) or not all(isinstance(x, str) and x for x in module["outputs"]):
             raise SystemExit(f"invalid module inputs or outputs: {module_id}")
         if not isinstance(module.get("dependsOn"), list) or not all(isinstance(x, str) for x in module["dependsOn"]):
             raise SystemExit(f"invalid module dependencies: {module_id}")
+        for output in module["outputs"]:
+            if output in output_owners:
+                raise SystemExit(f"duplicate module output {output}: {output_owners[output]} and {module_id}")
+            output_owners[output] = module_id
         cleanup = module.get("cleanup")
-        if not isinstance(cleanup, dict) or cleanup.get("policy") not in {"preserve", "always"}:
+        expected_cleanup = "always" if module["kind"] == "podman-systemd.composition-gate" else "preserve"
+        if not isinstance(cleanup, dict) or cleanup.get("policy") != expected_cleanup:
             raise SystemExit(f"invalid module cleanup policy: {module_id}")
         if cleanup["policy"] == "always" and cleanup.get("scope") != "module-run":
             raise SystemExit(f"always-cleanup module must declare module-run scope: {module_id}")
@@ -155,6 +167,14 @@ else
   selected=("$gate")
 fi
 ((${#selected[@]})) || { echo "Unknown gate: $gate" >&2; exit 2; }
+declare -A gate_module_orders=()
+for selected_gate in "${selected[@]}"; do
+  plan_read get "gates.$selected_gate.description" >/dev/null || { echo "Unknown gate: $selected_gate" >&2; exit 2; }
+  gate_module_orders["$selected_gate"]=$(plan_read module-order "$selected_gate") || {
+    echo "Invalid module graph for gate $selected_gate" >&2; exit 2;
+  }
+done
+
 
 make_nix() { command make -C "$nix_local" --no-print-directory "$@" SCOPE="$scope" WORKSPACES="$workspaces" CONTAINER="$toolbox"; }
 prepare_artifact() {
@@ -235,6 +255,9 @@ printf 'Plan: %s (%s)\nPlan SHA-256: %s\nAgni revision: %s\nGate selection: %s\n
 if (( check_only )); then
   printf 'Selected gates:\n'
   printf '  %s\n' "${selected[@]}"
+  for selected_gate in "${selected[@]}"; do
+    printf 'Modules for %s:\n%s\n' "$selected_gate" "${gate_module_orders[$selected_gate]}"
+  done
   exit 0
 fi
 declare -A completed_modules=()
@@ -265,7 +288,7 @@ run_module() {
 }
 for selected_gate in "${selected[@]}"; do
   echo "CHECK: $name qualification gate $selected_gate"
-  module_order=$(plan_read module-order "$selected_gate") || { echo "Invalid module graph for gate $selected_gate" >&2; exit 2; }
+  module_order=${gate_module_orders[$selected_gate]}
   while IFS= read -r module_id; do
     [[ -n "$module_id" ]] || continue
     [[ -n "${completed_modules[$module_id]:-}" ]] && continue
