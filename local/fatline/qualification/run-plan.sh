@@ -292,10 +292,11 @@ run_module() {
       prepare_component "$input"
       ;;
     acl.verify-policy)
+      input=$(plan_read get "modules.$module_id.inputs.policy")
       python3 "$agni_root/local/fatline/scripts/test-render-users-acl.py"
       podman exec "$toolbox" nix run --no-write-lock-file \
         "/workspaces/$checkout/local/fatline#check-acl-pins" -- \
-        "/workspaces/$checkout/local/fatline/acl-policy.json" "$LOGMA_REV" "$SKYMILL_REV"
+        "/workspaces/$checkout/local/fatline/$input" "$LOGMA_REV" "$SKYMILL_REV"
       ;;
     podman-systemd.composition-gate)
       input=$(plan_read get "modules.$module_id.inputs.gate")
