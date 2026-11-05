@@ -37,7 +37,7 @@ jobs:
       - name: Validate Terraform without provider credentials
         run: |
           docker run --rm -v "$PWD/compositions/cloudflare-placeholder-sites/terraform:/workspace" \
-            -w /workspace hashicorp/terraform:1.9.8 fmt -check
+            -w /workspace hashicorp/terraform:1.9.8 fmt -check -diff
           docker run --rm -v "$PWD/compositions/cloudflare-placeholder-sites/terraform:/workspace" \
             -w /workspace hashicorp/terraform:1.9.8 init -backend=false -input=false
           docker run --rm -v "$PWD/compositions/cloudflare-placeholder-sites/terraform:/workspace" \
