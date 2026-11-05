@@ -296,7 +296,7 @@ for selected_gate in "${selected[@]}"; do
     run_module "$module_id"
     outputs=$(plan_read list "modules.$module_id.outputs") || { echo "Could not read module outputs: $module_id" >&2; exit 2; }
     completed_modules["$module_id"]=1
-    printf 'PASS: qualification module %s (outputs: %s)\n' "$module_id" "${outputs//
+    printf 'PASS: qualification module %s; declared outputs:\n%s\n' "$module_id" "$outputs"
   done <<< "$module_order"
   echo "PASS: $name qualification gate $selected_gate"
 done
