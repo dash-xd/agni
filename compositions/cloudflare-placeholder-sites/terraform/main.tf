@@ -35,12 +35,12 @@ resource "cloudflare_workers_script" "placeholder" {
 }
 
 resource "cloudflare_workers_custom_domain" "site" {
-  for_each     = var.sites
-  account_id   = var.account_id
-  hostname     = each.key
-  service      = cloudflare_workers_script.placeholder.script_name
-  zone_id      = each.value.zone_id
-  zone_name    = each.value.zone_name
+  for_each   = var.sites
+  account_id = var.account_id
+  hostname   = each.key
+  service    = cloudflare_workers_script.placeholder.script_name
+  zone_id    = each.value.zone_id
+  zone_name  = each.value.zone_name
 }
 
 output "managed_hostnames" {
