@@ -203,8 +203,9 @@
         "provider-logma"
       ],
       "cleanup": {
-        "policy": "always",
-        "scope": "module-run"
+        "policy": "retainable",
+        "scope": "module-run",
+        "override": "RETAIN"
       }
     },
     "runtime-production-acl": {
@@ -237,8 +238,9 @@
         "acl-policy"
       ],
       "cleanup": {
-        "policy": "always",
-        "scope": "module-run"
+        "policy": "retainable",
+        "scope": "module-run",
+        "override": "RETAIN"
       }
     },
     "runtime-cold-start": {
@@ -267,8 +269,9 @@
         "provider-logma"
       ],
       "cleanup": {
-        "policy": "always",
-        "scope": "module-run"
+        "policy": "retainable",
+        "scope": "module-run",
+        "override": "RETAIN"
       }
     },
     "runtime-timer-recovery": {
@@ -303,8 +306,9 @@
         "provider-logma"
       ],
       "cleanup": {
-        "policy": "always",
-        "scope": "module-run"
+        "policy": "retainable",
+        "scope": "module-run",
+        "override": "RETAIN"
       }
     },
     "runtime-lifecycle-dispatch": {
@@ -330,8 +334,9 @@
         "provider-logma"
       ],
       "cleanup": {
-        "policy": "always",
-        "scope": "module-run"
+        "policy": "retainable",
+        "scope": "module-run",
+        "override": "RETAIN"
       }
     },
     "runtime-skymill-provider": {
@@ -361,8 +366,9 @@
         "provider-skymill"
       ],
       "cleanup": {
-        "policy": "always",
-        "scope": "module-run"
+        "policy": "retainable",
+        "scope": "module-run",
+        "override": "RETAIN"
       }
     },
     "runtime-strict-readiness": {
@@ -398,8 +404,9 @@
         "provider-logma"
       ],
       "cleanup": {
-        "policy": "always",
-        "scope": "module-run"
+        "policy": "retainable",
+        "scope": "module-run",
+        "override": "RETAIN"
       }
     }
   }
