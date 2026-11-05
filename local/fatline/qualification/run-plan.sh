@@ -25,7 +25,7 @@ plan_dir=$(dirname "$plan")
 agni_root=$(realpath "$plan_dir/../../..")
 plan_read() {
   python3 - "$plan" "$@" <<'PY'
-import json, sys
+import json, re, sys
 plan = json.load(open(sys.argv[1], encoding="utf-8"))
 mode, *args = sys.argv[2:]
 if mode in ("get", "list"):
@@ -69,8 +69,26 @@ elif mode == "module-order":
             raise SystemExit(f"invalid module phases: {module_id}")
         if not isinstance(module.get("inputs"), dict) or not isinstance(module.get("outputs"), list) or not all(isinstance(x, str) and x for x in module["outputs"]):
             raise SystemExit(f"invalid module inputs or outputs: {module_id}")
+        if not re.fullmatch(r"[a-z][a-z0-9-]*", module_id):
+            raise SystemExit(f"invalid module ID: {module_id}")
         if not isinstance(module.get("dependsOn"), list) or not all(isinstance(x, str) for x in module["dependsOn"]):
             raise SystemExit(f"invalid module dependencies: {module_id}")
+        if len(module["dependsOn"]) != len(set(module["dependsOn"])):
+            raise SystemExit(f"duplicate module dependency: {module_id}")
+        inputs = module["inputs"]
+        if module["kind"] == "nix.build-image" and inputs.get("artifact") not in plan.get("artifacts", {}):
+            raise SystemExit(f"unknown image artifact input: {module_id}")
+        if module["kind"] == "nix.build-provider" and inputs.get("component") not in plan.get("components", {}):
+            raise SystemExit(f"unknown provider component input: {module_id}")
+        if module["kind"] == "acl.verify-policy" and (not isinstance(inputs.get("policy"), str) or inputs["policy"].startswith("/") or ".." in inputs["policy"]):
+            raise SystemExit(f"invalid ACL policy input: {module_id}")
+        if module["kind"] == "podman-systemd.composition-gate":
+            gate_name = inputs.get("gate")
+            if module_id != f"runtime-{gate_name}" or gate_name not in plan.get("gates", {}):
+                raise SystemExit(f"invalid runtime gate input: {module_id}")
+            modes = inputs.get("runtimeModes", {})
+            if not isinstance(modes, dict) or any(not isinstance(k, str) or not k.startswith("COMPOSITION_") or v not in ("0", "1") for k, v in modes.items()):
+                raise SystemExit(f"invalid runtime mode declaration: {module_id}")
         for output in module["outputs"]:
             if output in output_owners:
                 raise SystemExit(f"duplicate module output {output}: {output_owners[output]} and {module_id}")
