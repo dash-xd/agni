@@ -300,7 +300,3 @@ for selected_gate in "${selected[@]}"; do
   done <<< "$module_order"
   echo "PASS: $name qualification gate $selected_gate"
 done
-\n'/,}"
-  done <<< "$module_order"
-  echo "PASS: $name qualification gate $selected_gate"
-done
