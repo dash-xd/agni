@@ -175,7 +175,22 @@
               exec ${runner}/bin/agni-fatline ${command} "$@"
             ''}";
           };
+          planRunner = pkgs.writeShellApplication {
+            name = "agni-qualification-plan";
+            runtimeInputs = with pkgs; [
+              bash coreutils findutils git gnumake podman systemd python3
+              go_1_26 stdenv.cc redis gnugrep gnused
+            ];
+            text = ''
+              : "${NIX_XD_PLAN_ROOT:?NIX_XD_PLAN_ROOT must point to the pinned workspace checkout}"
+              exec bash "$NIX_XD_PLAN_ROOT/local/fatline/qualification/run-plan.sh" "$@"
+            '';
+          };
         in {
+          qualify-plan = {
+            type = "app";
+            program = "${planRunner}/bin/agni-qualification-plan";
+          };
           check-acl-pins = {
             type = "app";
             program = "${checkAclPins}/bin/agni-check-acl-pins";
