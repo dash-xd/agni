@@ -182,8 +182,8 @@
               go_1_26 stdenv.cc redis gnugrep gnused
             ];
             text = ''
-              : "${NIX_XD_PLAN_ROOT:?NIX_XD_PLAN_ROOT must point to the pinned workspace checkout}"
-              exec bash "$NIX_XD_PLAN_ROOT/local/fatline/qualification/run-plan.sh" "$@"
+              : "''${NIX_XD_PLAN_ROOT:?NIX_XD_PLAN_ROOT must point to the pinned workspace checkout}"
+              exec bash "''${NIX_XD_PLAN_ROOT}/local/fatline/qualification/run-plan.sh" "$@"
             '';
           };
         in {
