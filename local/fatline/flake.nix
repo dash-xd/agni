@@ -17,8 +17,16 @@
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in {
-          # Redis artifacts are produced and qualified by Nix-Alpine.
-          # Agni consumes only the release-ledger-selected image reference.
+          # Composition-owned runtime images; Nix-Alpine supplies only the build/runtime toolchain.
+          redis-image = pkgs.dockerTools.buildLayeredImage {
+            name = "localhost/fatline-redis";
+            tag = "candidate";
+            contents = [ pkgs.redis ];
+            config = {
+              Entrypoint = [ "${pkgs.redis}/bin/redis-server" ];
+              Cmd = [ "/etc/redis/redis.conf" ];
+            };
+          };
           nginx-image = pkgs.dockerTools.buildLayeredImage {
             name = "localhost/fatline-nginx";
             tag = "candidate";
