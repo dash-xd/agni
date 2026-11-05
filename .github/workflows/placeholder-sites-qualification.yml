@@ -1,0 +1,44 @@
+name: Placeholder sites qualification
+
+on:
+  push:
+    branches:
+      - codex/cloudflare-placeholder-plan
+    paths:
+      - compositions/cloudflare-placeholder-sites/**
+      - .github/workflows/placeholder-sites-qualification.yml
+  pull_request:
+    paths:
+      - compositions/cloudflare-placeholder-sites/**
+      - .github/workflows/placeholder-sites-qualification.yml
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate example manifest
+        run: node compositions/cloudflare-placeholder-sites/validate.mjs compositions/cloudflare-placeholder-sites/hosts.json
+      - name: Test placeholder handler
+        run: node --test compositions/cloudflare-placeholder-sites/test.mjs
+      - name: Build deployable module without deploying
+        run: |
+          node compositions/cloudflare-placeholder-sites/build.mjs \
+            compositions/cloudflare-placeholder-sites/hosts.json \
+            "$RUNNER_TEMP/worker.mjs"
+          node --check "$RUNNER_TEMP/worker.mjs"
+      - name: Validate Terraform without provider credentials
+        run: |
+          docker run --rm -v "$PWD/compositions/cloudflare-placeholder-sites/terraform:/workspace" \
+            -w /workspace hashicorp/terraform:1.9.8 fmt -check
+          docker run --rm -v "$PWD/compositions/cloudflare-placeholder-sites/terraform:/workspace" \
+            -w /workspace hashicorp/terraform:1.9.8 init -backend=false -input=false
+          docker run --rm -v "$PWD/compositions/cloudflare-placeholder-sites/terraform:/workspace" \
+            -w /workspace hashicorp/terraform:1.9.8 validate
