@@ -28,43 +28,43 @@
     "baseline": {
       "description": "Composition baseline runtime",
       "modules": [
-        "runtime.baseline"
+        "runtime-baseline"
       ]
     },
     "production-acl": {
       "description": "Tenant isolation and Skymill ACL checks against the production policy topology",
       "modules": [
-        "runtime.production-acl"
+        "runtime-production-acl"
       ]
     },
     "cold-start": {
       "description": "Logma-only coordinated cold start",
       "modules": [
-        "runtime.cold-start"
+        "runtime-cold-start"
       ]
     },
     "timer-recovery": {
       "description": "Redis crash, Function reconciliation, lifecycle and readiness recovery",
       "modules": [
-        "runtime.timer-recovery"
+        "runtime-timer-recovery"
       ]
     },
     "lifecycle-dispatch": {
       "description": "Lifecycle dispatch using the pinned Logma provider",
       "modules": [
-        "runtime.lifecycle-dispatch"
+        "runtime-lifecycle-dispatch"
       ]
     },
     "skymill-provider": {
       "description": "Skymill provider integration",
       "modules": [
-        "runtime.skymill-provider"
+        "runtime-skymill-provider"
       ]
     },
     "strict-readiness": {
       "description": "Readiness during Redis and Functions outage and recovery",
       "modules": [
-        "runtime.strict-readiness"
+        "runtime-strict-readiness"
       ]
     }
   },
@@ -94,7 +94,7 @@
   },
   "protocolVersion": 1,
   "modules": {
-    "artifact.redis": {
+    "artifact-redis": {
       "kind": "nix.build-image",
       "phases": [
         "prepare",
@@ -111,7 +111,7 @@
         "policy": "preserve"
       }
     },
-    "artifact.nginx": {
+    "artifact-nginx": {
       "kind": "nix.build-image",
       "phases": [
         "prepare",
@@ -128,7 +128,7 @@
         "policy": "preserve"
       }
     },
-    "provider.logma": {
+    "provider-logma": {
       "kind": "nix.build-provider",
       "phases": [
         "prepare",
@@ -145,7 +145,7 @@
         "policy": "preserve"
       }
     },
-    "provider.skymill": {
+    "provider-skymill": {
       "kind": "nix.build-provider",
       "phases": [
         "prepare",
@@ -162,7 +162,7 @@
         "policy": "preserve"
       }
     },
-    "acl.policy": {
+    "acl-policy": {
       "kind": "acl.verify-policy",
       "phases": [
         "prepare",
@@ -175,14 +175,14 @@
         "acl:policy-verified"
       ],
       "dependsOn": [
-        "provider.logma",
-        "provider.skymill"
+        "provider-logma",
+        "provider-skymill"
       ],
       "cleanup": {
         "policy": "preserve"
       }
     },
-    "runtime.baseline": {
+    "runtime-baseline": {
       "kind": "podman-systemd.composition-gate",
       "phases": [
         "prepare",
@@ -198,16 +198,16 @@
         "gate:baseline:passed"
       ],
       "dependsOn": [
-        "artifact.redis",
-        "artifact.nginx",
-        "provider.logma"
+        "artifact-redis",
+        "artifact-nginx",
+        "provider-logma"
       ],
       "cleanup": {
         "policy": "always",
         "scope": "module-run"
       }
     },
-    "runtime.production-acl": {
+    "runtime-production-acl": {
       "kind": "podman-systemd.composition-gate",
       "phases": [
         "prepare",
@@ -230,18 +230,18 @@
         "gate:production-acl:passed"
       ],
       "dependsOn": [
-        "artifact.redis",
-        "artifact.nginx",
-        "provider.logma",
-        "provider.skymill",
-        "acl.policy"
+        "artifact-redis",
+        "artifact-nginx",
+        "provider-logma",
+        "provider-skymill",
+        "acl-policy"
       ],
       "cleanup": {
         "policy": "always",
         "scope": "module-run"
       }
     },
-    "runtime.cold-start": {
+    "runtime-cold-start": {
       "kind": "podman-systemd.composition-gate",
       "phases": [
         "prepare",
@@ -262,16 +262,16 @@
         "gate:cold-start:passed"
       ],
       "dependsOn": [
-        "artifact.redis",
-        "artifact.nginx",
-        "provider.logma"
+        "artifact-redis",
+        "artifact-nginx",
+        "provider-logma"
       ],
       "cleanup": {
         "policy": "always",
         "scope": "module-run"
       }
     },
-    "runtime.timer-recovery": {
+    "runtime-timer-recovery": {
       "kind": "podman-systemd.composition-gate",
       "phases": [
         "prepare",
@@ -298,16 +298,16 @@
         "gate:timer-recovery:passed"
       ],
       "dependsOn": [
-        "artifact.redis",
-        "artifact.nginx",
-        "provider.logma"
+        "artifact-redis",
+        "artifact-nginx",
+        "provider-logma"
       ],
       "cleanup": {
         "policy": "always",
         "scope": "module-run"
       }
     },
-    "runtime.lifecycle-dispatch": {
+    "runtime-lifecycle-dispatch": {
       "kind": "podman-systemd.composition-gate",
       "phases": [
         "prepare",
@@ -325,16 +325,16 @@
         "gate:lifecycle-dispatch:passed"
       ],
       "dependsOn": [
-        "artifact.redis",
-        "artifact.nginx",
-        "provider.logma"
+        "artifact-redis",
+        "artifact-nginx",
+        "provider-logma"
       ],
       "cleanup": {
         "policy": "always",
         "scope": "module-run"
       }
     },
-    "runtime.skymill-provider": {
+    "runtime-skymill-provider": {
       "kind": "podman-systemd.composition-gate",
       "phases": [
         "prepare",
@@ -355,17 +355,17 @@
         "gate:skymill-provider:passed"
       ],
       "dependsOn": [
-        "artifact.redis",
-        "artifact.nginx",
-        "provider.logma",
-        "provider.skymill"
+        "artifact-redis",
+        "artifact-nginx",
+        "provider-logma",
+        "provider-skymill"
       ],
       "cleanup": {
         "policy": "always",
         "scope": "module-run"
       }
     },
-    "runtime.strict-readiness": {
+    "runtime-strict-readiness": {
       "kind": "podman-systemd.composition-gate",
       "phases": [
         "prepare",
@@ -393,9 +393,9 @@
         "gate:strict-readiness:passed"
       ],
       "dependsOn": [
-        "artifact.redis",
-        "artifact.nginx",
-        "provider.logma"
+        "artifact-redis",
+        "artifact-nginx",
+        "provider-logma"
       ],
       "cleanup": {
         "policy": "always",
