@@ -5,7 +5,7 @@ import { createHandler } from './worker.mjs'
 const manifest = JSON.parse(readFileSync(new URL('./hosts.json', import.meta.url), 'utf8'))
 const fetch = createHandler(manifest)
 test('each exact hostname serves its own placeholder', async () => {
-  assert.equal(manifest.hosts.length, 8)
+  assert.equal(manifest.hosts.length, 2)
   for (const site of manifest.hosts) {
     const response = fetch(new Request('https://' + site.hostname + '/'))
     assert.equal(response.status, 200)
@@ -17,7 +17,7 @@ test('each exact hostname serves its own placeholder', async () => {
   }
 })
 test('unknown hosts and paths fail closed', () => {
-  for (const url of ['https://unknown.example/','https://logma.sh/admin','https://evil.logma.sh/']) {
+  for (const url of ['https://unknown.example/','https://example.com/admin','https://evil.example.com/']) {
     assert.equal(fetch(new Request(url)).status, 404)
   }
 })
