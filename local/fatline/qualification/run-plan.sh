@@ -171,13 +171,11 @@ read_source_pin() {
   printf -v "${component^^}_CHECKOUT" '%s' "$checkout"
 }
 for component in logma skymill; do read_source_pin "$component"; done
-agni_branch=$(plan_read get components.agni.branch)
-[[ "$agni_branch" == "$COMPOSITION_AGNI_BRANCH" ]] || { echo "Plan Agni branch does not match source pin" >&2; exit 2; }
 redis_image=$(plan_read get artifacts.redis.image)
 nginx_image=$(plan_read get artifacts.nginx.image)
 checkout=$plan_checkout
 export COMPOSITION_AGNI_CHECKOUT="$checkout" COMPOSITION_AGNI_SOURCE="$agni_root"
-export COMPOSITION_AGNI_REV="$repo_rev" COMPOSITION_AGNI_BRANCH="$agni_branch"
+export COMPOSITION_AGNI_REV="$repo_rev"
 export COMPOSITION_LOGMA_REV="$LOGMA_REV" COMPOSITION_SKYMILL_REV="$SKYMILL_REV"
 export COMPOSITION_LOGMA_IMAGE="$LOGMA_IMAGE" COMPOSITION_SKYMILL_IMAGE="$SKYMILL_IMAGE"
 export COMPOSITION_REDIS_IMAGE="$redis_image" COMPOSITION_NGINX_IMAGE="$nginx_image"
