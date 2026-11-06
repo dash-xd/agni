@@ -230,9 +230,8 @@ prepare_artifact() {
   podman image inspect "$image" --format "PASS: loaded $artifact image {{.Id}}"
 }
 prepare_component() {
-  local component=$1 key repo branch rev checkout flake image actual_rev
+  local component=$1 key repo rev checkout flake image actual_rev
   key="${component^^}_REPO"; repo=${!key}
-  key="${component^^}_BRANCH"; branch=${!key}
   key="${component^^}_REV"; rev=${!key}
   key="${component^^}_CHECKOUT"; checkout=${!key}
   key="${component^^}_FLAKE"; flake=${!key}
