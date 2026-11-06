@@ -139,34 +139,38 @@ actual_entrypoint=$(realpath --relative-to="$agni_root" "${BASH_SOURCE[0]}")
 [[ "$declared_entrypoint" == "$actual_entrypoint" ]] || { echo "Plan entrypoint does not match this runner" >&2; exit 2; }
 plan_hash=$(sha256sum "$plan" | awk '{print $1}')
 repo_rev=$(git -C "$agni_root" rev-parse HEAD)
-source "$plan_dir/sources"
-for component in logma skymill; do
-  branch_var="COMPOSITION_${component^^}_BRANCH"
-  rev_var="COMPOSITION_${component^^}_REV"
-  repo=$(plan_read get "components.$component.repository")
-  branch=$(plan_read get "components.$component.branch")
-  revision=$(plan_read get "components.$component.revision")
-  checkout=$(plan_read get "components.$component.checkout")
-  flake=$(plan_read get "components.$component.flake")
-  image=$(plan_read get "components.$component.image")
-  [[ "$checkout" != /* && "$checkout" != *//* ]] || { echo "Invalid $component checkout path in plan" >&2; exit 2; }
+source_manifest="$plan_dir/sources.tsv"
+[[ -r "$source_manifest" ]] || { echo "Missing component source lock: $source_manifest" >&2; exit 2; }
+read_source_pin() {
+  local component=$1 rows repo revision checkout flake image
+  rows=$(awk -F '\t' -v component="$component" '$1 == component { print $2 "\t" $3 "\t" $4; count++ } END { if (count != 1) exit 1 }' "$source_manifest") || {
+    echo "Expected exactly one source pin for $component" >&2; exit 2;
+  }
+  IFS=$'\t' read -r repo revision checkout <<< "$rows"
+  [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid repository pin for $component" >&2; exit 2; }
+  [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid revision pin for $component" >&2; exit 2; }
+  [[ "$checkout" != /* && "$checkout" != *//* ]] || { echo "Invalid checkout path for $component" >&2; exit 2; }
   IFS=/ read -r -a checkout_parts <<< "$checkout"
   for checkout_part in "${checkout_parts[@]}"; do
-    [[ "$checkout_part" =~ ^[A-Za-z0-9_.-]+$ && "$checkout_part" != "." && "$checkout_part" != ".." && "$checkout_part" != ".git" ]] || { echo "Invalid $component checkout path in plan" >&2; exit 2; }
+    [[ "$checkout_part" =~ ^[A-Za-z0-9_.-]+$ && "$checkout_part" != "." && "$checkout_part" != ".." && "$checkout_part" != ".git" ]] || {
+      echo "Invalid checkout path for $component" >&2; exit 2;
+    }
   done
   checkout_root=$(realpath "$workspaces/$checkout")
   checkout_rel=$(realpath --relative-to="$workspaces" "$checkout_root")
   [[ "$checkout_rel" == "$checkout" ]] || { echo "$component checkout resolves outside workspace" >&2; exit 2; }
-  [[ "$branch" == "${!branch_var}" && "$revision" == "${!rev_var}" ]] || {
-    echo "Plan pin mismatch for $component; update the plan and sources together" >&2; exit 2;
+  [[ "$(git -C "$checkout_root" rev-parse HEAD)" == "$revision" ]] || {
+    echo "$component checkout revision differs from source lock" >&2; exit 2;
   }
+  flake=$(plan_read get "components.$component.flake")
+  image=$(plan_read get "components.$component.image")
   printf -v "${component^^}_REPO" '%s' "$repo"
-  printf -v "${component^^}_BRANCH" '%s' "$branch"
   printf -v "${component^^}_REV" '%s' "$revision"
   printf -v "${component^^}_FLAKE" '%s' "$flake"
   printf -v "${component^^}_IMAGE" '%s' "$image"
   printf -v "${component^^}_CHECKOUT" '%s' "$checkout"
-done
+}
+for component in logma skymill; do read_source_pin "$component"; done
 agni_branch=$(plan_read get components.agni.branch)
 [[ "$agni_branch" == "$COMPOSITION_AGNI_BRANCH" ]] || { echo "Plan Agni branch does not match source pin" >&2; exit 2; }
 redis_image=$(plan_read get artifacts.redis.image)
