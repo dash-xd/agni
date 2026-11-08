@@ -219,8 +219,10 @@
         echo '${release}' > "$out/fcos-release"
       '';
     in {
-      packages.${armSystem}.qemuRunner = armRunner;
-      packages.${armSystem}.qcow = armQcow;
+      packages.${armSystem} = {
+        qemuRunner = armRunner;
+        qcow = armQcow;
+      };
       apps.${system}.astrochicken-inputs = {
         type = "app";
         program = "${astrochickenInputs}/bin/agni-astrochicken-inputs";
