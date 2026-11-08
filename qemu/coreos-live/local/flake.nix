@@ -20,6 +20,17 @@
         xz --decompress --stdout "${armCompressedQcow}" > "$out/base.qcow2"
         echo "9e35faa475db9dede69a81fb212cb6b6fe5bd7d753c2bb27df53666a16e445e9  $out/base.qcow2" | sha256sum --check
       '';
+      armTestSSHKey = builtins.getEnv "COREOS_TEST_SSH_PUBLIC_KEY";
+      armValidSSHKey = builtins.match "^ssh-ed25519 [A-Za-z0-9+/=]+$" armTestSSHKey != null;
+      armStarwispIgnition = assert armValidSSHKey; armPkgs.runCommand "starwisp-ignition-aarch64" {
+        nativeBuildInputs = [ armPkgs.butane armPkgs.coreutils ];
+        COREOS_TEST_SSH_PUBLIC_KEY = armTestSSHKey;
+      } ''
+        mkdir -p "$out"
+        substitute ${../profiles/starwisp/butane/starwisp.bu} "$TMPDIR/starwisp.bu" \
+          --replace-fail "@COREOS_TEST_SSH_PUBLIC_KEY@" "$COREOS_TEST_SSH_PUBLIC_KEY"
+        butane --strict --pretty "$TMPDIR/starwisp.bu" > "$out/config.ign"
+      '';
       armQemu = armPkgs.qemu.override { enableBlobs = true; };
       armEntrypoint = armPkgs.writeShellScriptBin "agni-coreos-qemu" ''
         set -euo pipefail
@@ -222,6 +233,7 @@
       packages.${armSystem} = {
         qemuRunner = armRunner;
         qcow = armQcow;
+        ignitionStarwisp = armStarwispIgnition;
       };
       apps.${system}.astrochicken-inputs = {
         type = "app";
