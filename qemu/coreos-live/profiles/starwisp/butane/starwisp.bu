@@ -1,0 +1,19 @@
+variant: fcos
+version: 1.7.0
+passwd:
+  users:
+    - name: wisp
+      groups:
+        - wheel
+      ssh_authorized_keys:
+        - "@COREOS_TEST_SSH_PUBLIC_KEY@"
+storage:
+  files:
+    - path: /var/lib/systemd/linger/wisp
+      mode: 0644
+      contents:
+        inline: ''
+systemd:
+  units:
+    - name: sshd.service
+      enabled: true
