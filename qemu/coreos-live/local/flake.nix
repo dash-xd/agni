@@ -22,12 +22,16 @@
       '';
       armTestSSHKey = builtins.getEnv "COREOS_TEST_SSH_PUBLIC_KEY";
       armValidSSHKey = builtins.match "^ssh-ed25519 [A-Za-z0-9+/=]+$" armTestSSHKey != null;
+      armStarwispSource = builtins.path {
+        path = builtins.toPath (builtins.getEnv "COREOS_STARWISP_BUTANE");
+        name = "starwisp-profile.bu";
+      };
       armStarwispIgnition = assert armValidSSHKey; armPkgs.runCommand "starwisp-ignition-aarch64" {
         nativeBuildInputs = [ armPkgs.butane armPkgs.coreutils ];
         COREOS_TEST_SSH_PUBLIC_KEY = armTestSSHKey;
       } ''
         mkdir -p "$out"
-        substitute ${../profiles/starwisp/butane/starwisp.bu} "$TMPDIR/starwisp.bu" \
+        substitute ${armStarwispSource} "$TMPDIR/starwisp.bu" \
           --replace-fail "@COREOS_TEST_SSH_PUBLIC_KEY@" "$COREOS_TEST_SSH_PUBLIC_KEY"
         butane --strict --pretty "$TMPDIR/starwisp.bu" > "$out/config.ign"
       '';
