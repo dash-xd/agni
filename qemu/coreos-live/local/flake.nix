@@ -30,7 +30,15 @@
             ;;
           run)
             shift
-            exec ${armQemu}/bin/qemu-system-aarch64 -L ${armQemu}/share/qemu "$@"
+            firmware=
+            for candidate in ${armQemu}/share/qemu/edk2-aarch64-code.fd ${armQemu}/share/qemu/QEMU_EFI.fd; do
+              if [ -f "$candidate" ]; then firmware="$candidate"; break; fi
+            done
+            if [ -z "$firmware" ]; then
+              echo 'ARM64 QEMU UEFI firmware is missing from the OCI runner' >&2
+              exit 1
+            fi
+            exec ${armQemu}/bin/qemu-system-aarch64 -L ${armQemu}/share/qemu -bios "$firmware" "$@"
             ;;
           *)
             echo "Usage: agni-coreos-qemu img|run [arguments...]" >&2
