@@ -8,6 +8,18 @@
       system = "x86_64-linux";
       armSystem = "aarch64-linux";
       armPkgs = import nixpkgs { system = armSystem; };
+      armRelease = "44.20261023.3.1";
+      armCompressedQcow = armPkgs.fetchurl {
+        url = "https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/${armRelease}/aarch64/fedora-coreos-${armRelease}-qemu.aarch64.qcow2.xz";
+        sha256 = "b239866503802feabc9cb4ce99e7d1eec18811dd44b9fd33af4a29f8f588978b";
+      };
+      armQcow = armPkgs.runCommand "fedora-coreos-${armRelease}-aarch64-qemu" {
+        nativeBuildInputs = [ armPkgs.xz armPkgs.coreutils ];
+      } ''
+        mkdir -p "$out"
+        xz --decompress --stdout "${armCompressedQcow}" > "$out/base.qcow2"
+        echo "9e35faa475db9dede69a81fb212cb6b6fe5bd7d753c2bb27df53666a16e445e9  $out/base.qcow2" | sha256sum --check
+      '';
       armQemu = armPkgs.qemu;
       armEntrypoint = armPkgs.writeShellScriptBin "agni-coreos-qemu" ''
         set -euo pipefail
@@ -28,7 +40,7 @@
       '';
       armRunner = armPkgs.dockerTools.buildLayeredImage {
         name = "localhost/agni-coreos-qemu-runner";
-        tag = "${release}-aarch64";
+        tag = "${armRelease}-aarch64";
         created = "1970-01-01T00:00:01Z";
         contents = [ armEntrypoint armQemu ];
         config.Entrypoint = [ "${armEntrypoint}/bin/agni-coreos-qemu" ];
@@ -200,6 +212,7 @@
       '';
     in {
       packages.${armSystem}.qemuRunner = armRunner;
+      packages.${armSystem}.qcow = armQcow;
       apps.${system}.astrochicken-inputs = {
         type = "app";
         program = "${astrochickenInputs}/bin/agni-astrochicken-inputs";
