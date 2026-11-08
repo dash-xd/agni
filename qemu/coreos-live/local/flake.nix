@@ -26,15 +26,21 @@
         path = builtins.toPath (builtins.getEnv "COREOS_STARWISP_BUTANE");
         name = "starwisp-profile.bu";
       };
-      armStarwispIgnition = assert armValidSSHKey; armPkgs.runCommand "starwisp-ignition-aarch64" {
+      armStarwisp9pSource = builtins.path {
+        path = builtins.toPath (builtins.getEnv "COREOS_STARWISP_9P_BUTANE");
+        name = "starwisp-9p-profile.bu";
+      };
+      mkArmStarwispIgnition = name: source: assert armValidSSHKey; armPkgs.runCommand name {
         nativeBuildInputs = [ armPkgs.butane armPkgs.coreutils ];
         COREOS_TEST_SSH_PUBLIC_KEY = armTestSSHKey;
       } ''
         mkdir -p "$out"
-        substitute ${armStarwispSource} "$TMPDIR/starwisp.bu" \
+        substitute ${source} "$TMPDIR/starwisp.bu" \
           --replace-fail "@COREOS_TEST_SSH_PUBLIC_KEY@" "$COREOS_TEST_SSH_PUBLIC_KEY"
         butane --strict --pretty "$TMPDIR/starwisp.bu" > "$out/config.ign"
       '';
+      armStarwispIgnition = mkArmStarwispIgnition "starwisp-ignition-aarch64" armStarwispSource;
+      armStarwisp9pIgnition = mkArmStarwispIgnition "starwisp-9p-ignition-aarch64" armStarwisp9pSource;
       armQemu = armPkgs.qemu.override { enableBlobs = true; };
       armEntrypoint = armPkgs.writeShellScriptBin "agni-coreos-qemu" ''
         set -euo pipefail
@@ -43,7 +49,8 @@
             shift
             exec ${armQemu}/bin/qemu-img "$@"
             ;;
-          run)
+          run|run-shared-nix)
+            mode="$1"
             shift
             firmware=
             for candidate in ${armQemu}/share/qemu/edk2-aarch64-code.fd ${armQemu}/share/qemu/QEMU_EFI.fd; do
@@ -53,10 +60,22 @@
               echo 'ARM64 QEMU UEFI firmware is missing from the OCI runner' >&2
               exit 1
             fi
-            exec ${armQemu}/bin/qemu-system-aarch64 -L ${armQemu}/share/qemu -bios "$firmware" "$@"
+            fs_args=()
+            if [ "$mode" = run-shared-nix ]; then
+              test -d /host-nix/store || {
+                echo 'Missing read-only Nix store volume at /host-nix/store' >&2
+                exit 1
+              }
+              fs_args=(
+                -fsdev local,id=nixstore,path=/host-nix/store,security_model=none,readonly=on
+                -device virtio-9p-pci,fsdev=nixstore,mount_tag=nixstore
+              )
+            fi
+            exec ${armQemu}/bin/qemu-system-aarch64 -L ${armQemu}/share/qemu \
+              -bios "$firmware" "''${fs_args[@]}" "$@"
             ;;
           *)
-            echo "Usage: agni-coreos-qemu img|run [arguments...]" >&2
+            echo "Usage: agni-coreos-qemu img|run|run-shared-nix [arguments...]" >&2
             exit 2
             ;;
         esac
@@ -238,6 +257,7 @@
         qemuRunner = armRunner;
         qcow = armQcow;
         ignitionStarwisp = armStarwispIgnition;
+        ignitionStarwisp9p = armStarwisp9pIgnition;
       };
       apps.${system}.astrochicken-inputs = {
         type = "app";
