@@ -6,6 +6,33 @@
   outputs = { self, nixpkgs }:
     let
       system = "x86_64-linux";
+      armSystem = "aarch64-linux";
+      armPkgs = import nixpkgs { system = armSystem; };
+      armQemu = armPkgs.qemu;
+      armEntrypoint = armPkgs.writeShellScriptBin "agni-coreos-qemu" ''
+        set -euo pipefail
+        case "''${1:-}" in
+          img)
+            shift
+            exec ${armQemu}/bin/qemu-img "$@"
+            ;;
+          run)
+            shift
+            exec ${armQemu}/bin/qemu-system-aarch64 -L ${armQemu}/share/qemu "$@"
+            ;;
+          *)
+            echo "Usage: agni-coreos-qemu img|run [arguments...]" >&2
+            exit 2
+            ;;
+        esac
+      '';
+      armRunner = armPkgs.dockerTools.buildLayeredImage {
+        name = "localhost/agni-coreos-qemu-runner";
+        tag = "${release}-aarch64";
+        created = "1970-01-01T00:00:01Z";
+        contents = [ armEntrypoint armQemu ];
+        config.Entrypoint = [ "${armEntrypoint}/bin/agni-coreos-qemu" ];
+      };
       pkgs = import nixpkgs { inherit system; };
       release = "44.20261012.3.1";
       astrochickenInputs = pkgs.writeShellApplication {
@@ -172,6 +199,7 @@
         echo '${release}' > "$out/fcos-release"
       '';
     in {
+      packages.${armSystem}.qemuRunner = armRunner;
       apps.${system}.astrochicken-inputs = {
         type = "app";
         program = "${astrochickenInputs}/bin/agni-astrochicken-inputs";
