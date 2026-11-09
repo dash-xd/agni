@@ -20,7 +20,6 @@ systemd:
       contents: |
         [Unit]
         Description=Read-only shared Nix store via QEMU VirtIO 9P
-        After=local-fs.target
         Before=multi-user.target
 
         [Mount]
