@@ -28,6 +28,13 @@ func bootstrapProfile() ratelimiter.Profile {
 	return lifecycle.New(ratelimiter.TargetResolverFunc(func(ratelimiter.Input, ratelimiter.Stage) []ratelimiter.Target { return nil }))
 }
 
+func readinessResponse(status int, contentType string, data []byte) error {
+	if status != http.StatusOK || strings.TrimSpace(strings.Split(contentType, ";")[0]) != "text/plain" || strings.TrimSpace(string(data)) != "ready" {
+		return fmt.Errorf("unexpected lifecycle readiness response: status=%d", status)
+	}
+	return nil
+}
+
 func execute() error {
 	if len(os.Args) != 3 {
 		return errors.New("mode and scope required")
@@ -113,6 +120,9 @@ func execute() error {
 		}
 		if response.StatusCode != 200 {
 			return nil, fmt.Errorf("HTTP status %d: %s", response.StatusCode, string(data))
+		}
+		if method == "GET" && strings.HasSuffix(url, "/lifecycle/readyz") {
+			return nil, readinessResponse(response.StatusCode, response.Header.Get("Content-Type"), data)
 		}
 		var result map[string]any
 		e = json.Unmarshal(data, &result)

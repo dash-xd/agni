@@ -21,3 +21,21 @@ func TestBootstrapProfileSatisfiesLifecycleContract(t *testing.T) {
 		t.Fatalf("bootstrap profile rejected: %v", err)
 	}
 }
+
+func TestReadinessUsesLogmaPlainTextContract(t *testing.T) {
+	for _, test := range []struct {
+		status            int
+		contentType, body string
+		valid             bool
+	}{
+		{200, "text/plain; charset=utf-8", "ready\n", true},
+		{503, "text/plain", "not ready\n", false},
+		{200, "text/plain", "not ready\n", false},
+		{200, "application/json", "{}", false},
+	} {
+		err := readinessResponse(test.status, test.contentType, []byte(test.body))
+		if (err == nil) != test.valid {
+			t.Fatalf("status=%d body=%q: %v", test.status, test.body, err)
+		}
+	}
+}
