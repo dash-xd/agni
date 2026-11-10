@@ -115,22 +115,22 @@ UNIT
     ;;
   check|publish)
     # A short-lived approved Unix client receives only its own credential files.
-    podman run --rm --pull=never --rootfs "$base/rootfs" --network none \
+    podman run --rm --pull=never --network none \
       --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
       --read-only --read-only-tmpfs=false --security-opt label=disable --cap-drop all --security-opt no-new-privileges \
       --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
       --mount "type=bind,src=$base/socket,dst=/run/redis,ro" \
       --mount "type=bind,src=$base/credentials/publisher,dst=/run/credentials/publisher,ro" \
       --mount "type=bind,src=$base/credentials/publisher.json,dst=/run/credentials/publisher.json,ro" \
-      "$client" --mode "$action" --config /run/credentials/publisher.json
+      --rootfs "$base/rootfs" "$client" --mode "$action" --config /run/credentials/publisher.json
     if [[ "$action" == check ]]; then
       # This UID is mapped to a different subordinate host UID; credentials are not needed.
-      podman run --rm --pull=never --rootfs "$base/rootfs" --network none \
+      podman run --rm --pull=never --network none \
         --userns keep-id:uid=1000,gid=1000 --user 1001:1001 \
         --read-only --read-only-tmpfs=false --security-opt label=disable --cap-drop all --security-opt no-new-privileges \
         --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
         --mount "type=bind,src=$base/socket,dst=/run/redis,ro" \
-        "$client" --mode deny-socket --socket /run/redis/redis.sock
+        --rootfs "$base/rootfs" "$client" --mode deny-socket --socket /run/redis/redis.sock
       # Client and proxy mounts must never contain the Redis ACL credential directory.
       mounts="$(podman inspect "$scope-nginx" --format '{{range .Mounts}}{{println .Destination}}{{end}}')"
       ! grep -Eq '^/run/credentials(/|$)' <<< "$mounts"

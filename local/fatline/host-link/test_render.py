@@ -50,6 +50,18 @@ class Policy(unittest.TestCase):
         self.assertIn('--mode deny-socket', source)
         self.assertIn('NoNewPrivileges=true', source)
 
+    def test_rootfs_operand_follows_all_container_options(self):
+        import shlex
+        source = (HERE / 'guest.sh').read_text().replace('\\\n', ' ')
+        commands = [shlex.split(line.strip()) for line in source.splitlines()
+                    if line.strip().startswith('podman run ')]
+        self.assertEqual(len(commands), 2)
+        for command in commands:
+            rootfs = command.index('--rootfs')
+            self.assertEqual(command[rootfs + 1], '$base/rootfs')
+            self.assertEqual(command[rootfs + 2], '$client')
+            self.assertLess(command.index('--network'), rootfs)
+
 
 if __name__ == '__main__':
     unittest.main()
