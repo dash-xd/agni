@@ -72,13 +72,33 @@ func execute() error {
 	if mode == "dispatch" {
 		return resourceDispatch(ctx, scope)
 	}
-	if mode == "bootstrap" {
+	if mode == "bootstrap" || mode == "bootstrap-denied" {
 		pass, e := secret("/run/credentials/redis")
 		if e != nil {
 			return e
 		}
 		client := redis.NewClient(&redis.Options{Network: "unix", Addr: "/run/redis/redis.sock", Username: "bootstrap", Password: pass, Protocol: 2, DialTimeout: 10 * time.Second, ReadTimeout: 10 * time.Second})
 		defer client.Close()
+		if mode == "bootstrap-denied" {
+			if e = client.Ping(ctx).Err(); e == nil || !strings.Contains(e.Error(), "WRONGPASS") {
+				return errors.New("bootstrap identity is not revoked")
+			}
+			fmt.Println("FATLINE_BOOTSTRAP_REVOCATION=passed")
+			return nil
+		}
+		for {
+			if e = client.Ping(ctx).Err(); e == nil {
+				break
+			}
+			if strings.Contains(e.Error(), "WRONGPASS") {
+				return errors.New("bootstrap authentication rejected")
+			}
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("Redis bootstrap readiness: %w", e)
+			case <-time.After(time.Second):
+			}
+		}
 		store, e := ratelimiter.NewRedisStore(client, ratelimiter.RedisConfig{Keyspace: scope + ":logma:lifecycle"})
 		if e != nil {
 			return e

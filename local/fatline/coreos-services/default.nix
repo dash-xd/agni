@@ -27,6 +27,7 @@ let
 in pkgs.runCommand "agni-coreos-fatline-services-v1" {} ''
  mkdir -p "$out"
  cp ${./guest.sh} "$out/guest.sh"
+ cp ${./recovery.sh} "$out/recovery.sh"
  cp ${./render.py} "$out/render.py"
  cp ${../acl-policy.json} "$out/acl-policy.json"
  cp ${../scripts/render-users-acl.py} "$out/render-users-acl.py"
