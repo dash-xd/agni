@@ -36,33 +36,8 @@ status() {
   [[ "$(sha256sum "$base/credentials/users.acl" | awk '{print $1}')" == "$new_acl_digest" ]]
   echo 'FATLINE_SERVICES_STATUS=passed private_http=true'
 }
-case "$action" in
-  activate)
-    if [[ -f "$apps/active" ]]; then status; echo FATLINE_SERVICES_ACTIVATED=reused; exit 0; fi
-    current="$(sha256sum "$base/credentials/users.acl" | awk '{print $1}')"
-    [[ "$current" == "$old_acl_digest" || "$current" == "$new_acl_digest" ]]
-    [[ "$(sha256sum "$incoming/users.acl" | awk '{print $1}')" == "$new_acl_digest" ]]
-    mkdir -p "$apps/rootfs" "$apps/state/logma" "$apps/credentials"
-    chmod 700 "$apps/state" "$apps/state/logma" "$apps/credentials"
-    if [[ ! -x "$apps/rootfs/bin/busybox" ]]; then tar --no-same-owner -xpf "/var/mnt/nixstore/${archive#/nix/store/}" -C "$apps/rootfs"; fi
-    mkdir -p "$apps/rootfs/run/redis" "$apps/rootfs/run/credentials" "$apps/rootfs/var/lib/logma/lifecycle"
-    cp -R "$incoming/logma" "$incoming/skymill" "$incoming/bootstrap" "$apps/credentials/"
-    chmod 700 "$apps/credentials/"{logma,skymill,bootstrap}
-    chmod 600 "$apps/credentials/"{logma,skymill,bootstrap}/*
-    # Activation adds ACL identities; the existing ephemeral Redis must restart once.
-    systemctl --user stop "$scope-nginx.service" "$scope-redis.service"
-    cp "$incoming/users.acl" "$base/credentials/users.acl"
-    chmod 600 "$base/credentials/users.acl"
-    systemctl --user start "$scope-redis.service" "$scope-nginx.service"
-    for ((i=0;i<60;i++)); do [[ -S "$base/socket/redis.sock" ]] && break; sleep 1; done
-    podman run --rm --pull=never --network none \
-      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
-      --read-only --read-only-tmpfs=false --security-opt label=disable --cap-drop all --security-opt no-new-privileges \
-      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
-      --mount "type=bind,src=$base/socket,dst=/run/redis,ro" \
-      --mount "type=bind,src=$apps/credentials/bootstrap,dst=/run/credentials,ro" \
-      --rootfs "$apps/rootfs" "$probe" bootstrap "$scope"
-    for role in logma skymill; do
+write_units() {
+    for role in "$@"; do
       executable="$logma"; [[ "$role" != skymill ]] || executable="$skymill"
       cat > "$units/$scope-$role.container" <<UNIT
 [Unit]
@@ -93,10 +68,12 @@ Environment=REDIS_NETWORK=unix
 Environment=REDIS_SOCKET=/run/redis/redis.sock
 Environment=REDIS_URI=unix:///run/redis/redis.sock
 Environment=REDIS_USERNAME=logma
+Environment=PUBSUB_RESOURCE_REDIS_URI=redis-proxy:6379
+Environment=PUBSUB_RESOURCE_REDIS_USERNAME=logma
 Environment=LOGMA_RATELIMITER_BOOTSTRAP=external
 Environment=LOGMA_LIFECYCLE_STATE_DIR=/var/lib/logma/lifecycle
 Environment=LOGMA_BIND_ADDR=0.0.0.0
-Exec=/bin/sh -ec 'export REDISCLI_AUTH="\$(/bin/busybox cat /run/credentials/redis)"; export API_KEY="\$(/bin/busybox cat /run/credentials/api-key)"; exec "$executable"'
+Exec=/bin/sh -ec 'export REDISCLI_AUTH="\$(/bin/busybox cat /run/credentials/redis)"; export PUBSUB_RESOURCE_REDIS_PASSWORD="\$(/bin/busybox cat /run/credentials/redis)"; export API_KEY="\$(/bin/busybox cat /run/credentials/api-key)"; exec "$executable"'
 UNIT
       else
         cat >> "$units/$scope-$role.container" <<UNIT
@@ -117,11 +94,57 @@ TimeoutStartSec=180
 WantedBy=default.target
 UNIT
     done
+}
+case "$action" in
+  activate)
+    if [[ -f "$apps/active" ]]; then status; echo FATLINE_SERVICES_ACTIVATED=reused; exit 0; fi
+    current="$(sha256sum "$base/credentials/users.acl" | awk '{print $1}')"
+    [[ "$current" == "$old_acl_digest" || "$current" == "$new_acl_digest" ]]
+    [[ "$(sha256sum "$incoming/users.acl" | awk '{print $1}')" == "$new_acl_digest" ]]
+    mkdir -p "$apps/rootfs" "$apps/state/logma" "$apps/credentials"
+    chmod 700 "$apps/state" "$apps/state/logma" "$apps/credentials"
+    if [[ ! -x "$apps/rootfs/bin/busybox" ]]; then tar --no-same-owner -xpf "/var/mnt/nixstore/${archive#/nix/store/}" -C "$apps/rootfs"; fi
+    mkdir -p "$apps/rootfs/run/redis" "$apps/rootfs/run/credentials" "$apps/rootfs/var/lib/logma/lifecycle"
+    cp -R "$incoming/logma" "$incoming/skymill" "$incoming/bootstrap" "$apps/credentials/"
+    chmod 700 "$apps/credentials/"{logma,skymill,bootstrap}
+    chmod 600 "$apps/credentials/"{logma,skymill,bootstrap}/*
+    # Activation adds ACL identities; the existing ephemeral Redis must restart once.
+    systemctl --user stop "$scope-nginx.service" "$scope-redis.service"
+    cp "$incoming/users.acl" "$base/credentials/users.acl"
+    chmod 600 "$base/credentials/users.acl"
+    systemctl --user start "$scope-redis.service" "$scope-nginx.service"
+    for ((i=0;i<60;i++)); do [[ -S "$base/socket/redis.sock" ]] && break; sleep 1; done
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$base/socket,dst=/run/redis,ro" \
+      --mount "type=bind,src=$apps/credentials/bootstrap,dst=/run/credentials,ro" \
+      --rootfs "$apps/rootfs" "$probe" bootstrap "$scope"
+    write_units logma skymill
     systemctl --user daemon-reload
     systemctl --user start "$scope-logma.service" "$scope-skymill.service"
     status
     touch "$apps/active"
     echo FATLINE_SERVICES_ACTIVATED=passed
+    ;;
+  configure-logma)
+    test -f "$apps/active"
+    peers_before="$(podman inspect "$scope-redis" "$scope-nginx" "$scope-skymill" --format '{{.Id}}')"
+    logma_before="$(podman inspect "$scope-logma" --format '{{.Id}}')"
+    write_units logma
+    systemctl --user daemon-reload
+    systemctl --user restart "$scope-logma.service"
+    status
+    [[ "$(podman inspect "$scope-redis" "$scope-nginx" "$scope-skymill" --format '{{.Id}}')" == "$peers_before" ]]
+    [[ "$(podman inspect "$scope-logma" --format '{{.Id}}')" != "$logma_before" ]]
+    podman run --rm --pull=never --network "nix-xd-$scope" \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$apps/credentials/logma,dst=/run/credentials,ro" \
+      --rootfs "$apps/rootfs" "$probe" resource-ready "$scope"
+    echo FATLINE_LOGMA_CONFIGURED=passed peers=unchanged
     ;;
   qualify)
     status

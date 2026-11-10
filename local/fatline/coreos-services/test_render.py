@@ -42,5 +42,17 @@ class RuntimePolicy(unittest.TestCase):
         self.assertIn('Environment=REDIS_URI=unix:///run/redis/redis.sock', script)
         self.assertIn('Environment=REDIS_PASSWORD_FILE=/run/credentials/redis', script)
         self.assertNotIn('PublishPort=', script)
+        self.assertIn('Environment=PUBSUB_RESOURCE_REDIS_URI=redis-proxy:6379', script)
+        self.assertIn('Environment=PUBSUB_RESOURCE_REDIS_USERNAME=logma', script)
+        self.assertIn('export PUBSUB_RESOURCE_REDIS_PASSWORD=', script)
+
+    def test_live_configuration_restarts_only_logma(self):
+        source = (HERE/'guest.sh').read_text()
+        action = source.split('  configure-logma)',1)[1].split('  qualify)',1)[0]
+        self.assertIn('write_units logma\n',action)
+        self.assertIn('systemctl --user restart "$scope-logma.service"',action)
+        self.assertNotIn('systemctl --user stop',action)
+        self.assertIn('"$peers_before"',action)
+        self.assertIn('resource-ready',action)
 
 if __name__ == '__main__': unittest.main()

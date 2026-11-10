@@ -66,6 +66,9 @@ func execute() error {
 		fmt.Println("FATLINE_SERVICE_ACL=passed role=" + role)
 		return nil
 	}
+	if mode == "resource-ready" {
+		return resourceReadiness(ctx)
+	}
 	if mode == "dispatch" {
 		return resourceDispatch(ctx, scope)
 	}

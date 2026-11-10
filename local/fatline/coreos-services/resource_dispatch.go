@@ -165,3 +165,36 @@ func resourceDispatch(ctx context.Context, scope string) (result error) {
 	fmt.Println("LOGMA_RESOURCE_DISPATCH=passed")
 	return nil
 }
+
+func resourceReadiness(ctx context.Context) error {
+	key, err := secret("/run/credentials/api-key")
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	var last error
+	for {
+		request, err := http.NewRequestWithContext(ctx, "GET", "http://logma:8080/pubsub/channels", nil)
+		if err != nil {
+			return err
+		}
+		request.Header.Set("X-API-Key", key)
+		response, err := client.Do(request)
+		if err == nil {
+			data, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+			response.Body.Close()
+			if response.StatusCode == http.StatusOK && readErr == nil && json.Valid(data) {
+				fmt.Println("LOGMA_RESOURCE_API_READY=passed")
+				return nil
+			}
+			last = fmt.Errorf("resource API HTTP status %d", response.StatusCode)
+		} else {
+			last = err
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("resource API readiness: %w", last)
+		case <-time.After(time.Second):
+		}
+	}
+}
