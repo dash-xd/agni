@@ -44,6 +44,8 @@ class Policy(unittest.TestCase):
         self.assertIn('Volume=$base/socket:/run/redis:ro', nginx)
         self.assertNotIn('/run/credentials', nginx)
         self.assertIn('Network=none', source)
+        self.assertIn('Internal=true', source)
+        self.assertIn('Network=$scope.network', source)
         self.assertIn('--user 1001:1001', source)
         self.assertIn('--mode deny-socket', source)
         self.assertIn('NoNewPrivileges=true', source)

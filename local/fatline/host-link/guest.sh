@@ -31,6 +31,13 @@ case "$action" in
     chmod 600 "$base/credentials/"*
     [[ "$(sha256sum "$base/credentials/users.acl" | awk '{print $1}')" == "$acl_digest" ]]
     cp "$incoming/redis.conf" "$incoming/nginx.conf" "$base/config/"
+    network="$units/$scope.network"
+    [[ ! -e "$network" ]] || { echo 'Refusing an existing network unit' >&2; exit 1; }
+    cat > "$network" <<UNIT
+[Network]
+NetworkName=nix-xd-$scope
+Internal=true
+UNIT
     for role in redis nginx; do
       file="$units/$scope-$role.container"
       [[ ! -e "$file" ]] || { echo 'Refusing to overwrite an existing unit' >&2; exit 1; }
@@ -60,7 +67,8 @@ Exec=$redis/bin/redis-server /etc/redis.conf
 UNIT
       else
         cat >> "$file" <<UNIT
-Network=private
+Network=$scope.network
+NetworkAlias=redis-proxy
 PublishPort=127.0.0.1:$port:6379
 Volume=$base/socket:/run/redis:ro
 Volume=$base/config/nginx.conf:/etc/nginx.conf:ro
@@ -96,6 +104,7 @@ UNIT
       test "$(podman inspect "$scope-$role" --format '{{.State.Running}}')" = true
     done
     stat -c 'SOCKET_MODE=%a OWNER=%u GROUP=%g' "$base/socket/redis.sock"
+    [[ "$(podman network inspect "nix-xd-$scope" --format '{{.Internal}}')" == true ]]
     [[ "$(podman port "$scope-nginx" 6379/tcp)" == "127.0.0.1:$port" ]]
     [[ "$(podman inspect "$scope-redis" --format '{{.HostConfig.NetworkMode}}')" == none ]]
     [[ "$(stat -c %u "$base/socket/redis.sock")" == "$(id -u)" ]]
