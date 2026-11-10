@@ -17,6 +17,7 @@
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in {
+          host-link-vm1 = import ./host-link { inherit pkgs; };
           # Composition-owned runtime images; Nix-Alpine supplies only the build/runtime toolchain.
           redis-image = pkgs.dockerTools.buildLayeredImage {
             name = "localhost/fatline-redis";
