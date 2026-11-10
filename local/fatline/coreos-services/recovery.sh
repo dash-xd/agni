@@ -28,7 +28,27 @@ bootstrap_container() {
     --mount "type=bind,src=$apps/credentials/bootstrap,dst=/run/credentials,ro" \
     --rootfs "$apps/rootfs" "$probe" "$1" "$scope"
 }
+check_graph() {
+  local role property dependency
+  for role in redis nginx logma skymill; do
+    [[ $(systemctl --user show "$scope-$role.service" -p LoadState --value) == loaded ]]
+    if [[ "$role" != redis ]]; then
+      for property in Requires After PartOf; do
+        systemctl --user show "$scope-$role.service" -p "$property" --value |
+          tr ' ' '\n' | grep -Fxq "$scope-redis.service"
+      done
+    fi
+  done
+  for property in Requires After; do
+    systemctl --user show "$scope-logma.service" -p "$property" --value |
+      tr ' ' '\n' | grep -Fxq "$scope-nginx.service"
+  done
+  systemctl --user show "$scope-redis.service" -p ExecStartPre --value | grep -Fq "service-prepare $scope $probe"
+  systemctl --user show "$scope-redis.service" -p ExecStartPost --value | grep -Fq "service-bootstrap $scope $probe"
+  systemctl --user show "$scope-redis.service" -p ExecStopPost --value | grep -Fq "service-stop $scope $probe"
+}
 case "$action" in
+  graph-check) check_graph ;;
   service-prepare)
     umask 077
     install -d -m 700 "$runtime"
@@ -89,7 +109,7 @@ UNIT
       fi
     done
     systemctl --user daemon-reload
-    systemd-analyze --user verify "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
+    check_graph
     echo FATLINE_RESTART_GRAPH=installed runtime=unchanged
     ;;
   qualify)

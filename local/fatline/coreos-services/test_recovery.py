@@ -44,6 +44,29 @@ class BootstrapTransaction(unittest.TestCase):
                 run('service-prepare')
                 self.assertIn('user bootstrap on', (runtime / 'users.acl').read_text())
 
+    def test_live_graph_rejects_missing_restart_relationship(self):
+        with tempfile.TemporaryDirectory() as directory:
+            commands = Path(directory)
+            for name, source in {
+                'id':'echo 1001',
+                'findmnt':'case "$*" in *FSTYPE*) echo 9p;; *) echo ro;; esac',
+                'systemctl': '''case "$*" in
+*LoadState*) echo loaded;;
+*ExecStartPre*) echo "service-prepare test $PROBE";;
+*ExecStartPost*) echo "service-bootstrap test $PROBE";;
+*ExecStopPost*) echo "service-stop test $PROBE";;
+*PartOf*) [ "${MISSING_EDGE:-0}" = 1 ] || echo test-redis.service;;
+*) echo 'test-redis.service test-nginx.service';;
+esac''',
+            }.items():
+                path = commands / name
+                path.write_text('#!/bin/sh\n' + source + '\n'); path.chmod(0o700)
+            env = dict(os.environ, HOME=directory, PATH=directory+':'+os.environ['PATH'], PROBE=PROBE)
+            command = ['bash', str(SCRIPT), 'graph-check', 'test', PROBE]
+            self.assertEqual(subprocess.run(command, env=env, capture_output=True).returncode, 0)
+            env['MISSING_EDGE'] = '1'
+            self.assertNotEqual(subprocess.run(command, env=env, capture_output=True).returncode, 0)
+
     def test_success_revokes_runtime_and_file(self): self.exercise()
     def test_failed_bootstrap_revokes_file_and_never_marks_ready(self): self.exercise(fail=True)
 
