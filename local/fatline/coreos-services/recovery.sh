@@ -50,8 +50,31 @@ check_graph() {
   systemctl --user show "$scope-redis.service" -p ExecStartPost --value | grep -Fq "service-bootstrap $scope $probe"
   systemctl --user show "$scope-redis.service" -p ExecStopPost --value | grep -Fq "service-stop $scope $probe"
 }
+wait_ready() {
+  local role state job ready deadline=$((SECONDS + 180))
+  while (( SECONDS < deadline )); do
+    ready=1
+    for role in redis nginx logma skymill; do
+      state=$(systemctl --user show "$scope-$role.service" -p ActiveState --value)
+      case "$state" in
+        active) ;;
+        activating|reloading|deactivating) ready=0 ;;
+        inactive)
+          job=$(systemctl --user show "$scope-$role.service" -p Job --value)
+          [[ "$job" =~ ^[1-9][0-9]* ]] || { echo "Restart propagation missing: $scope-$role.service" >&2; return 1; }
+          ready=0 ;;
+        *) echo "Restart unit failed: $scope-$role.service state=$state" >&2; return 1 ;;
+      esac
+    done
+    if (( ready == 1 )); then echo FATLINE_RESTART_CONSUMERS=ready; return 0; fi
+    sleep 2
+  done
+  echo 'Restart readiness timed out after 180 seconds' >&2
+  return 1
+}
 case "$action" in
   graph-check) check_graph ;;
+  wait-ready) wait_ready ;;
   service-prepare)
     umask 077
     install -d -m 700 "$runtime"
@@ -158,6 +181,7 @@ UNIT
     before=$after
     cp "$apps/restart-after.ids" "$apps/restart-before.ids"
     systemctl --user restart "$scope-redis.service"
+    wait_ready
     after=$(systemctl --user show "$scope-redis.service" -p InvocationID --value)
     [[ -n "$after" && "$after" != "$before" && $(cat "$runtime/ready") == "$after" ]]
     [[ $(cat /proc/sys/kernel/random/boot_id) == "$boot" ]]

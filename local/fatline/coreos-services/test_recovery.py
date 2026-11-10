@@ -67,6 +67,37 @@ esac''',
             env['MISSING_EDGE'] = '1'
             self.assertNotEqual(subprocess.run(command, env=env, capture_output=True).returncode, 0)
 
+    def test_restart_waits_for_pending_consumers_without_starting_them(self):
+        with tempfile.TemporaryDirectory() as directory:
+            commands = Path(directory)
+            for name, source in {
+                'id':'echo 1001',
+                'findmnt':'case "$*" in *FSTYPE*) echo 9p;; *) echo ro;; esac',
+                'sleep':':',
+                'systemctl': '''printf '%s\n' "$*" >> "$HOME/calls"
+case "$*" in
+*Job*) exit 0;;
+*nginx*)
+  if [ "${BROKEN:-0}" = 1 ]; then echo inactive
+  elif [ -f "$HOME/pending" ]; then rm "$HOME/pending"; echo activating
+  else echo active; fi;;
+*) echo active;;
+esac''',
+            }.items():
+                path = commands / name
+                path.write_text('#!/bin/sh\n' + source + '\n'); path.chmod(0o700)
+            env = dict(os.environ, HOME=directory, PATH=directory+':'+os.environ['PATH'])
+            command = ['bash', str(SCRIPT), 'wait-ready', 'test', PROBE]
+            (commands / 'pending').touch()
+            result = subprocess.run(command, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((commands / 'pending').exists())
+            self.assertNotIn('--user start', (commands / 'calls').read_text())
+            env['BROKEN'] = '1'
+            result = subprocess.run(command, env=env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Restart propagation missing', result.stderr)
+
     def test_success_revokes_runtime_and_file(self): self.exercise()
     def test_failed_bootstrap_revokes_file_and_never_marks_ready(self): self.exercise(fail=True)
 
