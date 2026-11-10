@@ -45,7 +45,7 @@ case "$action" in
     mkdir -p "$apps/rootfs" "$apps/state/logma" "$apps/credentials"
     chmod 700 "$apps/state" "$apps/state/logma" "$apps/credentials"
     if [[ ! -x "$apps/rootfs/bin/busybox" ]]; then tar --no-same-owner -xpf "/var/mnt/nixstore/${archive#/nix/store/}" -C "$apps/rootfs"; fi
-    mkdir -p "$apps/rootfs/run/credentials" "$apps/rootfs/var/lib/logma/lifecycle"
+    mkdir -p "$apps/rootfs/run/redis" "$apps/rootfs/run/credentials" "$apps/rootfs/var/lib/logma/lifecycle"
     cp -R "$incoming/logma" "$incoming/skymill" "$incoming/bootstrap" "$apps/credentials/"
     chmod 700 "$apps/credentials/"{logma,skymill,bootstrap}
     chmod 600 "$apps/credentials/"{logma,skymill,bootstrap}/*
