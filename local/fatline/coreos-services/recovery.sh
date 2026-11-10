@@ -18,8 +18,11 @@ revoke_file() {
   chmod 600 "$temporary"
   mv -f "$temporary" "$runtime/users.acl"
 }
+aux_podman() {
+  env -u NOTIFY_SOCKET -u PODMAN_SYSTEMD_UNIT -u LISTEN_PID -u LISTEN_FDS -u LISTEN_FDNAMES podman "$@"
+}
 bootstrap_container() {
-  podman run --rm --pull=never --name "$scope-bootstrap" --network none \
+  aux_podman run --sdnotify=ignore --rm --pull=never --name "$scope-bootstrap" --network none \
     --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
     --read-only --read-only-tmpfs=false --security-opt label=disable \
     --cap-drop all --security-opt no-new-privileges \
@@ -33,7 +36,7 @@ check_graph() {
   for role in redis nginx logma skymill; do
     [[ $(systemctl --user show "$scope-$role.service" -p LoadState --value) == loaded ]]
     if [[ "$role" != redis ]]; then
-      for property in Requires After PartOf; do
+      for property in Requires After PartOf BindsTo; do
         systemctl --user show "$scope-$role.service" -p "$property" --value |
           tr ' ' '\n' | grep -Fxq "$scope-redis.service"
       done
@@ -67,7 +70,7 @@ case "$action" in
     echo FATLINE_REDIS_STARTUP=passed bootstrap=revoked
     ;;
   service-stop)
-    podman rm -f --ignore "$scope-bootstrap" >/dev/null
+    aux_podman rm -f --ignore "$scope-bootstrap" >/dev/null
     revoke_file
     rm -f "$runtime/ready"
     ;;
@@ -100,6 +103,7 @@ UNIT
 Requires=$scope-redis.service
 After=$scope-redis.service
 PartOf=$scope-redis.service
+BindsTo=$scope-redis.service
 UNIT
       if [[ "$role" == logma ]]; then
         cat >> "$units/$scope-$role.container.d/30-bootstrap.conf" <<UNIT
@@ -111,6 +115,20 @@ UNIT
     systemctl --user daemon-reload
     check_graph
     echo FATLINE_RESTART_GRAPH=installed runtime=unchanged
+    ;;
+  recover)
+    exec 9>"$base/lifecycle.lock"; flock -x 9
+    check_graph
+    echo FATLINE_RESTART_RECOVERY=starting
+    systemctl --user stop "$scope-logma.service" "$scope-skymill.service" "$scope-nginx.service"
+    systemctl --user reset-failed "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
+    systemctl --user start "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
+    invocation=$(systemctl --user show "$scope-redis.service" -p InvocationID --value)
+    [[ -n "$invocation" && $(cat "$runtime/ready") == "$invocation" ]]
+    grep -Fxq 'user bootstrap reset off' "$runtime/users.acl"
+    bootstrap_container bootstrap-denied
+    for role in redis nginx logma skymill; do systemctl --user is-active --quiet "$scope-$role.service"; done
+    echo FATLINE_RESTART_RECOVERED=passed
     ;;
   qualify)
     exec 9>"$base/lifecycle.lock"; flock -x 9

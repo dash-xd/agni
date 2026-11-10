@@ -16,14 +16,14 @@ class BootstrapTransaction(unittest.TestCase):
             for name, source in {
                 'id':'echo 1001',
                 'findmnt':'case "$*" in *FSTYPE*) echo 9p;; *) echo ro,trans=virtio;; esac',
-                'podman':'if [ "${FAIL_BOOTSTRAP:-0}" = 1 ]; then exit 1; fi; echo FATLINE_FUNCTIONS_BOOTSTRAP=passed',
+                'podman':'[ -z "${NOTIFY_SOCKET:-}${PODMAN_SYSTEMD_UNIT:-}${LISTEN_FDS:-}" ] || exit 88; case "$*" in run*) case "$*" in *--sdnotify=ignore*) ;; *) exit 89;; esac;; esac; if [ "${FAIL_BOOTSTRAP:-0}" = 1 ]; then exit 1; fi; echo FATLINE_FUNCTIONS_BOOTSTRAP=passed',
             }.items():
                 path = commands / name
                 path.write_text('#!/bin/sh\n' + source + '\n'); path.chmod(0o700)
             base = home / '.local/state/nix-xd/fatline/test'
             apps = base / 'services'; apps.mkdir(parents=True)
             (apps / 'bootstrap-template.acl').write_text('user default off\nuser bootstrap on #hash +ping\nuser logma on #other +ping\n')
-            env = dict(os.environ, HOME=str(home), PATH=str(commands)+':'+os.environ['PATH'], INVOCATION_ID='one')
+            env = dict(os.environ, HOME=str(home), PATH=str(commands)+':'+os.environ['PATH'], INVOCATION_ID='one', NOTIFY_SOCKET='/fake/redis', PODMAN_SYSTEMD_UNIT='redis.service', LISTEN_FDS='1')
             def run(action, check=True):
                 return subprocess.run(['bash', str(SCRIPT), action, 'test', PROBE], env=env, check=check, capture_output=True, text=True)
             run('service-prepare')
@@ -55,7 +55,7 @@ class BootstrapTransaction(unittest.TestCase):
 *ExecStartPre*) echo "service-prepare test $PROBE";;
 *ExecStartPost*) echo "service-bootstrap test $PROBE";;
 *ExecStopPost*) echo "service-stop test $PROBE";;
-*PartOf*) [ "${MISSING_EDGE:-0}" = 1 ] || echo test-redis.service;;
+*PartOf*|*BindsTo*) [ "${MISSING_EDGE:-0}" = 1 ] || echo test-redis.service;;
 *) echo 'test-redis.service test-nginx.service';;
 esac''',
             }.items():
