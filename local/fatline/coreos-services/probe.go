@@ -24,6 +24,10 @@ func secret(path string) (string, error) {
 	b, e := os.ReadFile(path)
 	return strings.TrimSpace(string(b)), e
 }
+func bootstrapProfile() ratelimiter.Profile {
+	return lifecycle.New(ratelimiter.TargetResolverFunc(func(ratelimiter.Input, ratelimiter.Stage) []ratelimiter.Target { return nil }))
+}
+
 func execute() error {
 	if len(os.Args) != 3 {
 		return errors.New("mode and scope required")
@@ -66,7 +70,7 @@ func execute() error {
 		if e != nil {
 			return e
 		}
-		if e = store.Bootstrap(ctx, lifecycle.New(nil)); e != nil {
+		if e = store.Bootstrap(ctx, bootstrapProfile()); e != nil {
 			return e
 		}
 		if e = client.Do(ctx, "ACL", "SETUSER", "bootstrap", "off").Err(); e != nil {
