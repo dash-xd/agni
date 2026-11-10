@@ -10,7 +10,7 @@ let
     vendorHash = "sha256-Fw2my1ueJZBlHES4l656zALRMgaHUIHop+B0QT4FwAo=";
     subPackages = [ "cmd/api" "cmd/fatline-services-probe" ];
     env.CGO_ENABLED = "0";
-    postPatch = ''mkdir -p cmd/fatline-services-probe; cp ${./probe.go} cmd/fatline-services-probe/main.go; cp ${./probe_test.go} cmd/fatline-services-probe/main_test.go'';
+    postPatch = ''mkdir -p cmd/fatline-services-probe; cp ${./probe.go} cmd/fatline-services-probe/main.go; cp ${./probe_test.go} cmd/fatline-services-probe/main_test.go; cp ${./resource_dispatch.go} cmd/fatline-services-probe/resource_dispatch.go; cp ${./resource_dispatch_test.go} cmd/fatline-services-probe/resource_dispatch_test.go'';
     doCheck = true;
     checkPhase = "go test -mod=vendor ./cmd/fatline-services-probe";
   };
