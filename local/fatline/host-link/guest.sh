@@ -13,6 +13,9 @@ mkdir -p "$base" "$units"
 chmod 700 "$base"
 exec 9>"$base/lifecycle.lock"
 flock -x 9
+if [[ "$action" == start || "$action" == status || "$action" == check || "$action" == publish ]]; then
+  [[ "$(sha256sum "$base/credentials/users.acl" | awk '{print $1}')" == "$acl_digest" ]]
+fi
 case "$action" in
   prepare)
     [[ ! -e "$base/prepared" ]] || { echo 'Existing scope; stop it before replacement' >&2; exit 1; }
@@ -26,6 +29,7 @@ case "$action" in
     cp "$incoming/publisher" "$base/credentials/publisher"
     cp "$incoming/publisher.json" "$base/credentials/publisher.json"
     chmod 600 "$base/credentials/"*
+    [[ "$(sha256sum "$base/credentials/users.acl" | awk '{print $1}')" == "$acl_digest" ]]
     cp "$incoming/redis.conf" "$incoming/nginx.conf" "$base/config/"
     for role in redis nginx; do
       file="$units/$scope-$role.container"
@@ -78,6 +82,12 @@ UNIT
     test -f "$base/prepared"
     systemctl --user start "$scope-redis.service"
     systemctl --user start "$scope-nginx.service"
+    ready=0
+    for attempt in {1..60}; do
+      if [[ -S "$base/socket/redis.sock" ]]; then ready=1; break; fi
+      sleep 1
+    done
+    [[ "$ready" == 1 ]] || { journalctl --user --no-pager -u "$scope-redis.service" -n 30; exit 1; }
     echo 'FATLINE_HOST_LINK_STARTED=true'
     ;;
   status)
@@ -86,6 +96,10 @@ UNIT
       test "$(podman inspect "$scope-$role" --format '{{.State.Running}}')" = true
     done
     stat -c 'SOCKET_MODE=%a OWNER=%u GROUP=%g' "$base/socket/redis.sock"
+    [[ "$(podman port "$scope-nginx" 6379/tcp)" == "127.0.0.1:$port" ]]
+    [[ "$(podman inspect "$scope-redis" --format '{{.HostConfig.NetworkMode}}')" == none ]]
+    [[ "$(stat -c %u "$base/socket/redis.sock")" == "$(id -u)" ]]
+    [[ "$(stat -c %a "$base/credentials/users.acl")" == 600 ]]
     test "$(stat -c %a "$base/socket")" = 700
     test "$(stat -c %a "$base/socket/redis.sock")" = 600
     echo 'FATLINE_HOST_LINK_STATUS=passed'
@@ -111,6 +125,7 @@ UNIT
       # Client and proxy mounts must never contain the Redis ACL credential directory.
       mounts="$(podman inspect "$scope-nginx" --format '{{range .Mounts}}{{println .Destination}}{{end}}')"
       ! grep -Eq '^/run/credentials(/|$)' <<< "$mounts"
+      printf 'ACL_DIGEST=%s\n' "$acl_digest"
       echo 'FATLINE_HOST_LINK_SECURITY=passed'
     fi
     ;;

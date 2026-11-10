@@ -15,19 +15,23 @@ def render(root, scope, port):
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(root, 0o700)
     passwords = {role: secrets.token_hex(32) for role in ('publisher', 'subscriber')}
+    policy = {'schema':1, 'scope':scope, 'database':0, 'users': {
+        'publisher': {'keys':[scope + ':qualification:*'], 'channels':[scope + ':qualification'],
+            'commands':['ping','hello','client|setinfo','publish','get','set']},
+        'subscriber': {'keys':[], 'channels':[scope + ':qualification'],
+            'commands':['ping','hello','client|setinfo','subscribe','unsubscribe']}}}
+    policy_bytes = (json.dumps(policy, sort_keys=True, separators=(',', ':')) + '\n').encode()
+    (root / 'policy.json').write_bytes(policy_bytes)
+    (root / 'policy.sha256').write_text(hashlib.sha256(policy_bytes).hexdigest() + '\n')
     acl = ['user default off']
     for role, password in passwords.items():
         (root / role).write_text(password + '\n')
         os.chmod(root / role, 0o600)
-        commands = '+ping +hello +client|setinfo '
-        if role == 'publisher':
-            commands += '+publish +get +set'
-            keys = '~' + scope + ':qualification:*'
-        else:
-            commands += '+subscribe +unsubscribe'
-            keys = ''
+        spec = policy['users'][role]
+        rules = ['~' + value for value in spec['keys']] + ['&' + value for value in spec['channels']]
+        rules += ['+' + command for command in spec['commands']]
         acl.append('user ' + role + ' reset on #' + hashlib.sha256(password.encode()).hexdigest() +
-                   ' -@all resetkeys resetchannels ' + keys + ' &' + scope + ':qualification ' + commands)
+                   ' -@all resetkeys resetchannels ' + ' '.join(rules))
     (root / 'users.acl').write_text('\n'.join(acl) + '\n')
     os.chmod(root / 'users.acl', 0o600)
     (root / 'redis.conf').write_text('port 0\nprotected-mode yes\nunixsocket /run/redis/redis.sock\nunixsocketperm 600\n'
