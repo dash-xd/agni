@@ -74,6 +74,46 @@ wait_ready() {
 }
 case "$action" in
   graph-check) check_graph ;;
+  boot-prepare)
+    exec 9>"$base/lifecycle.lock"; flock -x 9
+    check_graph
+    script=$(realpath "$0")
+    install -m 700 "$(dirname "$script")/boot-wait.sh" "$apps/.boot-wait.sh.new"
+    mv -f "$apps/.boot-wait.sh.new" "$apps/boot-wait.sh"
+    for role in redis nginx logma skymill; do
+      install -d -m 700 "$units/$scope-$role.container.d"
+      cat > "$units/$scope-$role.container.d/10-store-ready.conf" <<UNIT
+[Service]
+ExecStartPre=/bin/bash $apps/boot-wait.sh $scope $probe
+TimeoutStartSec=300
+UNIT
+    done
+    systemctl --user daemon-reload
+    check_graph
+    for role in logma skymill; do
+      systemctl --user list-dependencies --plain --no-pager default.target | grep -Fq "$scope-$role.service"
+    done
+    echo FATLINE_REBOOT_PREPARED=passed
+    ;;
+  boot-check)
+    cmp -s "$(dirname "$(realpath "$0")")/boot-wait.sh" "$apps/boot-wait.sh"
+    for role in redis nginx logma skymill; do
+      systemctl --user show "$scope-$role.service" -p ExecStartPre --value | grep -Fq "$apps/boot-wait.sh $scope $probe"
+    done
+    check_graph
+    wait_ready
+    invocation=$(systemctl --user show "$scope-redis.service" -p InvocationID --value)
+    [[ -n "$invocation" && $(cat "$runtime/ready") == "$invocation" ]]
+    grep -Fxq 'user bootstrap reset off' "$runtime/users.acl"
+    bootstrap_container bootstrap-denied
+    mount_time=$(systemctl show var-mnt-nixstore.mount -p ActiveEnterTimestampMonotonic --value)
+    [[ "$mount_time" =~ ^[1-9][0-9]*$ ]]
+    for role in redis nginx logma skymill; do
+      start_time=$(systemctl --user show "$scope-$role.service" -p ExecMainStartTimestampMonotonic --value)
+      [[ "$start_time" =~ ^[1-9][0-9]*$ && "$start_time" -ge "$mount_time" ]]
+    done
+    echo FATLINE_REBOOT_BOOTSTRAP=passed store_before_services=true bootstrap=revoked
+    ;;
   wait-ready) wait_ready ;;
   service-prepare)
     umask 077

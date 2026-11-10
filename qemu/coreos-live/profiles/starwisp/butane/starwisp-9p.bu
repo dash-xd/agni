@@ -11,6 +11,17 @@ storage:
       mode: 0644
       contents:
         inline: ''
+    - path: /etc/polkit-1/rules.d/60-wisp-reboot.rules
+      mode: 0644
+      contents:
+        inline: |
+          polkit.addRule(function(action, subject) {
+            if (subject.user == "wisp" &&
+                (action.id == "org.freedesktop.login1.reboot" ||
+                 action.id == "org.freedesktop.login1.reboot-multiple-sessions")) {
+              return polkit.Result.YES;
+            }
+          });
 systemd:
   units:
     - name: sshd.service
