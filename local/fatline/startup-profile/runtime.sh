@@ -145,7 +145,9 @@ case "$action" in
     [[ ! -e "$base/credentials/runtime/ready" ]]
     grep -Fxq 'user bootstrap reset off' "$base/credentials/runtime/users.acl"
     for role in nginx logma skymill; do
-      ! systemctl --user is-active --quiet "$scope-$role.service"
+      if systemctl --user is-active --quiet "$scope-$role.service"; then
+        echo "Bootstrap failure left $scope-$role.service active" >&2;exit 1
+      fi
       if podman container exists "$scope-$role"; then
         [[ $(podman inspect "$scope-$role" --format '{{.State.Running}}') == false ]]
       fi
