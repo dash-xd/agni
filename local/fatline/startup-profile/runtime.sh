@@ -64,7 +64,11 @@ case "$action" in
         case "${file##*/}" in 10-store-ready.conf|30-bootstrap.conf) ;; *) echo "Undeclared Quadlet drop-in: $file" >&2;exit 1 ;; esac
       done
     done
-    systemctl --user stop "$scope-logma.service" "$scope-skymill.service" "$scope-nginx.service" "$scope-redis.service"
+    for role in logma skymill nginx redis; do
+      if [[ $(systemctl --user show "$scope-$role.service" -p LoadState --value) != not-found ]]; then
+        systemctl --user stop "$scope-$role.service"
+      fi
+    done
     install -d -m 700 "$profile" "$base/socket" "$base/config" "$base/credentials/runtime" "$apps/state/logma" "$apps/credentials"
     for rootfs in "$base/rootfs" "$apps/rootfs"; do
       mkdir -p "$rootfs"
