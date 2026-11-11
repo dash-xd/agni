@@ -3,7 +3,12 @@
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-  outputs = { self, nixpkgs }:
+  inputs.nix-alpine-runtime = {
+    url = "github:xd-dash/nix.xd/ccb21c8f6e1defacc7da7989ba6ac8b7985d53a1";
+    flake = false;
+  };
+
+  outputs = { self, nixpkgs, nix-alpine-runtime }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
@@ -159,6 +164,15 @@
       apps = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
+          runtimePrimitives = import "${nix-alpine-runtime}/runtime" { inherit pkgs; };
+          startupPython = pkgs.python3.withPackages (_: [ runtimePrimitives ]);
+          startup = pkgs.writeShellApplication {
+            name = "agni-startup";
+            runtimeInputs = [ startupPython pkgs.bash pkgs.coreutils pkgs.gawk ];
+            text = ''
+              exec python3 ${./startup-profile}/controller.py "$@"
+            '';
+          };
           checkAclPins = pkgs.writeShellApplication {
             name = "agni-check-acl-pins";
             runtimeInputs = [ pkgs.python3 ];
@@ -191,6 +205,10 @@
             '';
           };
         in {
+          startup = {
+            type = "app";
+            program = "${startup}/bin/agni-startup";
+          };
           qualify-plan = {
             type = "app";
             program = "${planRunner}/bin/agni-qualification-plan";
