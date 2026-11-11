@@ -24,9 +24,10 @@ def render(spec, output):
         'profile_acl_digest':spec['aclDigest'],'profile_bundle':shared}.items())+'\n')
     (output/(scope+'.network')).write_text('[Network]\nNetworkName=nix-xd-'+scope+'\nInternal=true\n')
     for role in ('redis','nginx','logma','skymill'):
-        lines=['[Unit]','Description=Fatline '+scope+' '+role]
+        lines=['[Unit]','Description=Fatline '+scope+' '+role,'StartLimitIntervalSec=120','StartLimitBurst=3']
+        if role=='redis':lines+=['Upholds='+' '.join(scope+'-'+child+'.service' for child in ('nginx','logma','skymill'))]
         if role!='redis':lines+=['Requires='+scope+'-redis.service','After='+scope+'-redis.service','BindsTo='+scope+'-redis.service','PartOf='+scope+'-redis.service']
-        if role=='logma':lines+=['Requires='+scope+'-nginx.service','After='+scope+'-nginx.service']
+        if role=='logma':lines+=['Requires='+scope+'-nginx.service','After='+scope+'-nginx.service','BindsTo='+scope+'-nginx.service']
         lines+=['[Container]','ContainerName='+scope+'-'+role,'Rootfs='+ (base if role in ('redis','nginx') else apps)+'/rootfs',
             'User=1000:1000','UserNS=keep-id:uid=1000,gid=1000','ReadOnly=true','NoNewPrivileges=true','DropCapability=all',
             'PodmanArgs=--read-only-tmpfs=false --security-opt label=disable','Volume=/var/mnt/nixstore:/nix/store:ro',
@@ -47,7 +48,7 @@ def render(spec, output):
             'Environment=REDIS_PASSWORD_FILE=/run/credentials/redis','Environment=SKYMILL_LISTEN_ADDR=0.0.0.0:8081',
             'Environment=SKYMILL_SCOPED_PROVIDER=true','Environment=SKYMILL_STREAM='+scope+':skymill:stream:github.webhooks','Exec='+spec['skymill']]
         lines+=['[Service]','ExecStartPre=/bin/bash '+apps+'/boot-wait.sh '+scope+' '+spec['probe'],'TimeoutStartSec=300',
-            'Restart='+('no' if role=='redis' else 'on-failure')]
+            'Restart=on-failure','RestartSec=5']
         if role=='redis':lines+=['ExecStartPre=/bin/bash '+shared+'/bootstrap.sh prepare '+scope+' '+spec['probe'],
             'ExecStartPost=/bin/bash '+shared+'/bootstrap.sh start '+scope+' '+spec['probe'],
             'ExecStopPost=/bin/bash '+shared+'/bootstrap.sh stop '+scope+' '+spec['probe']]

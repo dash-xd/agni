@@ -23,7 +23,10 @@ class ProfileContract(unittest.TestCase):
             redis=(root/'fatline-arm-vm1-redis.container').read_text()
             self.assertIn('ExecStartPost=/bin/bash ',redis)
             self.assertIn('/bootstrap.sh start ',redis)
-            self.assertIn('Restart=no',redis)
+            self.assertIn('Restart=on-failure',redis)
+            self.assertIn('RestartSec=5',redis)
+            self.assertIn('StartLimitBurst=3',redis)
+            self.assertIn('Upholds=fatline-arm-vm1-nginx.service fatline-arm-vm1-logma.service fatline-arm-vm1-skymill.service',redis)
             self.assertLess(redis.index('/boot-wait.sh'),redis.index('/bootstrap.sh prepare'))
             for role in ('nginx','logma','skymill'):
                 unit=(root/('fatline-arm-vm1-'+role+'.container')).read_text()

@@ -49,6 +49,7 @@ case "$action" in
     chmod 600 "$runtime/ready"
     echo FATLINE_REDIS_STARTUP=passed bootstrap=revoked
     ;;
+  verify) bootstrap_container bootstrap-denied ;;
   stop)
     aux_podman rm -f --ignore "$scope-bootstrap" >/dev/null
     revoke_file

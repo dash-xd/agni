@@ -18,13 +18,24 @@ fi
 [[ $(podman info --format '{{.Host.Security.Rootless}}') == true ]]
 [[ $(findmnt -rn -o FSTYPE --mountpoint /var/mnt/nixstore) == 9p ]]
 [[ ",$(findmnt -rn -o OPTIONS --mountpoint /var/mnt/nixstore)," == *,ro,* ]]
+fault_dir="${XDG_RUNTIME_DIR:?user runtime directory required}/systemd/user/$scope-redis.service.d"
+fault_file="$fault_dir/90-fatline-qualification.conf"
+clear_fault() {
+  if [[ -f "$fault_file" ]]; then
+    rm -f "$fault_file"
+    systemctl --user daemon-reload
+  fi
+}
 failed() {
   code=$?
+  trap - ERR
+  if [[ "$action" == qualify-reliability ]]; then clear_fault || true;fi
   echo "FATLINE_STARTUP_PROFILE=failed action=$action status=$code" >&2
   journalctl --user --no-pager -n 40 -u "$scope-redis.service" -u "$scope-nginx.service" -u "$scope-logma.service" -u "$scope-skymill.service" || true
   exit "$code"
 }
 trap failed ERR
+trap 'if [[ "$action" == qualify-reliability ]]; then clear_fault;fi' EXIT
 status() {
   for role in redis nginx logma skymill; do
     systemctl --user is-active --quiet "$scope-$role.service"
@@ -35,6 +46,8 @@ status() {
       [[ $(podman inspect "$scope-$role" --format '{{range .Mounts}}{{if eq .Destination "/run/credentials"}}{{.RW}}{{end}}{{end}}') == false ]]
     fi
   done
+  upheld=$(systemctl --user show "$scope-redis.service" -p Upholds --value)
+  for role in nginx logma skymill; do [[ " $upheld " == *" $scope-$role.service "* ]];done
   invocation=$(systemctl --user show "$scope-redis.service" -p InvocationID --value)
   [[ -n "$invocation" && $(cat "$base/credentials/runtime/ready") == "$invocation" ]]
   grep -Fxq 'user bootstrap reset off' "$base/credentials/runtime/users.acl"
@@ -46,7 +59,7 @@ wait_ready() {
     ready=1
     for role in redis nginx logma skymill; do
       state=$(systemctl --user show "$scope-$role.service" -p ActiveState --value)
-      case "$state" in active) ;; activating|deactivating|reloading) ready=0 ;; *) echo "Startup failed: $scope-$role.service state=$state" >&2;return 1 ;; esac
+      case "$state" in active) ;; activating|deactivating|reloading|inactive|failed) ready=0 ;; *) echo "Unexpected state: $scope-$role.service state=$state" >&2;return 1 ;; esac
     done
     (( ready==0 )) || return 0
     sleep 2
@@ -64,11 +77,14 @@ case "$action" in
         case "${file##*/}" in 10-store-ready.conf|30-bootstrap.conf) ;; *) echo "Undeclared Quadlet drop-in: $file" >&2;exit 1 ;; esac
       done
     done
+    clear_fault
+    stop_units=()
     for role in logma skymill nginx redis; do
       if [[ $(systemctl --user show "$scope-$role.service" -p LoadState --value) != not-found ]]; then
-        systemctl --user stop "$scope-$role.service"
+        stop_units+=("$scope-$role.service")
       fi
     done
+    (( ${#stop_units[@]}==0 )) || systemctl --user stop "${stop_units[@]}"
     install -d -m 700 "$profile" "$base/socket" "$base/config" "$base/credentials/runtime" "$apps/state/logma" "$apps/credentials"
     for rootfs in "$base/rootfs" "$apps/rootfs"; do
       mkdir -p "$rootfs"
@@ -100,6 +116,66 @@ case "$action" in
     status
     touch "$apps/active"
     echo FATLINE_STARTUP_PROFILE=passed
+    ;;
+  recover)
+    exec 9>"$base/lifecycle.lock";flock -x 9
+    clear_fault
+    systemctl --user reset-failed "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
+    systemctl --user start "$scope-redis.service"
+    wait_ready;status
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    echo FATLINE_PROFILE_RECOVERY=passed
+    ;;
+  qualify-reliability)
+    exec 9>"$base/lifecycle.lock";flock -x 9
+    status
+    [[ ! -e "$fault_file" ]]
+    boot=$(cat /proc/sys/kernel/random/boot_id)
+    acl_before=$(sha256sum "$apps/bootstrap-template.acl")
+    # The runtime-only override fails the bootstrap hook without modifying credentials.
+    systemctl --user stop "$scope-redis.service"
+    install -d -m 700 "$fault_dir"
+    printf '[Service]\nRestart=no\nExecStartPost=\nExecStartPost=/bin/false\n' > "$fault_file"
+    systemctl --user daemon-reload
+    systemctl --user reset-failed "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
+    if systemctl --user start "$scope-logma.service" "$scope-skymill.service" "$scope-nginx.service"; then
+      echo 'Bootstrap failure unexpectedly allowed startup' >&2;exit 1
+    fi
+    [[ $(systemctl --user show "$scope-redis.service" -p ActiveState --value) == failed ]]
+    [[ ! -e "$base/credentials/runtime/ready" ]]
+    grep -Fxq 'user bootstrap reset off' "$base/credentials/runtime/users.acl"
+    for role in nginx logma skymill; do
+      ! systemctl --user is-active --quiet "$scope-$role.service"
+      if podman container exists "$scope-$role"; then
+        [[ $(podman inspect "$scope-$role" --format '{{.State.Running}}') == false ]]
+      fi
+    done
+    echo FATLINE_BOOTSTRAP_FAILURE=passed dependents=blocked
+    clear_fault
+    systemctl --user reset-failed "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
+    systemctl --user start "$scope-redis.service"
+    wait_ready;status
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    echo FATLINE_BOOTSTRAP_RECOVERY=passed bootstrap=revoked
+    before=$(systemctl --user show "$scope-redis.service" -p InvocationID --value)
+    for role in redis nginx logma skymill; do podman inspect "$scope-$role" --format '{{.Id}}';done > "$apps/crash-before.ids"
+    podman kill --signal KILL "$scope-redis" >/dev/null
+    # Observe a new successful invocation, without controller start/recover calls.
+    deadline=$((SECONDS+180))
+    changed=false
+    while (( SECONDS<deadline )); do
+      after=$(systemctl --user show "$scope-redis.service" -p InvocationID --value)
+      if [[ -n "$after" && "$after" != "$before" && -f "$base/credentials/runtime/ready" && $(cat "$base/credentials/runtime/ready") == "$after" ]]; then changed=true;break;fi
+      sleep 2
+    done
+    [[ "$changed" == true ]]
+    wait_ready;status
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    for role in redis nginx logma skymill; do podman inspect "$scope-$role" --format '{{.Id}}';done > "$apps/crash-after.ids"
+    [[ $(sort "$apps/crash-before.ids" "$apps/crash-after.ids" | uniq -d | wc -l) == 0 ]]
+    [[ $(cat /proc/sys/kernel/random/boot_id) == "$boot" ]]
+    [[ $(sha256sum "$apps/bootstrap-template.acl") == "$acl_before" ]]
+    echo FATLINE_PROFILE_RELIABILITY=passed bootstrap_failure=blocked redis_crash=automatic boot=unchanged
     ;;
   status) status;echo FATLINE_STARTUP_PROFILE_STATUS=passed ;;
   boot-prepare) status;echo FATLINE_REBOOT_PREPARED=passed ;;
