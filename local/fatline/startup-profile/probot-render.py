@@ -40,6 +40,8 @@ def render(spec, artifacts, source, destination, original_renderer):
     profile["skymill"] = entries["skymill"]["store"]
     profile["webhook"] = {"mode": "staged", "revision": {role: entries[role]["revision"] for role in sorted(entries)}}
     original_renderer(profile, destination)
+    with (destination / "profile.env").open("a") as profile_env:
+        profile_env.write("profile_roles='redis nginx logma skymill probot'\\n")
     scope = profile["scope"]
     base = profile["home"] + "/.local/state/nix-xd/fatline/" + scope
     app = base + "/services"
