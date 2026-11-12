@@ -37,7 +37,9 @@ def main():
     encoded = base64.urlsafe_b64encode(stream.encode()).decode().rstrip("=")
     substitutions = {"scope": scope, "stream": stream, "encodedStream": encoded}
     lines = ["user default off"]
-    for name in ("logma", "skymill", "bootstrap"):
+    required = ("logma", "skymill", "bootstrap")
+    additional = tuple(sorted(set(policy.get("users", {})) - set(required)))
+    for name in required + additional:
         spec = policy.get("users", {}).get(name)
         if not isinstance(spec, dict):
             fail(f"missing {name} policy")
