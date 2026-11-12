@@ -24,6 +24,10 @@ esac
 read -r -a roles <<< "$profile_roles"
 app_roles=(nginx logma skymill)
 if [[ "$profile_roles" == *" probot" ]]; then app_roles+=(probot); fi
+all_units=()
+app_units=()
+for role in "${roles[@]}"; do all_units+=("$scope-$role.service"); done
+for role in "${app_roles[@]}"; do app_units+=("$scope-$role.service"); done
 [[ $(podman info --format '{{.Host.Security.Rootless}}') == true ]]
 [[ $(findmnt -rn -o FSTYPE --mountpoint /var/mnt/nixstore) == 9p ]]
 [[ ",$(findmnt -rn -o OPTIONS --mountpoint /var/mnt/nixstore)," == *,ro,* ]]
@@ -40,7 +44,7 @@ failed() {
   trap - ERR
   if [[ "$action" == qualify-reliability ]]; then clear_fault || true;fi
   echo "FATLINE_STARTUP_PROFILE=failed action=$action status=$code" >&2
-  journalctl --user --no-pager -n 40 -u "$scope-redis.service" -u "$scope-nginx.service" -u "$scope-logma.service" -u "$scope-skymill.service" || true
+  journalctl --user --no-pager -n 40 "${all_units[@]/#/-u }" || true
   exit "$code"
 }
 trap failed ERR
@@ -158,7 +162,7 @@ case "$action" in
   recover)
     exec 9>"$base/lifecycle.lock";flock -x 9
     clear_fault
-    systemctl --user reset-failed "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
+    systemctl --user reset-failed "${all_units[@]}"
     systemctl --user start "$scope-redis.service"
     wait_ready;status
     bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
@@ -175,8 +179,8 @@ case "$action" in
     install -d -m 700 "$fault_dir"
     printf '[Service]\nRestart=no\nExecStartPost=\nExecStartPost=/bin/false\n' > "$fault_file"
     systemctl --user daemon-reload
-    systemctl --user reset-failed "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
-    if systemctl --user start "$scope-logma.service" "$scope-skymill.service" "$scope-nginx.service"; then
+    systemctl --user reset-failed "${all_units[@]}"
+    if systemctl --user start "${app_units[@]}"; then
       echo 'Bootstrap failure unexpectedly allowed startup' >&2;exit 1
     fi
     [[ $(systemctl --user show "$scope-redis.service" -p ActiveState --value) == failed ]]
@@ -192,7 +196,7 @@ case "$action" in
     done
     echo FATLINE_BOOTSTRAP_FAILURE=passed dependents=blocked
     clear_fault
-    systemctl --user reset-failed "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
+    systemctl --user reset-failed "${all_units[@]}"
     systemctl --user start "$scope-redis.service"
     wait_ready;status
     bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
