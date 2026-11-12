@@ -175,7 +175,7 @@
             plan.schema == 1
             && plan.system == system
             && plan.sourceSelection.immutableRevisionRequired
-            && plan.sourceSelection.developmentBranch == "v20261111"
+            && !plan.sourceSelection.mutableBranchAllowed
             && plan.sources.agni.repository == "dash-xd/agni"
             && builtins.match "[0-9a-f]{40}" plan.sources.agni.revision != null
             && plan.services.contract == "coreos-services-v1"
