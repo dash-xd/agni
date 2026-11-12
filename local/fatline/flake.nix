@@ -17,6 +17,73 @@
         url = "https://github.com/xd-dash/smoke.git";
         rev = smokeRevision;
       };
+      mkSmokeNativeQualifier = pkgs: pkgs.writeShellApplication {
+            name = "agni-fatline-native-qualifier";
+            runtimeInputs = [ pkgs.go_1_26 pkgs.coreutils pkgs.gnugrep pkgs.openssh ];
+            text = ''
+              set -Eeuo pipefail
+              mode="''${1:---check-build}"
+              test "$(uname -s)" = Linux || { echo 'Native qualifier requires Linux Nix-Alpine' >&2; exit 1; }
+              case "$mode" in
+                --check-build|--check-transport) ;;
+                *) echo 'Available gates: --check-build, --check-transport' >&2; exit 2 ;;
+              esac
+
+              revision=${smokeRevision}
+              source=${smokeSource}
+              if [[ -n "''${AGNI_NATIVE_SMOKE_BINARY:-}" ]]; then
+                binary="$AGNI_NATIVE_SMOKE_BINARY"
+                [[ "$mode" == --check-transport ]] || { echo 'Prebuilt binary only accepted for transport' >&2; exit 2; }
+                [[ "$binary" =~ ^/nix/store/[a-z0-9]{32}-smoke$ && -x "$binary" ]] ||
+                  { echo 'Expected a native Smoke binary in the mounted Nix store' >&2; exit 1; }
+                go version -m "$binary" | grep -Fq 'GOOS=linux'
+                echo 'AGNI_NATIVE_SMOKE_REUSED=passed'
+              else
+                root="''${HOME}/.local/state/agni/fatline/smoke/$revision"
+                mkdir -p "$root/cache" "$root/mod"
+                export GOCACHE="$root/cache" GOMODCACHE="$root/mod"
+                export GOOS=linux CGO_ENABLED=0
+                work="$(mktemp -d "$root/build.XXXXXXXX")"
+                trap 'rm -rf -- "$work"' EXIT
+                (cd "$source" && go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$work/smoke" ./cmd/smoke-wisp)
+                binary="$(nix-store --add "$work/smoke")"
+                nix-store --realise --add-root "$root/gcroot" "$binary" >/dev/null
+                go version -m "$binary" | grep -Fq 'GOOS=linux'
+                printf 'AGNI_NATIVE_SMOKE_BUILD=passed source=%s store=%s sha256=%s\n' \
+                  "$revision" "$binary" "$(sha256sum "$binary" | cut -d' ' -f1)"
+              fi
+
+              if [[ "$mode" == --check-build ]]; then
+                echo 'AGNI_RESOURCE_QUALIFICATION=pending phase=transport-and-credential-contract'
+                exit 0
+              fi
+
+              : "''${AGNI_COREOS_ENDPOINT:?Provide reachable guest SSH endpoint}"
+              : "''${AGNI_COREOS_PORT:?Provide guest SSH port}"
+              : "''${AGNI_COREOS_IDENTITY:?Provide runtime-mounted SSH identity}"
+              : "''${AGNI_COREOS_KNOWN_HOSTS:?Provide runtime-mounted SSH known_hosts}"
+              [[ "$AGNI_COREOS_PORT" =~ ^[0-9]{1,5}$ ]] || { echo 'Invalid SSH port' >&2; exit 2; }
+              [[ "$AGNI_COREOS_IDENTITY" == /run/nix-xd/mounts/secrets/identity &&
+                 "$AGNI_COREOS_KNOWN_HOSTS" == /run/nix-xd/mounts/secrets/known_hosts ]] || {
+                echo 'SSH trust paths must be explicitly volume-mounted' >&2; exit 1;
+              }
+              test -f "$AGNI_COREOS_IDENTITY" && test -f "$AGNI_COREOS_KNOWN_HOSTS" || {
+                echo 'SSH trust material is not mounted into Nix-Alpine' >&2; exit 1;
+              }
+              "$binary" wisp qualify \
+                --address "$AGNI_COREOS_ENDPOINT:$AGNI_COREOS_PORT" \
+                --user "''${AGNI_COREOS_USER:-wisp}" \
+                --identity "$AGNI_COREOS_IDENTITY" \
+                --known-hosts "$AGNI_COREOS_KNOWN_HOSTS" \
+                --timeout 2m
+              if [[ -n "''${AGNI_EVIDENCE_DIR:-}" ]]; then
+                [[ "$AGNI_EVIDENCE_DIR" == /run/nix-xd/mounts/evidence ]] || exit 2
+                printf 'AGNI_NATIVE_WISP_TRANSPORT=passed\n' > "$AGNI_EVIDENCE_DIR/native-wisp-transport.txt"
+              fi
+              echo 'AGNI_NATIVE_WISP_TRANSPORT=passed'
+              echo 'AGNI_RESOURCE_QUALIFICATION=pending phase=resource-authorization-and-delivery'
+            '';
+      };
       coreosPlans = forAllSystems (system: {
         vm1 = import ./coreos/plan.nix { inherit system; profile = "vm1"; };
         vm2 = import ./coreos/plan.nix { inherit system; profile = "vm2"; };
@@ -31,6 +98,7 @@
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in {
+          native-smoke-qualifier = mkSmokeNativeQualifier pkgs;
           secret-volume-fixture = pkgs.writeShellApplication {
             name = "agni-secret-volume-fixture";
             runtimeInputs = with pkgs; [ age sops jq coreutils ];
@@ -280,56 +348,7 @@
               exec bash ${./scripts/fatline.sh} "$@"
             '';
           };
-          smokeNativeQualifier = pkgs.writeShellApplication {
-            name = "agni-fatline-native-qualifier";
-            runtimeInputs = [ pkgs.go_1_26 pkgs.coreutils pkgs.gnugrep pkgs.openssh ];
-            text = ''
-              set -Eeuo pipefail
-              mode="''${1:---check-build}"
-              test "$(uname -s)" = Linux || { echo 'Native qualifier requires Linux Nix-Alpine' >&2; exit 1; }
-              case "$mode" in
-                --check-build|--check-transport) ;;
-                *) echo 'Available gates: --check-build, --check-transport' >&2; exit 2 ;;
-              esac
-
-              revision=${smokeRevision}
-              source=${smokeSource}
-              root="''${HOME}/.local/state/agni/fatline/smoke/$revision"
-              mkdir -p "$root/cache" "$root/mod"
-              export GOCACHE="$root/cache" GOMODCACHE="$root/mod"
-              export GOOS=linux CGO_ENABLED=0
-              work="$(mktemp -d "$root/build.XXXXXXXX")"
-              trap 'rm -rf -- "$work"' EXIT
-              (cd "$source" && go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$work/smoke" ./cmd/smoke-wisp)
-              binary="$(nix-store --add "$work/smoke")"
-              nix-store --realise --add-root "$root/gcroot" "$binary" >/dev/null
-              go version -m "$binary" | grep -Fq 'GOOS=linux'
-              printf 'AGNI_NATIVE_SMOKE_BUILD=passed source=%s store=%s sha256=%s\n' \
-                "$revision" "$binary" "$(sha256sum "$binary" | cut -d' ' -f1)"
-
-              if [[ "$mode" == --check-build ]]; then
-                echo 'AGNI_RESOURCE_QUALIFICATION=pending phase=transport-and-credential-contract'
-                exit 0
-              fi
-
-              : "''${AGNI_COREOS_ENDPOINT:?Provide reachable guest SSH endpoint}"
-              : "''${AGNI_COREOS_PORT:?Provide guest SSH port}"
-              : "''${AGNI_COREOS_IDENTITY:?Provide runtime-mounted SSH identity}"
-              : "''${AGNI_COREOS_KNOWN_HOSTS:?Provide runtime-mounted SSH known_hosts}"
-              [[ "$AGNI_COREOS_PORT" =~ ^[0-9]{1,5}$ ]] || { echo 'Invalid SSH port' >&2; exit 2; }
-              test -f "$AGNI_COREOS_IDENTITY" && test -f "$AGNI_COREOS_KNOWN_HOSTS" || {
-                echo 'SSH trust material is not mounted into Nix-Alpine' >&2; exit 1;
-              }
-              "$binary" wisp qualify \
-                --address "$AGNI_COREOS_ENDPOINT:$AGNI_COREOS_PORT" \
-                --user "''${AGNI_COREOS_USER:-wisp}" \
-                --identity "$AGNI_COREOS_IDENTITY" \
-                --known-hosts "$AGNI_COREOS_KNOWN_HOSTS" \
-                --timeout 2m
-              echo 'AGNI_NATIVE_WISP_TRANSPORT=passed'
-              echo 'AGNI_RESOURCE_QUALIFICATION=pending phase=resource-authorization-and-delivery'
-            '';
-          };
+          smokeNativeQualifier = mkSmokeNativeQualifier pkgs;
           smokeHostArtifact = pkgs.writeShellApplication {
             name = "agni-fatline-smoke-host-artifact";
             runtimeInputs = [ pkgs.go_1_26 pkgs.coreutils ];
