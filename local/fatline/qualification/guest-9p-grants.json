@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "guest": "vm1",
+  "exports": [
+    {
+      "volume": "nix-xd-state-control-fatline-input",
+      "tag": "fatlineinput",
+      "access": "ro"
+    }
+  ]
+}
