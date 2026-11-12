@@ -228,7 +228,7 @@
           };
           smokeHostArtifact = pkgs.writeShellApplication {
             name = "agni-fatline-smoke-host-artifact";
-            runtimeInputs = [ pkgs.go_1_26 pkgs.nix pkgs.coreutils ];
+            runtimeInputs = [ pkgs.go_1_26 pkgs.coreutils ];
             text = ''
               set -euo pipefail
               source=${smokeSource}
@@ -243,10 +243,10 @@
               (cd "$source" && go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$workdir/smoke" ./cmd/smoke-wisp)
               path="$(nix-store --add "$workdir/smoke")"
               nix-store --realise --add-root "$state/gcroot" "$path" >/dev/null
-              printf 'ARTIFACT_SOURCE_REV=%s\\n' "$revision"
-              printf 'ARTIFACT_STORE_PATH=%s\\n' "$path"
-              printf 'ARTIFACT_SHA256=%s\\n' "$(sha256sum "$path" | cut -d' ' -f1)"
-              printf 'ARTIFACT_TARGET=%s\\n' darwin-arm64
+              printf 'ARTIFACT_SOURCE_REV=%s\n' "$revision"
+              printf 'ARTIFACT_STORE_PATH=%s\n' "$path"
+              printf 'ARTIFACT_SHA256=%s\n' "$(sha256sum "$path" | cut -d' ' -f1)"
+              printf 'ARTIFACT_TARGET=%s\n' darwin-arm64
             '';
           };
           app = command: {
