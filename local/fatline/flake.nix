@@ -167,6 +167,28 @@
           };
           default = self.packages.${system}.fatline;
         });
+      checks = forAllSystems (system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+          plans = self.coreosPlans.${system};
+          valid = plan:
+            plan.schema == 1
+            && plan.system == system
+            && plan.sourceSelection.immutableRevisionRequired
+            && plan.sourceSelection.developmentBranch == "v20261111"
+            && plan.sources.agni.repository == "dash-xd/agni"
+            && builtins.match "[0-9a-f]{40}" plan.sources.agni.revision != null
+            && plan.services.contract == "coreos-services-v1"
+            && builtins.match "[0-9a-f]{40}" plan.services.revision != null
+            && !plan.fullFatlineQualified;
+        in {
+          coreos-plan = assert valid plans.vm1 && valid plans.vm2
+            && plans.vm1.scope != plans.vm2.scope
+            && plans.vm1.placement.sshPort != plans.vm2.placement.sshPort;
+            pkgs.runCommand "agni-coreos-plan-contract" { } ''
+              touch "$out"
+            '';
+        });
       apps = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
