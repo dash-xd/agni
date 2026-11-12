@@ -31,6 +31,54 @@
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in {
+          secret-volume-fixture = pkgs.writeShellApplication {
+            name = "agni-secret-volume-fixture";
+            runtimeInputs = with pkgs; [ age sops jq coreutils ];
+            text = ''
+              set -Eeuo pipefail
+              secret_dir=/run/nix-xd/mounts/secrets
+              evidence_dir=/run/nix-xd/mounts/evidence
+              identity="$secret_dir/identity.txt"
+              encrypted="$secret_dir/fixture.sops.json"
+              case "''${1:-}" in
+                init)
+                  [[ ! -e "$identity" && ! -e "$encrypted" ]] || {
+                    echo 'Existing secrets volume; refusing to overwrite fixture' >&2
+                    exit 1
+                  }
+                  [[ -d "$secret_dir" && -w "$secret_dir" ]] || exit 1
+                  umask 077
+                  age-keygen -o "$identity"
+                  recipient="$(age-keygen -y "$identity")"
+                  printf '%s\\n' '{"fixture":"persistent-podman-volume","valid":true}' |
+                    sops --encrypt --age "$recipient" --input-type json --output-type json /dev/stdin > "$encrypted"
+                  chmod 0600 "$identity" "$encrypted"
+                  echo 'AGNI_SECRET_VOLUME_INITIALIZED=passed mode=0600'
+                  ;;
+                verify)
+                  [[ -r "$identity" && -r "$encrypted" && -w "$evidence_dir" ]] || exit 1
+                  [[ "$(stat -c %a "$identity")" == 600 ]] || exit 1
+                  [[ ! -w "$secret_dir" ]] || {
+                    echo 'Secret volume unexpectedly writable by qualifier' >&2; exit 1;
+                  }
+                  scratch="$(mktemp -d)"
+                  trap 'rm -rf -- "$scratch"' EXIT
+                  umask 077
+                  SOPS_AGE_KEY_FILE="$identity" sops --decrypt --input-type json --output-type json "$encrypted" |
+                    jq -e '.fixture == "persistent-podman-volume" and .valid == true' > "$scratch/verified"
+                  [[ "$(cat "$scratch/verified")" == true ]] || exit 1
+                  test -r "$identity"
+                  printf '%s\\n' 'SECRETS_VOLUME_AGE_SOPS=passed' > "$evidence_dir/secret-volume-gate.txt"
+                  printf '%s\\n' 'SECRETS_VOLUME_NIX_STORE=protected' >> "$evidence_dir/secret-volume-gate.txt"
+                  echo 'AGNI_SECRET_VOLUME_QUALIFICATION=passed'
+                  ;;
+                *)
+                  echo 'Usage: agni-secret-volume-fixture init|verify' >&2
+                  exit 2
+                  ;;
+              esac
+            '';
+          };
           runtime-grants = pkgs.writeText "agni-fatline-runtime-grants.json" (builtins.readFile ./qualification/runtime-grants.json);
           isolated-runtime-grants = pkgs.writeText "agni-fatline-isolated-runtime-grants.json" (builtins.readFile ./qualification/isolated-runtime-grants.json);
           coreos-plan-vm1 = pkgs.writeText "agni-coreos-vm1-plan.json" (builtins.toJSON coreosPlans.${system}.vm1);
