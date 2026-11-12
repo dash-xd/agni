@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "scope": "nix-xd-arm",
+  "grants": [
+    {
+      "volume": "nix-xd-state-application-fatline",
+      "destination": "/run/nix-xd/mounts/fatline-input",
+      "access": "ro",
+      "reader": "nix-xd-arm",
+      "writer": "fatline-controller"
+    },
+    {
+      "volume": "nix-xd-state-control-qualification",
+      "destination": "/run/nix-xd/mounts/qualification-output",
+      "access": "rw",
+      "reader": "nix-xd-arm",
+      "writer": "nix-xd-arm"
+    }
+  ]
+}
