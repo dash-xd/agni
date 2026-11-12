@@ -80,3 +80,20 @@ The candidate includes no HTTP port publications. It intentionally does
 not install units, rotate ACLs or invoke the actual webhook. A passing
 guest-plan establishes artifact identity and composition shape, **not**
 CoreOS VM1 readiness or live integration success.
+
+## Scoped Redis ACL policy candidate
+
+Agni's `--scenario probot-webhook --phase acl-plan` derives a non-secret
+Redis ACL policy from the pinned webhook source manifest and the tracked
+baseline policy. It preserves the original Logma, Skymill and bootstrap
+identities, adds Probot state and independent lifecycle publish/subscribe
+principals, and scopes Skymill to its exact 32-hex Binding hash slot.
+The existing ACL renderer now supports additional principals and canonical
+Redis hash-slot notation without changing old policy output order.
+
+The candidate is written under the Nix-Alpine writer's
+`~/.local/state/agni/probot-webhook/redis-policy-vm1.json` and does not
+create credentials or modify the active Redis ACL. The Probot state prefix,
+service environment, command grants, and source-derived Binding must be
+qualified against actual applications before the policy is applied. No
+success marker from `acl-plan` authorizes guest activation or webhook delivery.
