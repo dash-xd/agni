@@ -79,6 +79,26 @@ case "$action" in
   install|install-probot)
     exec 9>"$base/lifecycle.lock";flock -x 9
     [[ $(sha256sum "$incoming/users.acl" | cut -d ' ' -f 1) == "$profile_acl_digest" ]]
+    for role in "${roles[@]}"; do
+      [[ -s "$incoming/$scope-$role.container" ]] || { echo "Missing staged Quadlet: $role" >&2; exit 1; }
+    done
+    for role in logma skymill bootstrap; do
+      [[ -d "$incoming/$role" && -s "$incoming/$role/redis" ]] || { echo "Missing staged credential: $role" >&2; exit 1; }
+    done
+    for principal in publisher subscriber; do
+      existing=$(awk -v name="$principal" '$1=="user" && $2==name {print}' "$base/credentials/users.acl")
+      candidate=$(awk -v name="$principal" '$1=="user" && $2==name {print}' "$incoming/users.acl")
+      [[ -n "$existing" && "$existing" == "$candidate" ]] || { echo "Existing host-link identity changed: $principal" >&2; exit 1; }
+    done
+    if [[ "$action" == install-probot ]]; then
+      [[ -s "$incoming/probot/state" && -s "$incoming/probot/publish" && -s "$incoming/probot/operator" &&
+         -s "$incoming/probot/skymill-token" && -s "$incoming/skymill/http-token" ]] || {
+        echo 'Incomplete five-role application credential staging' >&2; exit 1;
+      }
+      cmp -s "$incoming/probot/skymill-token" "$incoming/skymill/http-token" || {
+        echo 'Skymill server/client HTTP authority mismatch' >&2; exit 1;
+      }
+    fi
     # Refuse an undeclared overlay instead of silently mixing startup profiles.
     shopt -s nullglob
     for role in "${roles[@]}"; do
