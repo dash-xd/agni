@@ -123,3 +123,13 @@ The reusable `nix.xd` `grants-transport-qualify` target builds `#resource-prefli
 `#resource-preflight --check-transport` remains the Agni authority for native Smoke Wisp systemd qualification. It accepts `NIX_XD_NATIVE_BINARY` for immutable reader execution and `NIX_XD_TRANSPORT_*` paths supplied by the generic infrastructure adapter, retaining the earlier Agni transport input names as fallbacks. Successful native Wisp is recorded in the evidence volume. This proves only SSH/systemd execution; Redis ACL, Logma resource dispatch and cleanup remain independent, unqualified gates.
 
 The host SSH identity is real trust material, unlike the SOPS fixture. Provision it only through the explicit volume import; never stage it into Nix or place it in `/workspaces`. The general Nix-Alpine owner receives **no** secret-volume mount.
+
+## Probot webhook / Skymill provenance / Logma hint integration
+
+The `#qualify-integration --scenario probot-webhook` app is the ARM Nix-Alpine entrypoint. Its source selection is pinned by `qualification/probot-webhook-sources.json`; each selected checkout must have the exact `.nix-xd-source-revision` marker deposited by generic `nix.xd make stage`. The `--phase preflight` path runs only Probot's Skymill and Logma client-contract tests using the Nix-provided Node 22 on `aarch64-linux`. It never installs new VM units and does not read GitHub credentials.
+
+The **live** path is not yet wired: it must use the existing running CoreOS VM1, make the ARM64 Probot/Skymill/Logma OCI closures available through the authoritative store, bind distinct Redis state/stream/pubsub ACL credentials, activate a qualified GitHub App binding, start Logmash and the Logma lifecycle SSE subscriber before issuing a real webhook, and correlate the GitHub delivery GUID with Skymill's opaque `provider_delivery_id` and Logma hints. A Pub/Sub hint is **not** durable proof, so the final settlement must be read from Skymill and the Probot execution fence.
+
+Probot's `codex/probot-qualified-activation` branch already exposes the Logma lifecycle channels and integrates a Logma serverless SSE role. Its `nix/quadlets.nix` keeps role-specific credentials separate. The hardened Skymill provider lives at `codex/logma-hints-hardening`; `hints.go` defines best-effort `stream.activity` / `stream.acked` / `stream.nacked` / `stream.workflow.settled`. Do **not** substitute Stream consuming or XACK operations in Logmash or SSE. Reuse the existing lifecycle SSE role instead of building a competing SSE handler.
+
+The current preflight prints `AGNI_PROBOT_WEBHOOK_INTEGRATION=pending` and `--phase live` fails closed until complete. Passing preflight alone is **not** the end-to-end qualification.
