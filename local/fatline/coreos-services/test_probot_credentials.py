@@ -54,6 +54,8 @@ class CredentialGeneration(unittest.TestCase):
             self.assertEqual((target/"credentials/logma/redis").read_text(),
                              (prior/"logma/redis").read_text())
             self.assertEqual((target/"credentials/logma/api-key").read_text(),"a"*64+"\n")
+            self.assertEqual((target/"credentials/probot/skymill-token").read_text(),
+                             (target/"credentials/skymill/http-token").read_text())
             self.assertNotEqual((target/"credentials/probot/state").read_text(),
                                 (target/"credentials/probot/publish").read_text())
             for user,filename in (("probot_state","probot/state"),("lifecycle_publish","probot/publish"),
