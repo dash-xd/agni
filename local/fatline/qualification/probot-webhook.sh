@@ -21,7 +21,7 @@ while (($#)); do
   esac
 done
 [[ "$scenario" == probot-webhook ]] || { echo 'Select --scenario probot-webhook' >&2; exit 2; }
-[[ "$phase" == preflight || "$phase" == live ]] || { echo 'Select --phase preflight|live' >&2; exit 2; }
+[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|live' >&2; exit 2; }
 
 [[ "$(uname -s)" == Linux && "$(uname -m)" == aarch64 ]] || {
   echo 'PROBOT_WEBHOOK=blocked reason=requires-arm64-nix-alpine' >&2
@@ -84,5 +84,11 @@ if [[ "$phase" == preflight ]]; then
   echo 'AGNI_PROBOT_WEBHOOK_INTEGRATION=pending phase=arm64-provider-artifact-and-live-service-composition'
   exit 0
 fi
-echo 'AGNI_PROBOT_WEBHOOK_INTEGRATION=blocked phase=live scenario-not-yet-wired' >&2
+bash "${AGNI_PROBOT_ARTIFACT_BUILDER:?Artifact builder must be supplied by pinned Agni flake}"
+if [[ "$phase" == artifacts ]]; then
+  echo 'AGNI_PROBOT_ARTIFACT_PREFLIGHT=passed'
+  echo 'AGNI_PROBOT_WEBHOOK_INTEGRATION=pending phase=guest-compose-and-github-binding'
+  exit 0
+fi
+echo 'AGNI_PROBOT_WEBHOOK_INTEGRATION=blocked phase=live reason=guest-service-probot-and-github-authority-not-yet-wired' >&2
 exit 1
