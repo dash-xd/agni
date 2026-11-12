@@ -70,3 +70,11 @@ make project-host-run PROJECT=agni20261111 APPLICATION=fatline ACTION=resource-q
 ```
 
 The general host dispatcher identifies the committed project and executes `local/fatline/host-actions/resource-qualify.sh`. The Agni action selects its exact pinned Smoke host-artifact app, while the running legacy composition stays pinned and unchanged. This is a compatibility host action until its resource qualification controller is fully migrated out of `nix.xd`.
+
+## Nix-Alpine-native qualification and runtime file capabilities
+
+Agni now exposes `#resource-preflight` as a Linux-executed Nix flake app. It builds the pinned Smoke `cmd/smoke-wisp` entry point natively within Nix-Alpine, retains the executable in the existing owner store, and records its source revision and digest. An optional `--check-transport` phase requires explicit guest address, port, mounted SSH identity, and known-hosts file; it fails before claiming transport success if any capability is missing. Neither phase claims Logma resource qualification: publication, ACL denials, delivery, and cleanup remain separate unqualified gates.
+
+The generic infrastructure now allows optional scoped named volumes under `/run/nix-xd/mounts/<alias>`, either read-only or explicitly writable. The Nix store remains separately managed. Credentials should be exposed only to the chosen qualification scope, and host-to-Podman/Podman-to-CoreOS file shares must be declared separately, with verified ownership and access. Existing Quadlets cannot gain new mounts without a controlled recreation; do not retrofit them by editing the active VM1 state.
+
+Run preflight from `nix.xd` with the generic `make run FLAKE=agni20261111/local/fatline TARGET='#resource-preflight'` interface after staging Agni. The older host-side resource qualification remains a compatibility path pending the native credential and guest network binding.
