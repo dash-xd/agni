@@ -36,3 +36,47 @@ Full Logma resource/lifecycle semantics, production HTTP authentication, crash
 recovery, durable Redis persistence, and multi-VM application behavior remain
 separate gates. An interrupted activation keeps its roots and requires explicit
 stop/retry or sandbox reset. It is not automatically promoted to a successful run.
+
+
+## Probot webhook VM1 candidate (new revisions)
+
+The existing `coreos-services-vm1` activation is a qualified earlier
+two-service profile; its pinned artifacts and Redis ACLs must not be
+silently replaced with the newer webhook integration binaries.
+
+Run Agni's `#qualify-integration --scenario probot-webhook --phase guest-plan`
+to build/reuse the three exact ARM64 artifacts and produce the credential-free
+`~/.local/state/agni/probot-webhook/guest-plan-vm1.json` in the authoritative
+Nix-Alpine owner. The planner validates the exact Nix store paths, the
+Probot router and Node entrypoint, source SHAs, distinct role credentials,
+private network and read-only store mounts, then emits three *candidate*
+systemd user-Quadlet descriptions. Its tests reject mismatched revisions
+and any attempt to include a GHXD OAuth credential as application authority.
+
+**The plan is not an activation.** The guest still requires:
+
+- Revised Skymill Redis ACL grants for the pinned implementation's
+  `skymill:{binding-hash}:stream:...`, idempotency and correlation keys.
+  The older `{scope}:skymill:...` ACL does not authorize these keys.
+  Validate the exact Binding hash using the pinned Skymill keyspace code.
+- New, distinct Probot state and lifecycle-publication Redis identities,
+  plus a subscription-only Logma principal. Preserve the current host-link
+  publisher/subscriber identities. Redis is RAM-only; its in-memory ledger
+  does not survive Redis restart.
+- Process-scoped encrypted runtime delivery of the Huram App private key,
+  webhook secret, operator credential and matching installation/binding
+  evidence. These **must never** be read from the GHXD user OAuth token,
+  embedded in the Nix store, or introduced into a systemd unit's literal
+  environment.
+- Guest-side activation via Agni's existing `guest.sh` and lifecycle
+  locking, using runtime-bound configuration and credential mounts. Runtime
+  readiness needs actual Logma and Skymill HTTP/Redis probes, not only an
+  active systemd unit.
+- A real externally delivered GitHub webhook, a matching Skymill durable
+  provider delivery ID and ACK/NACK settlement, plus independent Logmash
+  and serverless SSE hint observations.
+
+The candidate includes no HTTP port publications. It intentionally does
+not install units, rotate ACLs or invoke the actual webhook. A passing
+guest-plan establishes artifact identity and composition shape, **not**
+CoreOS VM1 readiness or live integration success.
