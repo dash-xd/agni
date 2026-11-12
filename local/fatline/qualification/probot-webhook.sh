@@ -65,7 +65,14 @@ if set(manifest.get("observers", [])) != {"logmash", "serverless-sse"}:
 print("AGNI_PROBOT_SOURCE_SELECTION=passed system=aarch64-linux")
 PY
 
-probot_root="$source_root/probot-runtime-integration"
+probot_checkout="$(python3 - "$AGNI_PROBOT_SOURCES" <<'PY'
+import json,sys
+entry=json.load(open(sys.argv[1]))["sources"]["probot-runtime"]
+print(entry["checkout"])
+PY
+)"
+[[ "$probot_checkout" =~ ^[a-z][a-z0-9-]{1,63}$ ]] || exit 2
+probot_root="$source_root/$probot_checkout"
 [[ -f "$probot_root/src/skymill.js" && -f "$probot_root/test/skymill.test.js" ]] || exit 1
 (
   cd "$probot_root"
