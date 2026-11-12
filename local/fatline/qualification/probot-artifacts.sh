@@ -71,7 +71,28 @@ node --check "$probot/src/logma.js"
 node - "$probot/package.json" "$probot/package-lock.json" <<'JS'
 const fs = require('node:fs');
 const [manifest, lock] = process.argv.slice(2).map(p => JSON.parse(fs.readFileSync(p, 'utf8')));
-if (!lock.lockfileVersion || lock.packages?.['']?.name !== manifest.name) throw Error('Probot lockfile mismatch');
+if (lock.lockfileVersion !== 3 || lock.packages?.['']?.name !== manifest.name ||
+    JSON.stringify(lock.packages[''].dependencies) !== JSON.stringify(manifest.dependencies))
+  throw Error('Probot lockfile mismatch');
 console.log('AGNI_PROBOT_NODE_SOURCE=passed locked-manifest=true');
 JS
+
+mkdir -p "$work/probot"
+cp -R "$probot/package.json" "$probot/package-lock.json" "$probot/src" "$work/probot/"
+if [[ -d "$probot/router" ]]; then cp -R "$probot/router" "$work/probot/"; fi
+export npm_config_cache="$state/npmcache"
+export npm_config_userconfig=/dev/null npm_config_update_notifier=false
+(cd "$work/probot" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
+(cd "$work/probot" && node -e 'for (const name of ["probot", "redis", "simple-router-builder"]) require.resolve(name)')
+probot_store="$(nix-store --add "$work/probot")"
+probot_root="$state/gcroots/probot-runtime-$probot_revision"
+if [[ ! -e "$probot_root" ]]; then
+  nix-store --realise --add-root "$probot_root" "$probot_store" >/dev/null
+else
+  [[ "$(readlink -f "$probot_root")" == "$probot_store" ]] || {
+    echo 'AGNI_PROBOT_ARTIFACT=blocked root-conflict=probot-runtime' >&2
+    exit 1
+  }
+fi
+printf 'AGNI_PROBOT_NODE_ARTIFACT=passed revision=%s store=%s\n' "$probot_revision" "$probot_store"
 printf 'AGNI_PROBOT_NATIVE_BUILD=passed system=aarch64-linux\n'
