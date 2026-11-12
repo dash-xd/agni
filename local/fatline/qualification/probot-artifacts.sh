@@ -95,4 +95,39 @@ else
   }
 fi
 printf 'AGNI_PROBOT_NODE_ARTIFACT=passed revision=%s store=%s\n' "$probot_revision" "$probot_store"
+
+node_executable="$(readlink -f "$(command -v node)")"
+[[ "$node_executable" =~ ^/nix/store/[a-z0-9]{32}-[^/]+/bin/node$ && -x "$node_executable" ]] || {
+  echo 'AGNI_PROBOT_ARTIFACT=blocked node-not-store-backed' >&2
+  exit 1
+}
+node_store="${node_executable%/bin/node}"
+node_root="$state/gcroots/node-runtime-arm64"
+if [[ ! -e "$node_root" ]]; then
+  nix-store --realise --add-root "$node_root" "$node_store" >/dev/null
+else
+  [[ "$(readlink -f "$node_root")" == "$node_store" ]] || exit 1
+fi
+python3 - "$AGNI_PROBOT_SOURCES" "$state/artifacts.json" "$node_executable" <<'PY'
+import json,os,pathlib,re,sys
+manifest=json.loads(pathlib.Path(sys.argv[1]).read_text())
+dest=pathlib.Path(sys.argv[2]); node=sys.argv[3]
+root=dest.parent/"gcroots"
+roles={"skymill":"skymill-http","logma":"logma-lifecycle","probot-runtime":"probot"}
+artifacts={}
+for name,basename in roles.items():
+    rev=manifest["sources"][name]["revision"]
+    location=os.path.realpath(root/(name+"-"+rev))
+    if not re.fullmatch(r"/nix/store/[a-z0-9]{32}-"+re.escape(basename),location):
+        raise SystemExit("Unexpected artifact store path for "+name)
+    artifacts[name]={"revision":rev,"store":location}
+data={"schema":1,"system":"aarch64-linux","scope":"probot-webhook",
+      "artifacts":artifacts,"node":node,"ghxd_credentials_included":False}
+tmp=dest.with_name(dest.name+".tmp")
+with tmp.open("w") as f:
+    json.dump(data,f,sort_keys=True,indent=2);f.write("\n")
+os.chmod(tmp,0o600)
+os.replace(tmp,dest)
+print("AGNI_PROBOT_ARTIFACT_MANIFEST=passed roles=3 credentials=excluded")
+PY
 printf 'AGNI_PROBOT_NATIVE_BUILD=passed system=aarch64-linux\n'
