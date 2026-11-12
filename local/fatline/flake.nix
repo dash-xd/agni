@@ -31,8 +31,8 @@
 
               revision=${smokeRevision}
               source=${smokeSource}
-              if [[ -n "''${AGNI_NATIVE_SMOKE_BINARY:-}" ]]; then
-                binary="$AGNI_NATIVE_SMOKE_BINARY"
+              if [[ -n "''${NIX_XD_NATIVE_BINARY:-${AGNI_NATIVE_SMOKE_BINARY:-}}" ]]; then
+                binary="${NIX_XD_NATIVE_BINARY:-${AGNI_NATIVE_SMOKE_BINARY:-}}"
                 [[ "$mode" == --check-transport ]] || { echo 'Prebuilt binary only accepted for transport' >&2; exit 2; }
                 [[ "$binary" =~ ^/nix/store/[a-z0-9]{32}-smoke$ && -x "$binary" ]] ||
                   { echo 'Expected a native Smoke binary in the mounted Nix store' >&2; exit 1; }
@@ -53,32 +53,37 @@
                   "$revision" "$binary" "$(sha256sum "$binary" | cut -d' ' -f1)"
               fi
 
+              printf 'NIX_XD_NATIVE_ARTIFACT=%s\n' "$binary"
               if [[ "$mode" == --check-build ]]; then
                 echo 'AGNI_RESOURCE_QUALIFICATION=pending phase=transport-and-credential-contract'
                 exit 0
               fi
 
-              : "''${AGNI_COREOS_ENDPOINT:?Provide reachable guest SSH endpoint}"
-              : "''${AGNI_COREOS_PORT:?Provide guest SSH port}"
-              : "''${AGNI_COREOS_IDENTITY:?Provide runtime-mounted SSH identity}"
-              : "''${AGNI_COREOS_KNOWN_HOSTS:?Provide runtime-mounted SSH known_hosts}"
-              [[ "$AGNI_COREOS_PORT" =~ ^[0-9]{1,5}$ ]] || { echo 'Invalid SSH port' >&2; exit 2; }
-              [[ "$AGNI_COREOS_IDENTITY" == /run/nix-xd/mounts/secrets/identity &&
-                 "$AGNI_COREOS_KNOWN_HOSTS" == /run/nix-xd/mounts/secrets/known_hosts ]] || {
+              endpoint="''${NIX_XD_TRANSPORT_ENDPOINT:-${AGNI_COREOS_ENDPOINT:-}}"
+              port="''${NIX_XD_TRANSPORT_PORT:-${AGNI_COREOS_PORT:-}}"
+              identity="''${NIX_XD_TRANSPORT_IDENTITY:-${AGNI_COREOS_IDENTITY:-}}"
+              known_hosts="''${NIX_XD_TRANSPORT_KNOWN_HOSTS:-${AGNI_COREOS_KNOWN_HOSTS:-}}"
+              guest_user="''${NIX_XD_TRANSPORT_USER:-${AGNI_COREOS_USER:-wisp}}"
+              evidence_dir="''${NIX_XD_EVIDENCE_DIR:-${AGNI_EVIDENCE_DIR:-}}"
+              [[ -n "$endpoint" && "$port" =~ ^[0-9]{1,5}$ ]] || {
+                echo 'Missing or invalid CoreOS endpoint and port' >&2; exit 2;
+              }
+              [[ "$identity" == /run/nix-xd/mounts/secrets/identity &&
+                 "$known_hosts" == /run/nix-xd/mounts/secrets/known_hosts ]] || {
                 echo 'SSH trust paths must be explicitly volume-mounted' >&2; exit 1;
               }
-              test -f "$AGNI_COREOS_IDENTITY" && test -f "$AGNI_COREOS_KNOWN_HOSTS" || {
-                echo 'SSH trust material is not mounted into Nix-Alpine' >&2; exit 1;
+              [[ -f "$identity" && -f "$known_hosts" ]] || {
+                echo 'SSH trust material is not mounted into the qualifier' >&2; exit 1;
               }
               "$binary" wisp qualify \
-                --address "$AGNI_COREOS_ENDPOINT:$AGNI_COREOS_PORT" \
-                --user "''${AGNI_COREOS_USER:-wisp}" \
-                --identity "$AGNI_COREOS_IDENTITY" \
-                --known-hosts "$AGNI_COREOS_KNOWN_HOSTS" \
+                --address "$endpoint:$port" \
+                --user "$guest_user" \
+                --identity "$identity" \
+                --known-hosts "$known_hosts" \
                 --timeout 2m
-              if [[ -n "''${AGNI_EVIDENCE_DIR:-}" ]]; then
-                [[ "$AGNI_EVIDENCE_DIR" == /run/nix-xd/mounts/evidence ]] || exit 2
-                printf 'AGNI_NATIVE_WISP_TRANSPORT=passed\n' > "$AGNI_EVIDENCE_DIR/native-wisp-transport.txt"
+              if [[ -n "$evidence_dir" ]]; then
+                [[ "$evidence_dir" == /run/nix-xd/mounts/evidence ]] || exit 2
+                printf 'AGNI_NATIVE_WISP_TRANSPORT=passed\n' > "$evidence_dir/native-wisp-transport.txt"
               fi
               echo 'AGNI_NATIVE_WISP_TRANSPORT=passed'
               echo 'AGNI_RESOURCE_QUALIFICATION=pending phase=resource-authorization-and-delivery'
