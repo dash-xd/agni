@@ -187,6 +187,10 @@
             && builtins.match "[0-9a-f]{40}" plan.services.revision != null
             && builtins.all (revision: builtins.match "[0-9a-f]{40}" revision != null)
                  (builtins.attrValues plan.componentRevisions)
+            && builtins.match "[0-9a-f]{40}" plan.hostArtifacts.smoke.sourceRevision != null
+            && builtins.match "github:dash-xd/agni/[0-9a-f]{40}\\?dir=local/fatline" plan.hostArtifacts.smoke.flake != null
+            && plan.hostArtifacts.smoke.app == "smoke-host-artifact"
+            && plan.hostArtifacts.smoke.target == "darwin-arm64"
             && !plan.fullFatlineQualified;
         in {
           coreos-plan = assert valid plans.vm1 && valid plans.vm2
