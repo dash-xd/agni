@@ -3,7 +3,7 @@
   "scope": "nix-xd-arm",
   "grants": [
     {
-      "volume": "nix-xd-state-application-fatline",
+      "volume": "nix-xd-state-control-fatline-input",
       "destination": "/run/nix-xd/mounts/fatline-input",
       "access": "ro",
       "reader": "nix-xd-arm",
