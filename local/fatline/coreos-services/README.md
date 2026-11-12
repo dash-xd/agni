@@ -60,7 +60,7 @@ and any attempt to include a GHXD OAuth credential as application authority.
   The older `{scope}:skymill:...` ACL does not authorize these keys.
   Validate the exact Binding hash using the pinned Skymill keyspace code.
 - New, distinct Probot state and lifecycle-publication Redis identities,
-  plus a subscription-only Logma principal. Preserve the current host-link
+  plus a subscription-only observer principal. Logma itself retains its\n  separate `logma` principal. Preserve the current host-link
   publisher/subscriber identities. Redis is RAM-only; its in-memory ledger
   does not survive Redis restart.
 - Process-scoped encrypted runtime delivery of the Huram App private key,
@@ -120,3 +120,33 @@ The disposable `acl-runtime` phase renders its own policy into a fresh
 per-run temporary directory, rather than overwriting the persistent
 `acl-plan` evidence. This supports revised source/policy candidates without
 requiring manual cleanup or weakening the fail-closed policy-file contract.
+
+## Webhook activation profile composition
+
+The new `startup-profile/probot-render.py` reuses the existing
+`startup-profile/render.py` to declare the five-role VM1 group:
+Redis, nginx, the pinned Logma lifecycle binary, the pinned Skymill HTTP
+binary and Probot/Node. The Redis bootstrap/revocation hooks and private
+service network remain those of the consolidated startup profile.
+Skymill connects over the existing private nginx TCP proxy on DB 0;
+the VM1 Redis server remains Unix-socket-only. Probot has independent
+`probot_state` and `lifecycle_publish` Redis credentials; all runtime
+passwords are read from mount-only files. Probot worker processing is
+initially disabled and the public URL is a private placeholder until
+real GitHub App authority and ingress configuration are installed.
+
+`coreos-services/probot-credentials.py` emits a new private generation
+using the existing ACL renderer. It retains the previously installed
+Logma, Skymill, bootstrap, publisher and subscriber identities and the
+Logma API key, and provisions separate Probot and observer credentials.
+It refuses unknown ACL principals, inconsistent policy schema and
+overwrites of an existing generation.
+
+`#qualify-integration --scenario probot-webhook --phase service-profile`
+runs these composition and credential tests inside Nix-Alpine. This
+is a **render/credential contract qualification**, not live activation.
+The existing CoreOS VM must be inventoried before a profile upgrade is
+implemented. In particular, updating only the legacy two-service
+`coreos-services/guest.sh` would conflict with an installed consolidated
+startup profile and its Redis bootstrap/revocation hooks. Do not stop
+or restart Redis just to pass these tests.
