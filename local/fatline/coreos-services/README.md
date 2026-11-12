@@ -91,7 +91,7 @@ principals, and scopes Skymill to its exact 32-hex Binding hash slot.
 The existing ACL renderer now supports additional principals and canonical
 Redis hash-slot notation without changing old policy output order.
 
-The candidate is written under the Nix-Alpine writer's
+The `acl-plan` candidate is written under the Nix-Alpine writer's
 `~/.local/state/agni/probot-webhook/redis-policy-vm1.json` and does not
 create credentials or modify the active Redis ACL. The Probot state prefix,
 service environment, command grants, and source-derived Binding must be
@@ -115,3 +115,8 @@ The `probot_state` prefix is aligned to the Probot runtime
 activation must explicitly bind those same identities and the appropriate
 Redis DB. The policy is only a candidate until actual Probot and Skymill
 behavior has been exercised. Redis is still RAM-only.
+
+The disposable `acl-runtime` phase renders its own policy into a fresh
+per-run temporary directory, rather than overwriting the persistent
+`acl-plan` evidence. This supports revised source/policy candidates without
+requiring manual cleanup or weakening the fail-closed policy-file contract.
