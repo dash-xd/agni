@@ -21,7 +21,7 @@ while (($#)); do
   esac
 done
 [[ "$scenario" == probot-webhook ]] || { echo 'Select --scenario probot-webhook' >&2; exit 2; }
-[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|live' >&2; exit 2; }
+[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|live' >&2; exit 2; }
 
 [[ "$(uname -s)" == Linux && "$(uname -m)" == aarch64 ]] || {
   echo 'PROBOT_WEBHOOK=blocked reason=requires-arm64-nix-alpine' >&2
@@ -88,6 +88,16 @@ bash "${AGNI_PROBOT_ARTIFACT_BUILDER:?Artifact builder must be supplied by pinne
 if [[ "$phase" == artifacts ]]; then
   echo 'AGNI_PROBOT_ARTIFACT_PREFLIGHT=passed'
   echo 'AGNI_PROBOT_WEBHOOK_INTEGRATION=pending phase=guest-compose-and-github-binding'
+  exit 0
+fi
+if [[ "$phase" == guest-plan ]]; then
+  state="$HOME/.local/state/agni/probot-webhook"
+  python3 "${AGNI_PROBOT_GUEST_PLANNER:?Guest planner must be provided by Agni flake}" \
+    --artifacts "$state/artifacts.json" \
+    --sources "$AGNI_PROBOT_SOURCES" \
+    --scope fatline-arm-vm1 \
+    --output "$state/guest-plan-vm1.json"
+  echo 'AGNI_PROBOT_GUEST_PLAN=passed activation=blocked'
   exit 0
 fi
 echo 'AGNI_PROBOT_WEBHOOK_INTEGRATION=blocked phase=live reason=guest-service-probot-and-github-authority-not-yet-wired' >&2
