@@ -54,7 +54,7 @@ def main():
             for pattern in spec.get(field, []):
                 for key, value in substitutions.items():
                     pattern = pattern.replace("{" + key + "}", value)
-                without_slot = re.sub(r"\\{[0-9a-f]{32}\\}", "", pattern)
+                without_slot = re.sub(r"\{[0-9a-f]{32}\}", "", pattern)
                 if "{" in without_slot or "}" in without_slot or any(ch.isspace() for ch in pattern):
                     fail(f"invalid {field} pattern in {name} policy")
                 rules.append(prefix + pattern)
