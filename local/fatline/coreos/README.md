@@ -105,3 +105,11 @@ Before using persistent Fatline resources, run the generic `make grants-isolatio
 `qualification/guest-9p-grants.json` declares the read-only `fatlineinput` QEMU 9P tag for a separately provisioned CoreOS guest. It intentionally excludes live secrets. The generic `guest-9p-plan` and `guest-9p-preflight` verify the declaration and existing state-volume labels. `COREOS_9P_GRANTS_FILE` may be supplied when **creating** a new QEMU runner; it is not an in-place configuration mechanism for VM1. CoreOS guest mount/unit construction and guest-side identity checks remain unqualified. Retain VM1's current runner and data unchanged.
 
 Full native Logma resource dispatch, Redis ACL failure modes, and recovery gates still require the guest-side access and authenticated SSH/Redis transport bindings before `#resource-qualify` should be marked passed.
+
+## Persistent Podman secret-volume qualification
+
+`qualification/persistent-secret-grants.json` specifies two dedicated fixture domains: `nix-xd-state-secret-fatline-qualification` (read-only consumer, separate writer) and `nix-xd-state-control-fatline-qualification-evidence` (qualification writer). These are **not** VM1's live keys or passwords.
+
+The `#secret-volume-fixture` package builds `agni-secret-volume-fixture` with pinned age/SOPS/jq tool closures in the authoritative Nix store. Generic `nix.xd` `make grants-execute FLAKE=... TARGET='#secret-volume-fixture' PROGRAM=agni-secret-volume-fixture GRANTS_FILE=...` invokes the result from a separate rootless container that sees the Nix store read-only. The initial writer creates an age private identity (0600) **inside the Podman secret volume**, encrypts a synthetic fixture and leaves no private material in the Nix store. The selected reader mounts that same volume read-only, decrypts into tmpfs, rejects a write to the secret directory, and writes only pass markers into the separate evidence volume.
+
+This intentionally scopes volume initialization to new `*-qualification` resources and refuses to overwrite an existing identity. It has no host SSH key import, does not contact CoreOS and does not modify Logma or Redis. Native Wisp transport, per-runtime UID/SELinux authorization for real credentials and application resource delivery remain separate gates.
