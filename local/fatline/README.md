@@ -54,3 +54,30 @@ but fails closed with
 `AGNI_PROBOT_WEBHOOK_INTEGRATION=blocked` until guest service and
 GitHub authority wiring are qualified. A successful build is not a
 webhook-settlement or Logmash/SSE observation qualification.
+
+
+## CoreOS VM1 Probot guest-plan qualification
+
+The next additive gate is
+`#qualify-integration --scenario probot-webhook --phase guest-plan`.
+It reuses the exact SHA source selection, the already-qualified Node/Go
+application artifacts and the existing `coreos-services-vm1` rootless
+user-Quadlet conventions. The writer produces a non-secret
+`~/.local/state/agni/probot-webhook/artifacts.json`, then Agni's
+`coreos-services/probot-plan.py` validates and emits
+`~/.local/state/agni/probot-webhook/guest-plan-vm1.json`.
+
+The plan is **not** transferred to CoreOS or installed. It contains
+three candidate private-service Quadlets, exact source and Nix-store
+identities, rootless/read-only mount conventions, role-specific expected
+credential filenames and an explicit activation blocker. The gate runs
+the unit and credential contract tests before emitting the candidate.
+No GHXD OAuth token is used for a GitHub App installation.
+
+The current CoreOS service package and its Redis ACL profile still
+target older Logma/Skymill sources. The new Skymill's SHA-based Redis
+binding keyspace is incompatible with those old ACL patterns. A future
+`--phase live` must first bind the application roles and their own
+scoped ACLs, then provision the App authority and verify a real webhook
+through Skymill durable settlement and both Logma observers. It remains
+fail-closed until those changes are complete.
