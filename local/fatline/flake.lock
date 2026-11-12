@@ -24,7 +24,7 @@
     "nix-alpine-runtime": {
       "flake": false,
       "locked": {
-        "lastModified": 1794355200,
+        "lastModified": 1794363319,
         "narHash": "sha256-wTKdLj0kqLauyQ4FlXdKv2bwdk8swMLNuRvh5uGS25c=",
         "owner": "xd-dash",
         "repo": "nix.xd",
