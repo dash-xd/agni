@@ -12,6 +12,11 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
+      smokeRevision = "66950da9a5e4e5303f5dcd018f9039f9b6fc8496";
+      smokeSource = builtins.fetchGit {
+        url = "https://github.com/xd-dash/smoke.git";
+        rev = smokeRevision;
+      };
       coreosPlans = forAllSystems (system: {
         vm1 = import ./coreos/plan.nix { inherit system; profile = "vm1"; };
         vm2 = import ./coreos/plan.nix { inherit system; profile = "vm2"; };
@@ -217,6 +222,29 @@
               exec bash ${./scripts/fatline.sh} "$@"
             '';
           };
+          smokeHostArtifact = pkgs.writeShellApplication {
+            name = "agni-fatline-smoke-host-artifact";
+            runtimeInputs = [ pkgs.go_1_26 pkgs.nix pkgs.coreutils ];
+            text = ''
+              set -euo pipefail
+              source=${smokeSource}
+              revision=${smokeRevision}
+              state="''${HOME}/.local/state/nix-xd/agni-fatline/smoke/$revision"
+              mkdir -p "$state/cache" "$state/mod"
+              export GOCACHE="$state/cache"
+              export GOMODCACHE="$state/mod"
+              export GOOS=darwin GOARCH=arm64 CGO_ENABLED=0
+              candidate="$(mktemp "$state/smoke.XXXXXXXX")"
+              trap 'rm -f "$candidate"' EXIT
+              (cd "$source" && go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$candidate" ./cmd/smoke-wisp)
+              path="$(nix-store --add "$candidate")"
+              nix-store --realise --add-root "$state/gcroot" "$path" >/dev/null
+              printf 'ARTIFACT_SOURCE_REV=%s\\n' "$revision"
+              printf 'ARTIFACT_STORE_PATH=%s\\n' "$path"
+              printf 'ARTIFACT_SHA256=%s\\n' "$(sha256sum "$path" | cut -d' ' -f1)"
+              printf 'ARTIFACT_TARGET=%s\\n' darwin-arm64
+            '';
+          };
           app = command: {
             type = "app";
             program = "${pkgs.writeShellScript "agni-fatline-${command}" ''
@@ -235,6 +263,10 @@
             '';
           };
         in {
+          smoke-host-artifact = {
+            type = "app";
+            program = "${smokeHostArtifact}/bin/agni-fatline-smoke-host-artifact";
+          };
           coreos-plan-vm1 = {
             type = "app";
             program = "${pkgs.writeShellScript "agni-coreos-plan-vm1" ''
