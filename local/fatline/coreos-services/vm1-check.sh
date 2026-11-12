@@ -34,7 +34,7 @@ case "$action" in
     printf 'AGNI_VM1_RUNTIME_INVENTORY=passed profile=%s redis=%s application_units=%s\n' "$profile" "$redis" "$units"
     ;;
   store-check)
-    [[ $# == 8 ]] || { echo 'Expected three store paths, three revisions and a Node executable' >&2; exit 2; }
+    [[ $# == 9 ]] || { echo 'Expected three store paths, three revisions and a Node executable' >&2; exit 2; }
     shift 2
     for role in skymill logma probot; do
       executable="$1"; revision="$2";shift 2
