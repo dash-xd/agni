@@ -4,7 +4,7 @@ The development checkout is `agniYYYYMMDD`, on `vYYYYMMDD`. The branch is a muta
 
 This migration declares `coreosPlans` internally and exposes standard read-only `coreos-plan-vm1` / `vm2` apps, corresponding packages, and the `checks.<system>.coreos-plan` derivation under `local/fatline`. The machine placement, transport, guest services, source revisions and compatibility pins now have an Agni-owned declaration. Existing runtime bundles (`coreos-services`, `host-link`, `startup-profile`) are reused, not rewritten.
 
-The `nix.xd` runtime controllers now select this plan from a staged Agni checkout via `NIX_XD_AGNI_FLAKE` and `NIX_XD_AGNI_REV`. They verify the staged source revision, locked Nix-Alpine input, and selected Nix build output before guest mutation. The legacy `fatlinePlans` output is retained temporarily for compatibility auditing, but is no longer read by the CoreOS/Fatline VM, host-link, or application-service controllers. Full flake-owned lifecycle orchestration and guest qualification remain outstanding.
+The `nix.xd` runtime controllers now select this plan from a staged Agni checkout via `NIX_XD_COMPOSITION_FLAKE` and `NIX_XD_COMPOSITION_REV`. They verify the staged source revision, locked Nix-Alpine input, and selected Nix build output before guest mutation. The legacy `fatlinePlans` output is retained temporarily for compatibility auditing, but is no longer read by the CoreOS/Fatline VM, host-link, or application-service controllers. Full flake-owned lifecycle orchestration and guest qualification remain outstanding.
 
 ## Inspect the read-only plan
 
@@ -43,10 +43,18 @@ From the dated `nix.xd` controller, stage both the committed `nix.xd` and Agni c
 
 ```sh
 make agni-coreos-plan-check PROVIDER=podman SCOPE=nix-xd-arm \
-  AGNI_FLAKE=/workspaces/agni20261111/local/fatline \
-  AGNI_REV="$(git -C "$HOME/workspace/agni20261111" rev-parse HEAD)"
+  COMPOSITION_FLAKE=/workspaces/agni20261111/local/fatline \
+  COMPOSITION_REV="$(git -C "$HOME/workspace/agni20261111" rev-parse HEAD)"
 ```
 
 The preflight builds only the plan JSON, not the Fatline images or guest services. It writes `.state/agni-coreos/vm1-selection.json` under the controller checkout, recording the exact Agni commit, plan store output, SHA-256 of plan and lock, Nix-Alpine runtime pin, and component revision pins (Logma, Skymill, Ratelimiter and service bundles). A mismatch fails before any guest mutation.
 
 The existing `fatline-vm-local` invokes this preflight before starting the guest. Previous generations from the legacy controller remain protected; an existing scope with a different composition manifest requires explicit migration or a fresh sandbox. No automatic replacement is performed.
+
+## Agni-owned host tool artifacts
+
+A Fatline plan can declare `hostArtifacts.smoke`, including an exact-revision flake, an app output, the pinned Smoke source revision, and its expected host target. The current candidate uses `#smoke-host-artifact` to cross-compile `cmd/smoke-wisp` for Darwin ARM64 from a Nix-fetched exact Smoke revision. The app places the output in the owner's Nix store, retains a GC root and reports its SHA-256. The generic Nix-Alpine/host transport verifies the bytes before making the executable available to the host-side qualifier.
+
+This app deliberately performs Go module downloads and build effects **at runtime**. It is not yet a fixed-output, hermetically vendored derivation. Pinning source and module checksums plus recording the resulting binary hash enables qualification, but do not conflate that with binary reproducibility. Move vendoring into the Nix build graph after the first runtime gate passes.
+
+The existing `nix.xd` Fatline-specific controllers remain compatibility code during the ongoing VM1 qualification. Their application phase graph must be migrated to Agni before retiring the older controller targets; the generic `nix.xd` Make interface is `stage`, `run`, `build`, and artifact transport.
