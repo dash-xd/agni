@@ -170,6 +170,11 @@
           host-link-vm2 = import ./host-link { inherit pkgs; scope = "fatline-arm-vm2"; };
           coreos-services-vm1 = import ./coreos-services { inherit pkgs; };
           coreos-startup-profile = import ./startup-profile { inherit pkgs; };
+          vm1-guest-check = pkgs.runCommand "agni-vm1-guest-check-v1" {} ''
+            mkdir -p "$out"
+            cp ${./coreos-services/vm1-check.sh} "$out/guest.sh"
+            chmod 0555 "$out/guest.sh"
+          '';
           # Composition-owned runtime images; Nix-Alpine supplies only the build/runtime toolchain.
           redis-image = pkgs.dockerTools.buildLayeredImage {
             name = "localhost/fatline-redis";
