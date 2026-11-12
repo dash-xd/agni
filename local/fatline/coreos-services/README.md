@@ -150,3 +150,27 @@ implemented. In particular, updating only the legacy two-service
 `coreos-services/guest.sh` would conflict with an installed consolidated
 startup profile and its Redis bootstrap/revocation hooks. Do not stop
 or restart Redis just to pass these tests.
+
+## Authenticated Skymill HTTP contract
+
+The earlier pinned Skymill CLI configured `httpapi.New(stream, nil)`. HTTP
+handlers require an explicit grant, so a running listener could still reject
+all publish, receive, settle and ACK/NACK operations with HTTP 403. A new
+Skymill source revision corrects this by requiring a runtime-only
+`SKYMILL_TOKEN_FILE` and granting only the pinned binding and consumer group
+to a caller with the matching Bearer credential. Startup fails closed if the
+credential file is absent or too short. Go tests check missing, invalid and
+valid tokens, and Agni's native artifact builder runs these tests before
+recording a new ARM64 Skymill store path.
+
+Agni's credential generator supplies one random token to the Skymill HTTP
+service and the Probot client using separate role-specific file mounts. The
+token does not appear as a systemd Environment literal, in the Nix store, or
+in a shared runtime credential directory. This is application-to-application
+HTTP authorization, separate from the Redis principal ACLs. The token is
+only accepted inside the private Fatline network, and the Skymill HTTP port
+remains unpublished.
+
+These source and credential fixes are not proof of live delivery. VM1 still
+runs the earlier legacy two-service profile, and the five-role profile
+migration requires an explicit Redis restart and real readiness checks.
