@@ -83,9 +83,9 @@ Run preflight from `nix.xd` with the generic `make run FLAKE=agni20261111/local/
 
 `qualification/runtime-grants.json` is the non-secret storage grant declaration for the Linux-side qualifier. It selects two **future bindings**, not existing VM1 credentials or disks:
 
-- A read-only application input volume `nix-xd-state-application-fatline`, written by a separate `fatline-controller` principal
+- A read-only **non-secret** qualification input volume `nix-xd-state-control-fatline-input`, written by a separate `fatline-controller` principal
 - A writable qualification-evidence volume `nix-xd-state-control-qualification`, whose designated writer is the Nix-Alpine runtime `nix-xd-arm`
 
-Both use paths under `/run/nix-xd/mounts`; no Nix store is shared writable and the declaration contains no credential material. The generic `nix.xd` `grants-plan`, `grants-render`, and `grants-verify` commands validate and inspect this declaration. Provisioning alone creates **empty** volumes; it does not migrate host credentials. Do not apply these grants to the active runtime until the guest transport, access identities, and credential handoff have been reconciled. CoreOS's existing 9P store export is independent and read-only.
+Both use paths under `/run/nix-xd/mounts`; no Nix store is shared writable and the declaration contains no credential material. The generic `nix.xd` `grants-plan`, `grants-render`, and `grants-verify` commands validate and inspect this declaration. Provisioning alone creates **empty** volumes; it does not migrate host credentials. **Do not put SSH keys, Redis passwords, or plaintext application secrets into these long-lived owner mounts.** Private credentials require a separate short-lived qualifier with explicit per-run grants. Do not apply these grants to the active runtime until the guest transport, access identities, and credential handoff have been reconciled. CoreOS's existing 9P store export is independent and read-only.
 
 The native Smoke preflight is already qualified; full Logma resource dispatch and evidence writing via these mounts remain unqualified.
