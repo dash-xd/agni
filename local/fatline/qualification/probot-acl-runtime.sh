@@ -7,7 +7,6 @@ umask 077
 : "${AGNI_PROBOT_REDIS_BASELINE:?Select pinned baseline policy}"
 : "${AGNI_PROBOT_SOURCES:?Select pinned source selection}"
 
-state="$HOME/.local/state/agni/probot-webhook"
 work="$(mktemp -d "${TMPDIR:-/tmp}/agni-probot-acl.XXXXXXXX")"
 pid=
 cleanup() {
@@ -22,7 +21,7 @@ python3 "$AGNI_PROBOT_REDIS_PLANNER" \
   --baseline "$AGNI_PROBOT_REDIS_BASELINE" \
   --sources "$AGNI_PROBOT_SOURCES" \
   --scope fatline-arm-vm1 \
-  --output "$state/redis-policy-vm1.json"
+  --output "$work/redis-policy.json"
 
 mkdir -m 700 "$work/credentials" "$work/socket"
 python3 - "$work/credentials" <<'PY'
@@ -32,7 +31,7 @@ for name in ("logma","skymill","bootstrap","probot_state","lifecycle_publish","l
     (base/name).write_text(secrets.token_hex(32)+"\n")
     (base/name).chmod(0o600)
 PY
-python3 "$AGNI_PROBOT_REDIS_RENDERER" "$state/redis-policy-vm1.json" "$work/credentials" "$work/users.acl" >/dev/null
+python3 "$AGNI_PROBOT_REDIS_RENDERER" "$work/redis-policy.json" "$work/credentials" "$work/users.acl" >/dev/null
 chmod 600 "$work/users.acl"
 
 cat > "$work/redis.conf" <<EOF
@@ -87,7 +86,7 @@ for user in logma skymill bootstrap probot_state lifecycle_publish lifecycle_sub
   denied "$user" ACL LIST
 done
 
-tag="$(python3 - "$state/redis-policy-vm1.json" <<'PY'
+tag="$(python3 - "$work/redis-policy.json" <<'PY'
 import json,re,sys
 data=json.load(open(sys.argv[1]))
 pattern=data["users"]["skymill"]["keys"][0]
