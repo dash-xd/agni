@@ -58,3 +58,15 @@ A Fatline plan can declare `hostArtifacts.smoke`, including an exact-revision fl
 This app deliberately performs Go module downloads and build effects **at runtime**. It is not yet a fixed-output, hermetically vendored derivation. Pinning source and module checksums plus recording the resulting binary hash enables qualification, but do not conflate that with binary reproducibility. Move vendoring into the Nix build graph after the first runtime gate passes.
 
 The existing `nix.xd` Fatline-specific controllers remain compatibility code during the ongoing VM1 qualification. Their application phase graph must be migrated to Agni before retiring the older controller targets; the generic `nix.xd` Make interface is `stage`, `run`, `build`, and artifact transport.
+
+## Host action dispatch
+
+Host effects are selected by the generic Nix-Alpine Make entry point, not by project-named targets:
+
+```sh
+make project-host-run PROJECT=agni20261111 APPLICATION=fatline ACTION=resource-qualify \
+  COMPOSITION_FLAKE=/workspaces/agni20261111/local/fatline \
+  COMPOSITION_REV=5442e5f9b13479edefb55cfa3c3cd518e199ad5c
+```
+
+The general host dispatcher identifies the committed project and executes `local/fatline/host-actions/resource-qualify.sh`. The Agni action selects its exact pinned Smoke host-artifact app, while the running legacy composition stays pinned and unchanged. This is a compatibility host action until its resource qualification controller is fully migrated out of `nix.xd`.
