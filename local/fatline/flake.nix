@@ -238,10 +238,10 @@
               export GOCACHE="$state/cache"
               export GOMODCACHE="$state/mod"
               export GOOS=darwin GOARCH=arm64 CGO_ENABLED=0
-              candidate="$(mktemp "$state/smoke.XXXXXXXX")"
-              trap 'rm -f "$candidate"' EXIT
-              (cd "$source" && go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$candidate" ./cmd/smoke-wisp)
-              path="$(nix-store --add "$candidate")"
+              workdir="$(mktemp -d "$state/build.XXXXXXXX")"
+              trap 'rm -rf -- "$workdir"' EXIT
+              (cd "$source" && go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$workdir/smoke" ./cmd/smoke-wisp)
+              path="$(nix-store --add "$workdir/smoke")"
               nix-store --realise --add-root "$state/gcroot" "$path" >/dev/null
               printf 'ARTIFACT_SOURCE_REV=%s\\n' "$revision"
               printf 'ARTIFACT_STORE_PATH=%s\\n' "$path"
