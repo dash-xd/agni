@@ -68,6 +68,12 @@ let vm2 = profile == "vm2"; in
     hostPort = if vm2 then 26379 else 16379;
     guestProxyPort = 16379;
   };
+  hostArtifacts.smoke = {
+    flake = "github:dash-xd/agni/2ee8d655b129340844cd6f0fcdbe32af20e93a00?dir=local/fatline";
+    app = "smoke-host-artifact";
+    sourceRevision = "66950da9a5e4e5303f5dcd018f9039f9b6fc8496";
+    target = "darwin-arm64";
+  };
   componentRevisions = {
     logma = "870c9f0c21796bb670cb6f1a142ca38fc21b653a";
     skymill = "907346ecd74a4d39830347b2ea01dc2b1c6b8969";
