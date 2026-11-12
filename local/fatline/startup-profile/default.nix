@@ -6,6 +6,7 @@ in pkgs.runCommand "agni-fatline-startup-profile-v1" {} ''
   cp ${./runtime.sh} "$out/runtime.sh"
   cp ${./probot-render.py} "$out/probot-render.py"
   cp ${./probot-stage.py} "$out/probot-stage.py"
+  cp ${./probot-guest-stage.sh} "$out/probot-guest-stage.sh"
   cp ${../coreos-services/probot-credentials.py} "$out/probot-credentials.py"
   cp ${../coreos-services/probot-redis-policy.py} "$out/probot-redis-policy.py"
   cp ${../scripts/render-users-acl.py} "$out/render-users-acl.py"
