@@ -1,0 +1,31 @@
+name: VM1 Probot candidate
+on:
+  push:
+    branches:
+      - codex/vm1-probot-five-role-activation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate five-role controller and renderers
+        run: |
+          bash -n local/fatline/startup-profile/runtime.sh
+          bash -n local/fatline/qualification/probot-artifacts.sh
+          python3 -m py_compile local/fatline/startup-profile/probot-render.py local/fatline/coreos-services/probot-credentials.py
+      - name: Profile and credential tests
+        env:
+          AGNI_PROBOT_PROFILE_RENDERER: ${{ github.workspace }}/local/fatline/startup-profile/probot-render.py
+          AGNI_PROBOT_STARTUP_RENDERER: ${{ github.workspace }}/local/fatline/startup-profile/render.py
+          AGNI_PROBOT_CREDENTIAL_GENERATOR: ${{ github.workspace }}/local/fatline/coreos-services/probot-credentials.py
+          AGNI_PROBOT_REDIS_PLANNER: ${{ github.workspace }}/local/fatline/coreos-services/probot-redis-policy.py
+          AGNI_PROBOT_REDIS_BASELINE: ${{ github.workspace }}/local/fatline/acl-policy.json
+          AGNI_PROBOT_REDIS_RENDERER: ${{ github.workspace }}/local/fatline/scripts/render-users-acl.py
+        run: |
+          python3 local/fatline/startup-profile/test_probot_render.py
+          python3 local/fatline/coreos-services/test_probot_credentials.py
