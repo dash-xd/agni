@@ -5,7 +5,6 @@ import (
 	lifecycle "github.com/dash-xd/ratelimiter/profile/lifecycle"
 	"github.com/redis/go-redis/v9"
 	"testing"
-	"net/http"
 )
 
 func TestBootstrapProfileSatisfiesLifecycleContract(t *testing.T) {
@@ -41,20 +40,3 @@ func TestReadinessUsesLogmaPlainTextContract(t *testing.T) {
 	}
 }
 
-func TestLogmaReadinessPlainTextContract(t *testing.T) {
-	if err := validateReadiness(http.StatusOK, []byte("ready\\n")); err != nil {
-		t.Fatal(err)
-	}
-	for _, item := range []struct {
-		status int
-		body string
-	}{
-		{http.StatusServiceUnavailable, "not ready\\n"},
-		{http.StatusOK, "ready"},
-		{http.StatusOK, "{\\\"ready\\\":true}"},
-	} {
-		if err := validateReadiness(item.status, []byte(item.body)); err == nil {
-			t.Errorf("accepted invalid readiness status=%d body=%q", item.status, item.body)
-		}
-	}
-}
