@@ -8,7 +8,10 @@ smoke="${NIX_XD_NATIVE_BINARY:?Select native Smoke binary from Nix store}"
 [[ "$(uname -s)" == Linux && "$(id -u)" == 1000 ]] || exit 2
 [[ "$HOME" == /home/ghxd && -d "$HOME" && -w "$HOME" ]] || exit 2
 credentials=/run/nix-xd/ghxd
-[[ -d "$credentials" && -w "$credentials" ]] || exit 2
+[[ -d "$credentials" && -r "$credentials" ]] || exit 2
+if [[ "$mode" != source-sync ]]; then
+  [[ -w "$credentials" ]] || exit 2
+fi
 identity="$credentials/identity.txt"
 ciphertext="$credentials/token.sops.json"
 pending="$credentials/device-request.json"
