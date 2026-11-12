@@ -21,7 +21,7 @@ while (($#)); do
   esac
 done
 [[ "$scenario" == probot-webhook ]] || { echo 'Select --scenario probot-webhook' >&2; exit 2; }
-[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == acl-plan || "$phase" == acl-runtime || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|acl-plan|acl-runtime|live' >&2; exit 2; }
+[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == acl-plan || "$phase" == acl-runtime || "$phase" == service-profile || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|acl-plan|acl-runtime|service-profile|live' >&2; exit 2; }
 
 [[ "$(uname -s)" == Linux && "$(uname -m)" == aarch64 ]] || {
   echo 'PROBOT_WEBHOOK=blocked reason=requires-arm64-nix-alpine' >&2
@@ -105,6 +105,12 @@ if [[ "$phase" == acl-runtime ]]; then
   python3 "${AGNI_PROBOT_REDIS_PLANNER_TEST:?Redis policy tests required}"
   bash "${AGNI_PROBOT_REDIS_RUNTIME:?Redis runtime qualifier required}"
   echo 'AGNI_PROBOT_ACL_RUNTIME=passed activation=blocked'
+  exit 0
+fi
+if [[ "$phase" == service-profile ]]; then
+  python3 "${AGNI_PROBOT_PROFILE_RENDER_TEST:?Pinned startup-profile tests required}"
+  python3 "${AGNI_PROBOT_CREDENTIAL_GENERATOR_TEST:?Pinned Redis credential tests required}"
+  echo 'AGNI_PROBOT_SERVICE_PROFILE=passed roles=5 credentials=isolated activation=blocked'
   exit 0
 fi
 if [[ "$phase" == guest-plan ]]; then
