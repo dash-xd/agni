@@ -458,6 +458,7 @@
                 export PATH="${pkgs.lib.makeBinPath [ pkgs.nodejs_22 pkgs.python3 pkgs.coreutils pkgs.bash pkgs.go_1_26 pkgs.git pkgs.gnugrep pkgs.file ]}:$PATH"
                 export AGNI_PROBOT_SOURCES="${./qualification/probot-webhook-sources.json}"
                 export AGNI_PROBOT_ARTIFACT_BUILDER="${./qualification/probot-artifacts.sh}"
+                export AGNI_PROBOT_GUEST_PLANNER="${./coreos-services/probot-plan.py}"
                 exec ${pkgs.bash}/bin/bash ${./qualification/probot-webhook.sh} "$@"
               fi
               exec ${runner}/bin/agni-fatline qualify-integration "$@"
