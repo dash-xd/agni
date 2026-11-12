@@ -154,9 +154,31 @@ func execute() error {
 		e = json.Unmarshal(data, &result)
 		return result, e
 	}
+	readiness := func() error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://logma:8080/lifecycle/readyz", nil)
+		if err != nil {
+			return err
+		}
+		response, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer response.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(response.Body, 256))
+		if err != nil {
+			return err
+		}
+		if response.StatusCode != http.StatusOK {
+			return fmt.Errorf("HTTP status %d", response.StatusCode)
+		}
+		if string(body) != "ready\\n" {
+			return fmt.Errorf("unexpected readiness response")
+		}
+		return nil
+	}
 	var readyErr error
 	for {
-		_, readyErr = request("GET", "http://logma:8080/lifecycle/readyz", nil)
+		readyErr = readiness()
 		if readyErr == nil {
 			break
 		}
