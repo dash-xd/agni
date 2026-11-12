@@ -114,6 +114,7 @@
             name = "agni-ghxd-operator";
             runtimeInputs = with pkgs; [ go_1_26 git sops age python3 coreutils gnutar gnugrep ];
             text = ''
+              ${pkgs.bash}/bin/bash -n ${./qualification/ghxd-operator.sh}
               exec ${pkgs.bash}/bin/bash ${./qualification/ghxd-operator.sh} "$@"
             '';
           };
