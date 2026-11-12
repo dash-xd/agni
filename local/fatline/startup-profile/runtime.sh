@@ -7,7 +7,7 @@ base="$HOME/.local/state/nix-xd/fatline/$scope"
 apps="$base/services"
 profile="$apps/profile"
 units="$HOME/.config/containers/systemd"
-if [[ "$action" == install ]]; then
+if [[ "$action" == install || "$action" == install-probot ]]; then
   incoming=${3:?incoming}
   [[ "$incoming" == "$HOME/.local/state/nix-xd/"* && "$incoming" != *..* ]]
   source "$incoming/profile.env"
@@ -15,6 +15,15 @@ else
   source "$profile/profile.env"
 fi
 [[ "$profile_scope" == "$scope" ]]
+profile_roles=${profile_roles:-redis nginx logma skymill}
+case "$profile_roles" in
+  "redis nginx logma skymill") [[ "$action" != install-probot ]] || { echo 'Five-role profile required' >&2; exit 2; };;
+  "redis nginx logma skymill probot") [[ "$action" != install ]] || { echo 'Explicit install-probot action required' >&2; exit 2; };;
+  *) echo 'Unexpected startup role graph' >&2; exit 2;;
+esac
+read -r -a roles <<< "$profile_roles"
+app_roles=(nginx logma skymill)
+if [[ "$profile_roles" == *" probot" ]]; then app_roles+=(probot); fi
 [[ $(podman info --format '{{.Host.Security.Rootless}}') == true ]]
 [[ $(findmnt -rn -o FSTYPE --mountpoint /var/mnt/nixstore) == 9p ]]
 [[ ",$(findmnt -rn -o OPTIONS --mountpoint /var/mnt/nixstore)," == *,ro,* ]]
@@ -37,17 +46,17 @@ failed() {
 trap failed ERR
 trap 'if [[ "$action" == qualify-reliability ]]; then clear_fault;fi' EXIT
 status() {
-  for role in redis nginx logma skymill; do
+  for role in "${roles[@]}"; do
     systemctl --user is-active --quiet "$scope-$role.service"
     [[ $(podman inspect "$scope-$role" --format '{{.State.Running}}') == true ]]
     [[ $(podman inspect "$scope-$role" --format '{{range .Mounts}}{{if eq .Destination "/nix/store"}}{{.RW}}{{end}}{{end}}') == false ]]
-    if [[ "$role" == logma || "$role" == skymill ]]; then
+    if [[ "$role" == logma || "$role" == skymill || "$role" == probot ]]; then
       [[ -z $(podman port "$scope-$role") ]]
       [[ $(podman inspect "$scope-$role" --format '{{range .Mounts}}{{if eq .Destination "/run/credentials"}}{{.RW}}{{end}}{{end}}') == false ]]
     fi
   done
   upheld=$(systemctl --user show "$scope-redis.service" -p Upholds --value)
-  for role in nginx logma skymill; do [[ " $upheld " == *" $scope-$role.service "* ]];done
+  for role in "${app_roles[@]}"; do [[ " $upheld " == *" $scope-$role.service "* ]];done
   invocation=$(systemctl --user show "$scope-redis.service" -p InvocationID --value)
   [[ -n "$invocation" && $(cat "$base/credentials/runtime/ready") == "$invocation" ]]
   grep -Fxq 'user bootstrap reset off' "$base/credentials/runtime/users.acl"
@@ -57,7 +66,7 @@ wait_ready() {
   deadline=$((SECONDS+180))
   while (( SECONDS<deadline )); do
     ready=1
-    for role in redis nginx logma skymill; do
+    for role in "${roles[@]}"; do
       state=$(systemctl --user show "$scope-$role.service" -p ActiveState --value)
       case "$state" in active) ;; activating|deactivating|reloading|inactive|failed) ready=0 ;; *) echo "Unexpected state: $scope-$role.service state=$state" >&2;return 1 ;; esac
     done
@@ -67,19 +76,19 @@ wait_ready() {
   echo 'Startup readiness timed out' >&2;return 1
 }
 case "$action" in
-  install)
+  install|install-probot)
     exec 9>"$base/lifecycle.lock";flock -x 9
     [[ $(sha256sum "$incoming/users.acl" | cut -d ' ' -f 1) == "$profile_acl_digest" ]]
     # Refuse an undeclared overlay instead of silently mixing startup profiles.
     shopt -s nullglob
-    for role in redis nginx logma skymill; do
+    for role in "${roles[@]}"; do
       for file in "$units/$scope-$role.container.d/"*; do
         case "${file##*/}" in 10-store-ready.conf|30-bootstrap.conf) ;; *) echo "Undeclared Quadlet drop-in: $file" >&2;exit 1 ;; esac
       done
     done
     clear_fault
     stop_units=()
-    for role in logma skymill nginx redis; do
+    for role in probot logma skymill nginx redis; do
       if [[ $(systemctl --user show "$scope-$role.service" -p LoadState --value) != not-found ]]; then
         stop_units+=("$scope-$role.service")
       fi
@@ -92,7 +101,9 @@ case "$action" in
       mkdir -p "$rootfs/run/redis" "$rootfs/run/credentials" "$rootfs/run/bootstrap-acl" "$rootfs/var/lib/logma/lifecycle"
       touch "$rootfs/etc/redis.conf" "$rootfs/etc/nginx.conf"
     done
-    for role in logma skymill bootstrap; do
+    credential_roles=(logma skymill bootstrap)
+    if [[ "$action" == install-probot ]]; then credential_roles+=(probot); fi
+    for role in "${credential_roles[@]}"; do
       install -d -m 700 "$apps/credentials/$role"
       for file in "$incoming/$role/"*; do install -m 600 "$file" "$apps/credentials/$role/${file##*/}";done
     done
@@ -104,17 +115,24 @@ case "$action" in
     install -m 600 "$incoming/redis.conf" "$base/config/redis.conf"
     install -m 600 "$incoming/nginx.conf" "$base/config/nginx.conf"
     install -m 600 "$incoming/$scope.network" "$units/$scope.network"
-    for role in redis nginx logma skymill; do
+    for role in "${roles[@]}"; do
       rm -f "$units/$scope-$role.container.d/10-store-ready.conf" "$units/$scope-$role.container.d/30-bootstrap.conf"
       install -m 600 "$incoming/$scope-$role.container" "$units/$scope-$role.container"
     done
     systemctl --user daemon-reload
-    for role in redis nginx logma skymill; do [[ $(systemctl --user show "$scope-$role.service" -p LoadState --value) == loaded ]];done
-    systemctl --user reset-failed "$scope-redis.service" "$scope-nginx.service" "$scope-logma.service" "$scope-skymill.service"
-    systemctl --user start "$scope-logma.service" "$scope-skymill.service" "$scope-nginx.service"
+    for role in "${roles[@]}"; do [[ $(systemctl --user show "$scope-$role.service" -p LoadState --value) == loaded ]];done
+    reset_units=()
+    start_units=()
+    for role in "${roles[@]}"; do reset_units+=("$scope-$role.service"); done
+    for role in "${app_roles[@]}"; do start_units+=("$scope-$role.service"); done
+    systemctl --user reset-failed "${reset_units[@]}"
+    systemctl --user start "${start_units[@]}"
     wait_ready
     status
     touch "$apps/active"
+    if [[ "$action" == install-probot ]]; then
+      echo FATLINE_PROBOT_PROFILE_ACTIVATION=passed roles=5 redis_restart=explicit
+    fi
     echo FATLINE_STARTUP_PROFILE=passed
     ;;
   recover)
@@ -144,7 +162,7 @@ case "$action" in
     [[ $(systemctl --user show "$scope-redis.service" -p ActiveState --value) == failed ]]
     [[ ! -e "$base/credentials/runtime/ready" ]]
     grep -Fxq 'user bootstrap reset off' "$base/credentials/runtime/users.acl"
-    for role in nginx logma skymill; do
+    for role in "${app_roles[@]}"; do
       if systemctl --user is-active --quiet "$scope-$role.service"; then
         echo "Bootstrap failure left $scope-$role.service active" >&2;exit 1
       fi
@@ -160,7 +178,7 @@ case "$action" in
     bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
     echo FATLINE_BOOTSTRAP_RECOVERY=passed bootstrap=revoked
     before=$(systemctl --user show "$scope-redis.service" -p InvocationID --value)
-    for role in redis nginx logma skymill; do podman inspect "$scope-$role" --format '{{.Id}}';done > "$apps/crash-before.ids"
+    for role in "${roles[@]}"; do podman inspect "$scope-$role" --format '{{.Id}}';done > "$apps/crash-before.ids"
     podman kill --signal KILL "$scope-redis" >/dev/null
     # Observe a new successful invocation, without controller start/recover calls.
     deadline=$((SECONDS+180))
@@ -173,7 +191,7 @@ case "$action" in
     [[ "$changed" == true ]]
     wait_ready;status
     bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
-    for role in redis nginx logma skymill; do podman inspect "$scope-$role" --format '{{.Id}}';done > "$apps/crash-after.ids"
+    for role in "${roles[@]}"; do podman inspect "$scope-$role" --format '{{.Id}}';done > "$apps/crash-after.ids"
     [[ $(sort "$apps/crash-before.ids" "$apps/crash-after.ids" | uniq -d | wc -l) == 0 ]]
     [[ $(cat /proc/sys/kernel/random/boot_id) == "$boot" ]]
     [[ $(sha256sum "$apps/bootstrap-template.acl") == "$acl_before" ]]
@@ -185,7 +203,7 @@ case "$action" in
     wait_ready;status
     mount_time=$(systemctl show var-mnt-nixstore.mount -p ActiveEnterTimestampMonotonic --value)
     [[ "$mount_time" =~ ^[1-9][0-9]*$ ]]
-    for role in redis nginx logma skymill; do
+    for role in "${roles[@]}"; do
       start_time=$(systemctl --user show "$scope-$role.service" -p ExecMainStartTimestampMonotonic --value)
       [[ "$start_time" =~ ^[1-9][0-9]*$ && "$start_time" -ge "$mount_time" ]]
     done
