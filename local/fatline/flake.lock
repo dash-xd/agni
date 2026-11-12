@@ -2,7 +2,8 @@
   "nodes": {
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "nix-alpine-runtime": "nix-alpine-runtime"
       }
     },
     "nixpkgs": {
@@ -17,6 +18,23 @@
         "owner": "NixOS",
         "repo": "nixpkgs",
         "ref": "nixos-unstable",
+        "type": "github"
+      }
+    },
+    "nix-alpine-runtime": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794355200,
+        "narHash": "sha256-wTKdLj0kqLauyQ4FlXdKv2bwdk8swMLNuRvh5uGS25c=",
+        "owner": "xd-dash",
+        "repo": "nix.xd",
+        "rev": "ccb21c8f6e1defacc7da7989ba6ac8b7985d53a1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "xd-dash",
+        "repo": "nix.xd",
+        "rev": "ccb21c8f6e1defacc7da7989ba6ac8b7985d53a1",
         "type": "github"
       }
     }
