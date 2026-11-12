@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-mode="${1:?Expected bootstrap, auth-start, auth-finish or source-sync}"
+mode="${1:?Expected bootstrap, auth-start, auth-finish, auth-refresh or source-sync}"
 smoke="${NIX_XD_NATIVE_BINARY:?Select native Smoke binary from Nix store}"
 [[ "$smoke" =~ ^/nix/store/[a-z0-9]{32}-smoke$ && -x "$smoke" ]] || exit 2
 [[ "$(uname -s)" == Linux && "$(id -u)" == 1000 ]] || exit 2
@@ -80,6 +80,20 @@ PY
     encrypt_token "$scratch/token.json"
     rm -f -- "$pending"
     echo 'GHXD_AUTH=passed persistence=sops-age volume=dedicated'
+    ;;
+  auth-refresh)
+    [[ -s "$ciphertext" && -s "$identity" && -s "$client_id_file" ]] || exit 1
+    scratch="$(mktemp -d /tmp/ghxd-refresh.XXXXXXXX)"
+    trap 'rm -rf -- "$scratch"' EXIT
+    SOPS_AGE_KEY_FILE="$identity" sops --decrypt --input-type json --output-type json "$ciphertext" > "$scratch/previous.json"
+    refresh_token="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("refresh_token",""))' "$scratch/previous.json")"
+    [[ -n "$refresh_token" ]] || {
+      echo 'OAuth response has no refresh token; new device authorization is required' >&2; exit 1;
+    }
+    client="$(cat "$client_id_file")"
+    "$smoke" ghxd auth refresh "$client" "$refresh_token" > "$scratch/updated.json"
+    encrypt_token "$scratch/updated.json"
+    echo 'GHXD_AUTH_REFRESH=passed persistence=sops-age'
     ;;
   source-sync)
     [[ -s "$ciphertext" && -s "$identity" ]] || {
