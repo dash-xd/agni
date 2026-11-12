@@ -180,6 +180,8 @@
             && builtins.match "[0-9a-f]{40}" plan.sources.agni.revision != null
             && plan.services.contract == "coreos-services-v1"
             && builtins.match "[0-9a-f]{40}" plan.services.revision != null
+            && builtins.all (revision: builtins.match "[0-9a-f]{40}" revision != null)
+                 (builtins.attrValues plan.componentRevisions)
             && !plan.fullFatlineQualified;
         in {
           coreos-plan = assert valid plans.vm1 && valid plans.vm2
