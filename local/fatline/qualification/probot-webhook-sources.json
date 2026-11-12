@@ -9,7 +9,7 @@
     },
     "skymill": {
       "repository": "xd-dash/skymill",
-      "revision": "70b0b5afebe4c729036551ff9365d840ec53937a",
+      "revision": "2c1700e9a1effc5b5c5273707fa3c5d12d7c63e5",
       "checkout": "skymill-integration"
     },
     "logma": {
@@ -20,5 +20,8 @@
   },
   "durability": "skymill",
   "hints": "logma",
-  "observers": ["logmash", "serverless-sse"]
+  "observers": [
+    "logmash",
+    "serverless-sse"
+  ]
 }
