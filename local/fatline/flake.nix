@@ -250,7 +250,7 @@
               binary="$(nix-store --add "$work/smoke")"
               nix-store --realise --add-root "$root/gcroot" "$binary" >/dev/null
               go version -m "$binary" | grep -Fq 'GOOS=linux'
-              printf 'AGNI_NATIVE_SMOKE_BUILD=passed source=%s store=%s sha256=%s\\n' \
+              printf 'AGNI_NATIVE_SMOKE_BUILD=passed source=%s store=%s sha256=%s\n' \
                 "$revision" "$binary" "$(sha256sum "$binary" | cut -d' ' -f1)"
 
               if [[ "$mode" == --check-build ]]; then
