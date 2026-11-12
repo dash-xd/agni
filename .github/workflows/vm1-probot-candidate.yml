@@ -2,7 +2,7 @@ name: VM1 Probot candidate
 on:
   push:
     branches:
-      - v20261112
+      - 'v*'
   workflow_dispatch:
 
 permissions:
