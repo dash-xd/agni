@@ -60,9 +60,11 @@
                 verify)
                   [[ -r "$identity" && -r "$encrypted" && -w "$evidence_dir" ]] || exit 1
                   [[ "$(stat -c %a "$identity")" == 600 ]] || exit 1
-                  [[ ! -w "$secret_dir" ]] || {
-                    echo 'Secret volume unexpectedly writable by qualifier' >&2; exit 1;
-                  }
+                  if ( : > "$secret_dir/unauthorized-write" ) 2>/dev/null; then
+                    rm -f "$secret_dir/unauthorized-write"
+                    echo 'Secret volume unexpectedly writable by qualifier' >&2
+                    exit 1
+                  fi
                   scratch="$(mktemp -d)"
                   trap 'rm -rf -- "$scratch"' EXIT
                   umask 077
