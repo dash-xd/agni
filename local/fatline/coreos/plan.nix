@@ -68,6 +68,11 @@ let vm2 = profile == "vm2"; in
     hostPort = if vm2 then 26379 else 16379;
     guestProxyPort = 16379;
   };
+  componentRevisions = {
+    logma = "870c9f0c21796bb670cb6f1a142ca38fc21b653a";
+    skymill = "907346ecd74a4d39830347b2ea01dc2b1c6b8969";
+    ratelimiter = "f9dd9465d98be5be2277908091237186ef606ca1";
+  };
   storeDomain = "common";
   fullFatlineQualified = false;
 }
