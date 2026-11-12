@@ -35,6 +35,16 @@ func readinessResponse(status int, contentType string, data []byte) error {
 	return nil
 }
 
+func validateReadiness(status int, body []byte) error {
+	if status != http.StatusOK {
+		return fmt.Errorf("readiness HTTP status %d", status)
+	}
+	if string(body) != "ready\\n" {
+		return errors.New("unexpected readiness response")
+	}
+	return nil
+}
+
 func execute() error {
 	if len(os.Args) != 3 {
 		return errors.New("mode and scope required")
@@ -168,13 +178,7 @@ func execute() error {
 		if err != nil {
 			return err
 		}
-		if response.StatusCode != http.StatusOK {
-			return fmt.Errorf("HTTP status %d", response.StatusCode)
-		}
-		if string(body) != "ready\\n" {
-			return fmt.Errorf("unexpected readiness response")
-		}
-		return nil
+		return validateReadiness(response.StatusCode, body)
 	}
 	var readyErr error
 	for {
