@@ -317,7 +317,7 @@
             '';
           };
         in {
-          resource-qualify = {
+          resource-preflight = {
             type = "app";
             program = "${smokeNativeQualifier}/bin/agni-fatline-native-qualifier";
           };
