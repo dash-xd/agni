@@ -97,7 +97,7 @@ def render(spec, artifacts, source, destination, original_renderer):
         "Environment=SKYMILL_STREAM=github.webhooks",
         "Environment=SKYMILL_CONSUMER_GROUP=probot-runtime",
         "Environment=PROBOT_RUNTIME_WORKER_ENABLED=false",
-        "Exec=/bin/sh -ec 'export SKYMILL_TOKEN=\\\"$(/bin/busybox cat /run/credentials/skymill-token)\\\"; exec " + node + " " + entries["probot-runtime"]["store"] + "/router/serve.js'",
+        "Exec=/bin/sh -ec 'export SKYMILL_TOKEN=\"$(/bin/busybox cat /run/credentials/skymill-token)\"; exec " + node + " " + entries["probot-runtime"]["store"] + "/router/serve.js'",
         "[Service]", "TimeoutStartSec=300", "Restart=on-failure", "RestartSec=5",
         "[Install]", "WantedBy=default.target",
     ]
