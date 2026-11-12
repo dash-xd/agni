@@ -5,7 +5,7 @@ let vm2 = profile == "vm2"; in
   schema = 1;
   sourceSelection = {
     repository = "dash-xd/agni";
-    developmentBranch = "v20261111";
+    mutableBranchAllowed = false;
     immutableRevisionRequired = true;
   };
   inherit system;
