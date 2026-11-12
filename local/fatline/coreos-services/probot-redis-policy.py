@@ -28,13 +28,13 @@ def build_policy(baseline, manifest, scope):
     users["skymill"]["keys"] = [bound + "*"]
     users["skymill"]["commands"] = sorted(set(users["skymill"]["commands"]) |
         {"xlen", "hgetall", "hset", "hget", "exists", "pexpire", "xinfo", "xpending", "xclaim"})
-    prefix = f"{scope}:fatline:runtime:probot-runtime:probot-test"
+    prefix = "xd-dash:fatline:runtime:probot-runtime:probot-test"
     users["probot_state"] = {
         "keys": [prefix + ":*", "xd-dash:fatline:auth:binding-artifact:*"],
         "channels": [],
         "commands": ["ping", "hello", "client", "select", "get", "set",
                      "hget", "hgetall", "hset", "hsetnx", "hdel", "del",
-                     "exists", "zadd", "zrange", "eval", "publish"],
+                     "exists", "zadd", "zrange", "eval"],
     }
     users["lifecycle_publish"] = {
         "keys": [], "channels": [f"{scope}:logma:lifecycle:probot-runtime:*"],
