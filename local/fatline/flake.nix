@@ -12,11 +12,11 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
-    in {
       coreosPlans = forAllSystems (system: {
         vm1 = import ./coreos/plan.nix { inherit system; profile = "vm1"; };
         vm2 = import ./coreos/plan.nix { inherit system; profile = "vm2"; };
       });
+    in {
       # Build-only provider artifacts from the owning repositories. Their revisions
       # must be recorded as flake.lock inputs before deployment authority exists.
       # This build does not install Quadlets or start Redis.
@@ -26,8 +26,8 @@
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in {
-          coreos-plan-vm1 = pkgs.writeText "agni-coreos-vm1-plan.json" (builtins.toJSON self.coreosPlans.${system}.vm1);
-          coreos-plan-vm2 = pkgs.writeText "agni-coreos-vm2-plan.json" (builtins.toJSON self.coreosPlans.${system}.vm2);
+          coreos-plan-vm1 = pkgs.writeText "agni-coreos-vm1-plan.json" (builtins.toJSON coreosPlans.${system}.vm1);
+          coreos-plan-vm2 = pkgs.writeText "agni-coreos-vm2-plan.json" (builtins.toJSON coreosPlans.${system}.vm2);
           host-link-vm1 = import ./host-link { inherit pkgs; };
           host-link-vm2 = import ./host-link { inherit pkgs; scope = "fatline-arm-vm2"; };
           coreos-services-vm1 = import ./coreos-services { inherit pkgs; };
@@ -170,7 +170,7 @@
       checks = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
-          plans = self.coreosPlans.${system};
+          plans = coreosPlans.${system};
           valid = plan:
             plan.schema == 1
             && plan.system == system
