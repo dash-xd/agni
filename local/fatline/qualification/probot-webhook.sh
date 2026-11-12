@@ -91,6 +91,7 @@ if [[ "$phase" == artifacts ]]; then
   exit 0
 fi
 if [[ "$phase" == acl-plan ]]; then
+  python3 "${AGNI_PROBOT_REDIS_PLANNER_TEST:?Redis policy tests required}"
   state="$HOME/.local/state/agni/probot-webhook"
   python3 "${AGNI_PROBOT_REDIS_PLANNER:?Redis policy generator required}" \
     --baseline "${AGNI_PROBOT_REDIS_BASELINE:?Redis ACL baseline required}" \
