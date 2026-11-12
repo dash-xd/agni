@@ -97,3 +97,21 @@ create credentials or modify the active Redis ACL. The Probot state prefix,
 service environment, command grants, and source-derived Binding must be
 qualified against actual applications before the policy is applied. No
 success marker from `acl-plan` authorizes guest activation or webhook delivery.
+
+## Disposable Redis ACL enforcement
+
+The `--phase acl-runtime` gate derives the pinned six-principal policy,
+generates ephemeral credentials outside the Nix store, and uses Agni's
+existing ACL renderer to load them in a disposable Unix-socket-only Redis
+process inside the authoritative Nix-Alpine writer. It checks positive
+key, channel and authentication operations plus Redis NOPERM responses for
+cross-scope keys/channels, ACL and CONFIG administration, and
+publication by subscription-only identities. It does not rewrite a guest
+ACL or launch any CoreOS application. Temporary credentials and Redis
+data are removed at exit.
+
+The `probot_state` prefix is aligned to the Probot runtime
+`org_id=xd-dash` and `tenant_id=probot-test` convention; the guest
+activation must explicitly bind those same identities and the appropriate
+Redis DB. The policy is only a candidate until actual Probot and Skymill
+behavior has been exercised. Redis is still RAM-only.
