@@ -15,6 +15,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate five-role controller and renderers
         run: |
+          bash -n local/fatline/coreos-services/vm1-check.sh
+          bash -n local/fatline/qualification/test-vm1-guest.sh
+          bash local/fatline/qualification/test-vm1-guest.sh
           bash -n local/fatline/startup-profile/runtime.sh
           bash -n local/fatline/startup-profile/probot-guest-stage.sh
           bash -n local/fatline/qualification/probot-artifacts.sh
