@@ -64,14 +64,15 @@ def generate(policy_path, prior_acl, prior_credentials, output, renderer):
     preserved = [found[name] for name in ("publisher", "subscriber")]
     (output / "users.acl").write_text("\n".join(new_lines + preserved) + "\n")
     (output / "users.acl").chmod(0o600)
+    skymill_token = secrets.token_hex(32)
     directories = {
         "logma": {"redis": credentials["logma"],
                   "api-key": (prior_credentials / "logma" / "api-key").read_text().strip()},
-        "skymill": {"redis": credentials["skymill"]},
+        "skymill": {"redis": credentials["skymill"], "http-token": skymill_token},
         "bootstrap": {"redis": credentials["bootstrap"]},
         "probot": {"state": credentials["probot_state"],
                    "publish": credentials["lifecycle_publish"],
-                   "operator": secrets.token_hex(32)},
+                   "operator": secrets.token_hex(32), "skymill-token": skymill_token},
         "lifecycle_subscribe": {"redis": credentials["lifecycle_subscribe"]},
     }
     for role, files in directories.items():
