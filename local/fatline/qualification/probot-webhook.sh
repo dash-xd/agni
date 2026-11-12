@@ -21,7 +21,7 @@ while (($#)); do
   esac
 done
 [[ "$scenario" == probot-webhook ]] || { echo 'Select --scenario probot-webhook' >&2; exit 2; }
-[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == acl-plan || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|acl-plan|live' >&2; exit 2; }
+[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == acl-plan || "$phase" == acl-runtime || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|acl-plan|acl-runtime|live' >&2; exit 2; }
 
 [[ "$(uname -s)" == Linux && "$(uname -m)" == aarch64 ]] || {
   echo 'PROBOT_WEBHOOK=blocked reason=requires-arm64-nix-alpine' >&2
@@ -99,6 +99,12 @@ if [[ "$phase" == acl-plan ]]; then
     --scope fatline-arm-vm1 \
     --output "$state/redis-policy-vm1.json"
   echo 'AGNI_PROBOT_ACL_PLAN=passed activation=blocked'
+  exit 0
+fi
+if [[ "$phase" == acl-runtime ]]; then
+  python3 "${AGNI_PROBOT_REDIS_PLANNER_TEST:?Redis policy tests required}"
+  bash "${AGNI_PROBOT_REDIS_RUNTIME:?Redis runtime qualifier required}"
+  echo 'AGNI_PROBOT_ACL_RUNTIME=passed activation=blocked'
   exit 0
 fi
 if [[ "$phase" == guest-plan ]]; then
