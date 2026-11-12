@@ -460,6 +460,7 @@
                 export AGNI_PROBOT_ARTIFACT_BUILDER="${./qualification/probot-artifacts.sh}"
                 export AGNI_PROBOT_GUEST_PLANNER="${./coreos-services/probot-plan.py}"
                 export AGNI_PROBOT_REDIS_PLANNER="${./coreos-services/probot-redis-policy.py}"
+                export AGNI_PROBOT_REDIS_PLANNER_TEST="${./coreos-services/test_probot_redis_policy.py}"
                 export AGNI_PROBOT_REDIS_BASELINE="${./acl-policy.json}"
                 export AGNI_PROBOT_GUEST_PLANNER_TEST="${./coreos-services/test_probot_plan.py}"
                 exec ${pkgs.bash}/bin/bash ${./qualification/probot-webhook.sh} "$@"
