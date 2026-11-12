@@ -97,3 +97,11 @@ The **same Podman named-volume system** manages Nix stores, chroot stores, SOPS/
 Encrypted SOPS data and age private identities can persist on a dedicated secret volume. Linux UID/GID ownership, mode/ACL, Podman user namespaces, and SELinux confinement where available determine which consumer may open each file. The ro mount prevents mutation by the selected consumer but does not enforce privilege separation between programs sharing that consumer's namespace. Avoid exposing the secret volume to the long-lived general-purpose Nix-Alpine builder unless all its workloads are trusted for that credential.
 
 The VM1 9P path is already qualified for the shared Nix store, **not** for arbitrary data/secret exports. QEMU 9P permissions must be qualified independently with guest identity mapping, and SELinux enforcement in the Podman Machine should not be assumed to carry into CoreOS. No VM1 disk, container, credentials or service needs changing for grant declaration checks.
+
+## Isolated Podman and read-only CoreOS 9P gates
+
+Before using persistent Fatline resources, run the generic `make grants-isolation-qualify` gate in `nix.xd`. It creates only **disposable, non-secret** local fixture volumes under the selected rootless Podman Machine, verifies an authorized matching UID/GID mapping can read the private fixture and write evidence, verifies an unrelated mapping cannot read it, and removes the fixture. Its SELinux prerequisite and fixture ownership are the same class of primitives exercised by the existing tenant-storage gate. The private fixture is not a real age identity.
+
+`qualification/guest-9p-grants.json` declares the read-only `fatlineinput` QEMU 9P tag for a separately provisioned CoreOS guest. It intentionally excludes live secrets. The generic `guest-9p-plan` and `guest-9p-preflight` verify the declaration and existing state-volume labels. `COREOS_9P_GRANTS_FILE` may be supplied when **creating** a new QEMU runner; it is not an in-place configuration mechanism for VM1. CoreOS guest mount/unit construction and guest-side identity checks remain unqualified. Retain VM1's current runner and data unchanged.
+
+Full native Logma resource dispatch, Redis ACL failure modes, and recovery gates still require the guest-side access and authenticated SSH/Redis transport bindings before `#resource-qualify` should be marked passed.
