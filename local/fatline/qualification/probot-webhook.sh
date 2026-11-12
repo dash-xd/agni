@@ -91,6 +91,7 @@ if [[ "$phase" == artifacts ]]; then
   exit 0
 fi
 if [[ "$phase" == guest-plan ]]; then
+  python3 "${AGNI_PROBOT_GUEST_PLANNER_TEST:?Guest planner tests required}"
   state="$HOME/.local/state/agni/probot-webhook"
   python3 "${AGNI_PROBOT_GUEST_PLANNER:?Guest planner must be provided by Agni flake}" \
     --artifacts "$state/artifacts.json" \
