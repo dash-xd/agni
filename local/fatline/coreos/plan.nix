@@ -69,7 +69,7 @@ let vm2 = profile == "vm2"; in
     guestProxyPort = 16379;
   };
   hostArtifacts.smoke = {
-    flake = "github:dash-xd/agni/f3331e2b16cfaf19fb0fc409d82754bf7532fca8?dir=local/fatline";
+    flake = "github:dash-xd/agni/1b66448cf3ba453767ac6b2b4aaf61337224a7c8?dir=local/fatline";
     app = "smoke-host-artifact";
     sourceRevision = "66950da9a5e4e5303f5dcd018f9039f9b6fc8496";
     target = "darwin-arm64";
