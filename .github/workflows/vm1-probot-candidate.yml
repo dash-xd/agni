@@ -2,7 +2,7 @@ name: VM1 Probot candidate
 on:
   push:
     branches:
-      - codex/vm1-probot-five-role-activation
+      - v20261112
   workflow_dispatch:
 
 permissions:
