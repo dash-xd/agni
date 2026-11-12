@@ -31,6 +31,7 @@
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
         in {
+          runtime-grants = pkgs.writeText "agni-fatline-runtime-grants.json" (builtins.readFile ./qualification/runtime-grants.json);
           coreos-plan-vm1 = pkgs.writeText "agni-coreos-vm1-plan.json" (builtins.toJSON coreosPlans.${system}.vm1);
           coreos-plan-vm2 = pkgs.writeText "agni-coreos-vm2-plan.json" (builtins.toJSON coreosPlans.${system}.vm2);
           host-link-vm1 = import ./host-link { inherit pkgs; };
@@ -317,6 +318,12 @@
             '';
           };
         in {
+          runtime-grants = {
+            type = "app";
+            program = "${pkgs.writeShellScript "agni-fatline-runtime-grants" ''
+              exec ${pkgs.coreutils}/bin/cat ${self.packages.${system}.runtime-grants}
+            ''}";
+          };
           resource-preflight = {
             type = "app";
             program = "${smokeNativeQualifier}/bin/agni-fatline-native-qualifier";
