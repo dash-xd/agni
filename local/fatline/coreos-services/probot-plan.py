@@ -30,7 +30,16 @@ def validate(artifact, source):
             raise ValueError("Artifact revision mismatch for " + role)
         if not STORE.fullmatch(path) or not path.endswith("-" + NAMES[role]):
             raise ValueError("Invalid Nix store artifact: " + role)
+    for role in ROLES:
+        location = Path(entries[role]["store"])
+        if role == "probot-runtime":
+            if not (location / "router" / "serve.js").is_file():
+                raise ValueError("Probot router is absent from immutable Node artifact")
+        elif not location.is_file() or not os.access(location, os.X_OK):
+            raise ValueError("Native executable missing from owner store: " + role)
     node = artifact.get("node", "")
+    if not Path(node).is_file() or not os.access(node, os.X_OK):
+        raise ValueError("Node executable unavailable from owner store")
     if not re.fullmatch(STORE.pattern + r"/bin/node", node):
         raise ValueError("Node executable must be an exact Nix store path")
     return entries, node
