@@ -21,7 +21,7 @@ while (($#)); do
   esac
 done
 [[ "$scenario" == probot-webhook ]] || { echo 'Select --scenario probot-webhook' >&2; exit 2; }
-[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|live' >&2; exit 2; }
+[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == acl-plan || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|acl-plan|live' >&2; exit 2; }
 
 [[ "$(uname -s)" == Linux && "$(uname -m)" == aarch64 ]] || {
   echo 'PROBOT_WEBHOOK=blocked reason=requires-arm64-nix-alpine' >&2
@@ -88,6 +88,16 @@ bash "${AGNI_PROBOT_ARTIFACT_BUILDER:?Artifact builder must be supplied by pinne
 if [[ "$phase" == artifacts ]]; then
   echo 'AGNI_PROBOT_ARTIFACT_PREFLIGHT=passed'
   echo 'AGNI_PROBOT_WEBHOOK_INTEGRATION=pending phase=guest-compose-and-github-binding'
+  exit 0
+fi
+if [[ "$phase" == acl-plan ]]; then
+  state="$HOME/.local/state/agni/probot-webhook"
+  python3 "${AGNI_PROBOT_REDIS_PLANNER:?Redis policy generator required}" \
+    --baseline "${AGNI_PROBOT_REDIS_BASELINE:?Redis ACL baseline required}" \
+    --sources "$AGNI_PROBOT_SOURCES" \
+    --scope fatline-arm-vm1 \
+    --output "$state/redis-policy-vm1.json"
+  echo 'AGNI_PROBOT_ACL_PLAN=passed activation=blocked'
   exit 0
 fi
 if [[ "$phase" == guest-plan ]]; then
