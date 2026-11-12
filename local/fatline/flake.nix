@@ -50,8 +50,10 @@
                   umask 077
                   age-keygen -o "$identity"
                   recipient="$(age-keygen -y "$identity")"
-                  printf '%s\\n' '{"fixture":"persistent-podman-volume","valid":true}' |
-                    sops --encrypt --age "$recipient" --input-type json --output-type json /dev/stdin > "$encrypted"
+                  scratch="$(mktemp -d)"
+                  trap 'rm -rf -- "$scratch"' EXIT
+                  printf '%s\\n' '{"fixture":"persistent-podman-volume","valid":true}' > "$scratch/fixture.json"
+                  sops --encrypt --age "$recipient" --input-type json --output-type json "$scratch/fixture.json" > "$encrypted"
                   chmod 0600 "$identity" "$encrypted"
                   echo 'AGNI_SECRET_VOLUME_INITIALIZED=passed mode=0600'
                   ;;
