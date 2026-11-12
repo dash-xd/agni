@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 import importlib.util
+import os
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-module_spec = importlib.util.spec_from_file_location(
-    "agni_probot_plan", Path(__file__).with_name("probot-plan.py"))
+planner = os.environ.get("AGNI_PROBOT_GUEST_PLANNER")
+if not planner or not Path(planner).is_file():
+    raise SystemExit("AGNI_PROBOT_GUEST_PLANNER must identify the pinned Agni planner")
+module_spec = importlib.util.spec_from_file_location("agni_probot_plan", planner)
 module = importlib.util.module_from_spec(module_spec)
 module_spec.loader.exec_module(module)
 
