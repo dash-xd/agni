@@ -49,7 +49,7 @@ case "$mode" in
       echo 'GHXD_AUTH=already-initialized-or-pending; refusing overwrite' >&2; exit 1;
     }
     client="${NIX_XD_GHXD_CLIENT_ID:?Public GitHub OAuth/GitHub App client ID required}"
-    [[ "$client" =~ ^[A-Za-z0-9_-]{8,128}$ ]] || exit 2
+    [[ "$client" =~ ^[A-Za-z0-9._-]{8,128}$ ]] || exit 2
     if [[ ! -e "$identity" ]]; then
       age-keygen -o "$identity" >/dev/null 2>&1
       chmod 0600 "$identity"
