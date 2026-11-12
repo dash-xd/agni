@@ -79,7 +79,7 @@ def plan(artifact, sources, scope):
     # The v2 Skymill provider derives Redis keys from the immutable Binding,
     # not from Agni's older scope-prefixed stream convention.
     binding = ("xd-dash", "probot-runtime", "github-webhooks", "github.webhooks")
-    tag = hashlib.sha256("\\x00".join(binding).encode()).hexdigest()[:32]
+    tag = hashlib.sha256("\x00".join(binding).encode()).hexdigest()[:32]
     physical_stream = "skymill:{" + tag + "}:stream:github.webhooks"
     for role, cfg in roles.items():
         deps = " ".join(cfg["dependencies"])
