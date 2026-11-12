@@ -64,7 +64,7 @@ def plan(artifact, sources, scope):
         "logma": {
             "executable": entries["logma"]["store"],
             "endpoint": "logma:18081",
-            "redis_principal": "lifecycle_subscribe",
+            "redis_principal": "logma",
             "credentials": ("redis", "api-key"),
             "dependencies": (scope + "-redis.service",),
         },
