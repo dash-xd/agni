@@ -16,7 +16,7 @@ make run PROVIDER=podman SCOPE=nix-xd-arm \
   FLAKE=agni20261111/local/fatline TARGET='#coreos-plan-vm1'
 ```
 
-The output must identify `sourceSelection.developmentBranch=v20261111` and full 40-hex-character immutable component revisions. A branch alone must never be passed as the final runtime source identity.
+The output must identify `sourceSelection.mutableBranchAllowed=false` and full 40-hex-character immutable component revisions. The dated branch is recorded by the invocation/evidence layer, not hardcoded into an immutable composition flake; a branch alone must never be passed as the final runtime source identity.
 
 Local Nix flake validation (in the Agni dated checkout, if Nix is installed):
 
