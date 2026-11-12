@@ -42,10 +42,12 @@ def generate(policy_path, prior_acl, prior_credentials, output, renderer):
     output.mkdir(mode=0o700, parents=True)
     secret_root = output / "acl-input"
     secret_root.mkdir(mode=0o700)
+    credentials = {}
     for role in ALL:
         value = (prior_credentials / role / "redis").read_text().strip() if role in ORIGINAL_ROLES else secrets.token_hex(32)
         if len(value) < 32 or any(c.isspace() for c in value):
             raise ValueError("Invalid credential format: " + role)
+        credentials[role] = value
         file = secret_root / role
         file.write_text(value + "\n")
         file.chmod(0o600)
@@ -62,16 +64,32 @@ def generate(policy_path, prior_acl, prior_credentials, output, renderer):
     preserved = [found[name] for name in ("publisher", "subscriber")]
     (output / "users.acl").write_text("\n".join(new_lines + preserved) + "\n")
     (output / "users.acl").chmod(0o600)
-    for role, filename in (("probot_state", "state"), ("lifecycle_publish", "publish"),
-                           ("lifecycle_subscribe", "subscribe")):
-        path = output / "credentials" / role
-        path.mkdir(mode=0o700, parents=True)
-        credential = secrets.token_hex(32)
-        # Read the ACL credential from a protected pending seed instead.
-        # The caller supplies that generation through a sealed private artifact.
-        (path / filename).write_text(credential + "\n")
-        (path / filename).chmod(0o600)
-    raise RuntimeError("Credential handoff not yet implemented: aborting unsafe generation")
+    directories = {
+        "logma": {"redis": credentials["logma"],
+                  "api-key": (prior_credentials / "logma" / "api-key").read_text().strip()},
+        "skymill": {"redis": credentials["skymill"]},
+        "bootstrap": {"redis": credentials["bootstrap"]},
+        "probot": {"state": credentials["probot_state"],
+                   "publish": credentials["lifecycle_publish"],
+                   "operator": secrets.token_hex(32)},
+        "lifecycle_subscribe": {"redis": credentials["lifecycle_subscribe"]},
+    }
+    for role, files in directories.items():
+        directory = output / "credentials" / role
+        directory.mkdir(mode=0o700, parents=True)
+        for filename, value in files.items():
+            if len(value) < 32 or any(c.isspace() for c in value):
+                raise ValueError("Invalid credential material: " + role)
+            file = directory / filename
+            file.write_text(value + "\n")
+            file.chmod(0o600)
+    policy_bytes = policy_path.read_bytes()
+    (output / "policy.json").write_bytes(policy_bytes)
+    (output / "policy.json").chmod(0o600)
+    digest = hashlib.sha256((output / "users.acl").read_bytes()).hexdigest()
+    (output / "digest").write_text(digest + "\n")
+    print("AGNI_PROBOT_CREDENTIAL_GENERATION=passed original=preserved new=3")
+    print("AGNI_PROBOT_REDIS_RESTART=blocked reason=explicit-activation-required")
 
 def main():
     parser = argparse.ArgumentParser()
