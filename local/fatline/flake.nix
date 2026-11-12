@@ -31,8 +31,8 @@
 
               revision=${smokeRevision}
               source=${smokeSource}
-              if [[ -n "''${NIX_XD_NATIVE_BINARY:-${AGNI_NATIVE_SMOKE_BINARY:-}}" ]]; then
-                binary="${NIX_XD_NATIVE_BINARY:-${AGNI_NATIVE_SMOKE_BINARY:-}}"
+              if [[ -n "''${NIX_XD_NATIVE_BINARY:-}" ]]; then
+                binary="$NIX_XD_NATIVE_BINARY"
                 [[ "$mode" == --check-transport ]] || { echo 'Prebuilt binary only accepted for transport' >&2; exit 2; }
                 [[ "$binary" =~ ^/nix/store/[a-z0-9]{32}-smoke$ && -x "$binary" ]] ||
                   { echo 'Expected a native Smoke binary in the mounted Nix store' >&2; exit 1; }
@@ -59,12 +59,18 @@
                 exit 0
               fi
 
-              endpoint="''${NIX_XD_TRANSPORT_ENDPOINT:-${AGNI_COREOS_ENDPOINT:-}}"
-              port="''${NIX_XD_TRANSPORT_PORT:-${AGNI_COREOS_PORT:-}}"
-              identity="''${NIX_XD_TRANSPORT_IDENTITY:-${AGNI_COREOS_IDENTITY:-}}"
-              known_hosts="''${NIX_XD_TRANSPORT_KNOWN_HOSTS:-${AGNI_COREOS_KNOWN_HOSTS:-}}"
-              guest_user="''${NIX_XD_TRANSPORT_USER:-${AGNI_COREOS_USER:-wisp}}"
-              evidence_dir="''${NIX_XD_EVIDENCE_DIR:-${AGNI_EVIDENCE_DIR:-}}"
+              endpoint="''${NIX_XD_TRANSPORT_ENDPOINT:-}"
+              if [[ -z "$endpoint" ]]; then endpoint="''${AGNI_COREOS_ENDPOINT:-}"; fi
+              port="''${NIX_XD_TRANSPORT_PORT:-}"
+              if [[ -z "$port" ]]; then port="''${AGNI_COREOS_PORT:-}"; fi
+              identity="''${NIX_XD_TRANSPORT_IDENTITY:-}"
+              if [[ -z "$identity" ]]; then identity="''${AGNI_COREOS_IDENTITY:-}"; fi
+              known_hosts="''${NIX_XD_TRANSPORT_KNOWN_HOSTS:-}"
+              if [[ -z "$known_hosts" ]]; then known_hosts="''${AGNI_COREOS_KNOWN_HOSTS:-}"; fi
+              guest_user="''${NIX_XD_TRANSPORT_USER:-}"
+              if [[ -z "$guest_user" ]]; then guest_user="''${AGNI_COREOS_USER:-wisp}"; fi
+              evidence_dir="''${NIX_XD_EVIDENCE_DIR:-}"
+              if [[ -z "$evidence_dir" ]]; then evidence_dir="''${AGNI_EVIDENCE_DIR:-}"; fi
               [[ -n "$endpoint" && "$port" =~ ^[0-9]{1,5}$ ]] || {
                 echo 'Missing or invalid CoreOS endpoint and port' >&2; exit 2;
               }
