@@ -41,6 +41,7 @@ class WebhookProfile(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)
             webhook.render(spec,artifacts,sources,root,startup.render)
+            self.assertIn("profile_roles=\'redis nginx logma skymill probot\'", (root/"profile.env").read_text())
             units=list(root.glob("*.container"))
             self.assertEqual(len(units),5)
             redis=(root/"fatline-arm-vm1-redis.container").read_text()
