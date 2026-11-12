@@ -39,6 +39,9 @@ build_native() {
     echo "AGNI_PROBOT_ARTIFACT=blocked source-mismatch=$component" >&2
     exit 1
   }
+  if [[ "$component" == skymill ]]; then
+    (cd "$src" && go test -mod=readonly ./httpapi ./cmd/skymill-http)
+  fi
   (cd "$src" && go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= \
       -o "$work/$binary" "$command")
   meta="$(go version -m "$work/$binary")"
