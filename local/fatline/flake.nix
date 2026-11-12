@@ -455,13 +455,15 @@
             type = "app";
             program = "${pkgs.writeShellScript "agni-fatline-qualify-integration" ''
               if [[ "''${1:-}" == --scenario ]]; then
-                export PATH="${pkgs.lib.makeBinPath [ pkgs.nodejs_22 pkgs.python3 pkgs.coreutils pkgs.bash pkgs.go_1_26 pkgs.git pkgs.gnugrep pkgs.file ]}:$PATH"
+                export PATH="${pkgs.lib.makeBinPath [ pkgs.nodejs_22 pkgs.python3 pkgs.coreutils pkgs.bash pkgs.go_1_26 pkgs.git pkgs.gnugrep pkgs.file pkgs.redis ]}:$PATH"
                 export AGNI_PROBOT_SOURCES="${./qualification/probot-webhook-sources.json}"
                 export AGNI_PROBOT_ARTIFACT_BUILDER="${./qualification/probot-artifacts.sh}"
                 export AGNI_PROBOT_GUEST_PLANNER="${./coreos-services/probot-plan.py}"
                 export AGNI_PROBOT_REDIS_PLANNER="${./coreos-services/probot-redis-policy.py}"
                 export AGNI_PROBOT_REDIS_PLANNER_TEST="${./coreos-services/test_probot_redis_policy.py}"
                 export AGNI_PROBOT_REDIS_BASELINE="${./acl-policy.json}"
+                export AGNI_PROBOT_REDIS_RUNTIME="${./qualification/probot-acl-runtime.sh}"
+                export AGNI_PROBOT_REDIS_RENDERER="${./scripts/render-users-acl.py}"
                 export AGNI_PROBOT_GUEST_PLANNER_TEST="${./coreos-services/test_probot_plan.py}"
                 exec ${pkgs.bash}/bin/bash ${./qualification/probot-webhook.sh} "$@"
               fi
