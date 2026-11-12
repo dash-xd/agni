@@ -35,16 +35,6 @@ func readinessResponse(status int, contentType string, data []byte) error {
 	return nil
 }
 
-func validateReadiness(status int, body []byte) error {
-	if status != http.StatusOK {
-		return fmt.Errorf("readiness HTTP status %d", status)
-	}
-	if string(body) != "ready\\n" {
-		return errors.New("unexpected readiness response")
-	}
-	return nil
-}
-
 func execute() error {
 	if len(os.Args) != 3 {
 		return errors.New("mode and scope required")
@@ -164,25 +154,9 @@ func execute() error {
 		e = json.Unmarshal(data, &result)
 		return result, e
 	}
-	readiness := func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://logma:8080/lifecycle/readyz", nil)
-		if err != nil {
-			return err
-		}
-		response, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		defer response.Body.Close()
-		body, err := io.ReadAll(io.LimitReader(response.Body, 256))
-		if err != nil {
-			return err
-		}
-		return validateReadiness(response.StatusCode, body)
-	}
 	var readyErr error
 	for {
-		readyErr = readiness()
+		_, readyErr = request("GET", "http://logma:8080/lifecycle/readyz", nil)
 		if readyErr == nil {
 			break
 		}
