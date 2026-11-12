@@ -26,7 +26,8 @@ app_roles=(nginx logma skymill)
 if [[ "$profile_roles" == *" probot" ]]; then app_roles+=(probot); fi
 all_units=()
 app_units=()
-for role in "${roles[@]}"; do all_units+=("$scope-$role.service"); done
+log_units=()
+for role in "${roles[@]}"; do all_units+=("$scope-$role.service"); log_units+=(-u "$scope-$role.service"); done
 for role in "${app_roles[@]}"; do app_units+=("$scope-$role.service"); done
 [[ $(podman info --format '{{.Host.Security.Rootless}}') == true ]]
 [[ $(findmnt -rn -o FSTYPE --mountpoint /var/mnt/nixstore) == 9p ]]
@@ -44,7 +45,7 @@ failed() {
   trap - ERR
   if [[ "$action" == qualify-reliability ]]; then clear_fault || true;fi
   echo "FATLINE_STARTUP_PROFILE=failed action=$action status=$code" >&2
-  journalctl --user --no-pager -n 40 "${all_units[@]/#/-u }" || true
+  journalctl --user --no-pager -n 40 "${log_units[@]}" || true
   exit "$code"
 }
 trap failed ERR
