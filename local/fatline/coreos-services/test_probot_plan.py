@@ -41,7 +41,7 @@ class ProbotGuestPlanTests(unittest.TestCase):
         self.assertEqual(len(candidate["unit_templates"]), 3)
         self.assertEqual(candidate["roles"]["probot"]["redis_principal"], "probot_state")
         self.assertEqual(candidate["roles"]["skymill"]["redis_principal"], "skymill")
-        self.assertEqual(candidate["roles"]["logma"]["redis_principal"], "lifecycle_subscribe")
+        self.assertEqual(candidate["roles"]["logma"]["redis_principal"], "logma")
         self.assertIn("github-app-key", candidate["roles"]["probot"]["credentials"])
         self.assertNotIn("token.sops.json", str(candidate))
         for unit in candidate["unit_templates"].values():
