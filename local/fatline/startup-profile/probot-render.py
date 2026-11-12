@@ -60,6 +60,7 @@ def render(spec, artifacts, source, destination, original_renderer):
         "Environment=SKYMILL_ADDR=0.0.0.0:8081", "Environment=SKYMILL_ORG=xd-dash",
         "Environment=SKYMILL_TENANT=probot-runtime", "Environment=SKYMILL_APPLICATION=github-webhooks",
         "Environment=SKYMILL_CONSUMER_GROUP=probot-runtime",
+        "Environment=SKYMILL_HTTP_TOKEN_FILE=/run/credentials/http-token",
     ]
     skymill.write_text("\n".join(lines) + "\n")
 
@@ -100,6 +101,7 @@ def render(spec, artifacts, source, destination, original_renderer):
         "[Service]", "TimeoutStartSec=300", "Restart=on-failure", "RestartSec=5",
         "[Install]", "WantedBy=default.target",
     ]
+    _replace(unit, "Exec=", "Exec=/bin/sh -ec 'export SKYMILL_TOKEN=\"$(/bin/busybox cat /run/credentials/skymill-token)\"; exec " + node + " " + entries["probot-runtime"]["store"] + "/router/serve.js'")
     (destination / (scope + "-probot.container")).write_text("\n".join(unit) + "\n")
     (destination / "webhook-artifacts.json").write_text(json.dumps(artifacts, sort_keys=True, indent=2) + "\n")
     print("AGNI_PROBOT_PROFILE_RENDER=passed roles=3 network=private credentials=unbound activation=blocked")
