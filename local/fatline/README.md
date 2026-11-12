@@ -35,10 +35,10 @@ Skymill/Logma Node client contract tests.
 `skymill-http` (`cmd/skymill-http`) and `logma-lifecycle`
 (`cmd/api-lifecycle`) with Go 1.26, `CGO_ENABLED=0`, and the Linux ARM64
 target. It checks build metadata and registers each result as a Nix GC root
-under the Nix-Alpine writer's state directory. Probot's exact staged
-package manifest/lockfile and Node source syntax are checked, but **npm
-dependency installation, immutable OCI packaging, CoreOS deployment, and
-GitHub webhook delivery are not included in this phase**. These are
+under the Nix-Alpine writer's state directory. Probot's staged manifest and lockfile are checked, locked production npm
+dependencies are installed without lifecycle scripts, and the resulting
+Node runtime directory is stored and GC-rooted. **Immutable OCI packaging,
+CoreOS deployment, and GitHub webhook delivery are not included in this phase**. These are
 explicit follow-on gates rather than implicit success claims.
 
 The older `coreos-services-vm1` package already orchestrates Logma and
