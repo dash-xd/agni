@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Build a new private VM1 Redis ACL generation without changing existing credentials."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import secrets
+import subprocess
+import sys
+
+ORIGINAL_ROLES = ("logma", "skymill", "bootstrap")
+NEW_ROLES = ("probot_state", "lifecycle_publish", "lifecycle_subscribe")
+ALL = ORIGINAL_ROLES + NEW_ROLES
+
+def generate(policy_path, prior_acl, prior_credentials, output, renderer):
+    if output.exists():
+        raise ValueError("Credential generation exists; select a new generation")
+    policy = json.loads(policy_path.read_text())
+    if policy.get("schema") != 1 or policy.get("scope") != "fatline-arm-vm1":
+        raise ValueError("Invalid scoped Redis policy")
+    if set(policy.get("users", {})) != set(ALL):
+        raise ValueError("Unexpected Redis principals")
+    old_lines = prior_acl.read_text().splitlines()
+    found = {}
+    for line in old_lines:
+        parts = line.split()
+        if len(parts) < 3 or parts[0] != "user" or parts[1] in found:
+            raise ValueError("Malformed or duplicate existing ACL user")
+        found[parts[1]] = line
+    required = {"default", "publisher", "subscriber", *ORIGINAL_ROLES}
+    if not required.issubset(found):
+        raise ValueError("Existing host-link and application identities are incomplete")
+    unexpected = set(found) - required
+    if unexpected:
+        raise ValueError("Unknown existing Redis ACL principals: " + ",".join(sorted(unexpected)))
+    if found["default"] != "user default off":
+        raise ValueError("Existing Redis default identity is not disabled")
+    for role in ORIGINAL_ROLES:
+        if not (prior_credentials / role / "redis").is_file():
+            raise ValueError("Missing pre-existing " + role + " credential")
+    output.mkdir(mode=0o700, parents=True)
+    secret_root = output / "acl-input"
+    secret_root.mkdir(mode=0o700)
+    for role in ALL:
+        value = (prior_credentials / role / "redis").read_text().strip() if role in ORIGINAL_ROLES else secrets.token_hex(32)
+        if len(value) < 32 or any(c.isspace() for c in value):
+            raise ValueError("Invalid credential format: " + role)
+        file = secret_root / role
+        file.write_text(value + "\n")
+        file.chmod(0o600)
+    try:
+        subprocess.run([sys.executable, str(renderer), str(policy_path),
+                        str(secret_root), str(output / "users.acl")],
+                       check=True, stdout=subprocess.DEVNULL)
+    finally:
+        for entry in secret_root.iterdir(): entry.unlink()
+        secret_root.rmdir()
+    new_lines = (output / "users.acl").read_text().splitlines()
+    if len(new_lines) != 1 + len(ALL) or new_lines[0] != "user default off":
+        raise ValueError("Unexpected rendered ACL")
+    preserved = [found[name] for name in ("publisher", "subscriber")]
+    (output / "users.acl").write_text("\n".join(new_lines + preserved) + "\n")
+    (output / "users.acl").chmod(0o600)
+    for role, filename in (("probot_state", "state"), ("lifecycle_publish", "publish"),
+                           ("lifecycle_subscribe", "subscribe")):
+        path = output / "credentials" / role
+        path.mkdir(mode=0o700, parents=True)
+        credential = secrets.token_hex(32)
+        # Read the ACL credential from a protected pending seed instead.
+        # The caller supplies that generation through a sealed private artifact.
+        (path / filename).write_text(credential + "\n")
+        (path / filename).chmod(0o600)
+    raise RuntimeError("Credential handoff not yet implemented: aborting unsafe generation")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--policy", required=True, type=Path)
+    parser.add_argument("--old-acl", required=True, type=Path)
+    parser.add_argument("--old-credentials", required=True, type=Path)
+    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--renderer", required=True, type=Path)
+    args = parser.parse_args()
+    generate(args.policy, args.old_acl, args.old_credentials, args.out, args.renderer)
+
+if __name__ == "__main__":
+    main()
