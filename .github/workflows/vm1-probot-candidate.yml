@@ -17,9 +17,12 @@ jobs:
         run: |
           bash -n local/fatline/startup-profile/runtime.sh
           bash -n local/fatline/qualification/probot-artifacts.sh
-          python3 -m py_compile local/fatline/startup-profile/probot-render.py local/fatline/coreos-services/probot-credentials.py
+          python3 -m py_compile local/fatline/startup-profile/probot-render.py local/fatline/startup-profile/probot-stage.py local/fatline/coreos-services/probot-credentials.py
       - name: Profile and credential tests
         env:
+          AGNI_PROBOT_STAGE: ${{ github.workspace }}/local/fatline/startup-profile/probot-stage.py
+          AGNI_PROBOT_PROFILE_RENDER_TEST: ${{ github.workspace }}/local/fatline/startup-profile/test_probot_render.py
+          AGNI_PROBOT_CREDENTIAL_GENERATOR_TEST: ${{ github.workspace }}/local/fatline/coreos-services/test_probot_credentials.py
           AGNI_PROBOT_PROFILE_RENDERER: ${{ github.workspace }}/local/fatline/startup-profile/probot-render.py
           AGNI_PROBOT_STARTUP_RENDERER: ${{ github.workspace }}/local/fatline/startup-profile/render.py
           AGNI_PROBOT_CREDENTIAL_GENERATOR: ${{ github.workspace }}/local/fatline/coreos-services/probot-credentials.py
@@ -29,3 +32,4 @@ jobs:
         run: |
           python3 local/fatline/startup-profile/test_probot_render.py
           python3 local/fatline/coreos-services/test_probot_credentials.py
+          python3 local/fatline/startup-profile/test_probot_stage.py
