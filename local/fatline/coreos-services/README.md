@@ -150,3 +150,38 @@ implemented. In particular, updating only the legacy two-service
 `coreos-services/guest.sh` would conflict with an installed consolidated
 startup profile and its Redis bootstrap/revocation hooks. Do not stop
 or restart Redis just to pass these tests.
+
+## Agni-owned guest inventory through generic Nix-Alpine transport
+
+`#vm1-guest-check` is an immutable Nix package containing `guest.sh`.
+It owns VM1 application-specific inventory and native artifact read checks,
+but does **not** install services, change Redis ACLs, restart processes,
+or generate application credentials.
+
+Nix-Alpine's generic `guest-app` host adapter takes a pinned flake,
+a target package, the exact source SHA, and opaque JSON-array arguments.
+Use the normal host-owned SSH identity/known_hosts for the existing guest.
+No Fatline or Probot target, phase, or role name is encoded in nix.xd's
+default Makefile.
+
+Example from the dated nix.xd checkout (substitute the pinned Agni SHA):
+
+```sh
+make guest-app FLAKE=agni20261112/local/fatline \
+  TARGET='#vm1-guest-check' GUEST_APP_REV=<exact-agni-sha> \
+  ARGS_JSON='["inventory","fatline-arm-vm1"]' \
+  COREOS_SSH_KEY="$HOME/.ssh/starwisp-test" \
+  COREOS_SSH_PORT=2222 COREOS_PROFILE=starwisp
+```
+
+For the `store-check` action, supply the exact three immutable store
+artifact paths and source revisions, plus Node, in this order:
+`["store-check", scope, skymillStore, skymillSHA, logmaStore, logmaSHA,
+probotStore, probotSHA, nodeStoreExecutable]`. Those values must come
+from the Agni artifact manifest; never guess them. This check remains
+read-only and validates guest 9P visibility, not service activation.
+
+The new application-owned path replaces the two obsolete Probot-specific
+host preflight targets. Other, older Fatline host controllers remain available
+only for explicit recovery of generations created by those controllers,
+until their Agni-owned replacement qualifies against the live VM.
