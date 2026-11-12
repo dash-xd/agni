@@ -110,15 +110,6 @@
         let pkgs = import nixpkgs { inherit system; };
         in {
           native-smoke-qualifier = mkSmokeNativeQualifier pkgs;
-          ghxd-operator = pkgs.writeShellApplication {
-            name = "agni-ghxd-operator";
-            runtimeInputs = with pkgs; [ go_1_26 git sops age python3 coreutils gnutar gnugrep ];
-            text = ''
-              ${pkgs.bash}/bin/bash -n ${./qualification/ghxd-operator.sh}
-              exec ${pkgs.bash}/bin/bash ${./qualification/ghxd-operator.sh} "$@"
-            '';
-          };
-
           secret-volume-fixture = pkgs.writeShellApplication {
             name = "agni-secret-volume-fixture";
             runtimeInputs = with pkgs; [ age sops jq coreutils ];
@@ -369,26 +360,6 @@
             '';
           };
           smokeNativeQualifier = mkSmokeNativeQualifier pkgs;
-          ghxdSourceBuild = pkgs.writeShellApplication {
-            name = "agni-ghxd-source-build";
-            runtimeInputs = with pkgs; [ go_1_26 git coreutils ];
-            text = ''
-              set -Eeuo pipefail
-              source=${smokeSource}
-              revision=${smokeRevision}
-              root="''${HOME}/.local/state/agni/ghxd/$revision"
-              mkdir -p "$root/go-build" "$root/go-mod"
-              export GOCACHE="$root/go-build" GOMODCACHE="$root/go-mod"
-              export GOOS=linux CGO_ENABLED=0
-              scratch="$(mktemp -d "$root/build.XXXXXXXX")"
-              trap 'rm -rf -- "$scratch"' EXIT
-              (cd "$source" && go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$scratch/smoke" ./cmd/smoke)
-              binary="$(nix-store --add "$scratch/smoke")"
-              nix-store --realise --add-root "$root/smoke-gcroot" "$binary" >/dev/null
-              printf 'NIX_XD_NATIVE_ARTIFACT=%s\\n' "$binary"
-              printf 'GHXD_SOURCE_BUILD=passed source=%s\\n' "$revision"
-            '';
-          };
           smokeHostArtifact = pkgs.writeShellApplication {
             name = "agni-fatline-smoke-host-artifact";
             runtimeInputs = [ pkgs.go_1_26 pkgs.coreutils ];
@@ -441,10 +412,6 @@
             program = "${pkgs.writeShellScript "agni-fatline-isolated-runtime-grants" ''
               exec ${pkgs.coreutils}/bin/cat ${self.packages.${system}.isolated-runtime-grants}
             ''}";
-          };
-          ghxd-source-build = {
-            type = "app";
-            program = "${ghxdSourceBuild}/bin/agni-ghxd-source-build";
           };
           resource-preflight = {
             type = "app";
