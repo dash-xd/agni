@@ -451,7 +451,17 @@
           qualify = app "qualify";
           test = app "test";
           test-workspace = app "test-workspace";
-          qualify-integration = app "qualify-integration";
+          qualify-integration = {
+            type = "app";
+            program = "${pkgs.writeShellScript "agni-fatline-qualify-integration" ''
+              if [[ "''${1:-}" == --scenario ]]; then
+                export PATH="${pkgs.lib.makeBinPath [ pkgs.nodejs_22 pkgs.python3 pkgs.coreutils pkgs.bash ]}:$PATH"
+                export AGNI_PROBOT_SOURCES="${./qualification/probot-webhook-sources.json}"
+                exec ${pkgs.bash}/bin/bash ${./qualification/probot-webhook.sh} "$@"
+              fi
+              exec ${runner}/bin/agni-fatline qualify-integration "$@"
+            ''}";
+          };
           advance-pin = app "advance-pin";
           default = app "preflight";
         });
