@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Render a non-secret, fail-closed CoreOS VM1 Probot composition candidate."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -64,7 +65,7 @@ def plan(artifact, sources, scope):
             "executable": entries["logma"]["store"],
             "endpoint": "logma:18081",
             "redis_principal": "lifecycle_subscribe",
-            "credentials": ("redis", "http"),
+            "credentials": ("redis", "api-key"),
             "dependencies": (scope + "-redis.service",),
         },
         "probot": {
@@ -75,6 +76,11 @@ def plan(artifact, sources, scope):
             "dependencies": (scope + "-redis.service", scope + "-skymill.service", scope + "-logma.service"),
         },
     }
+    # The v2 Skymill provider derives Redis keys from the immutable Binding,
+    # not from Agni's older scope-prefixed stream convention.
+    binding = ("xd-dash", "probot-runtime", "github-webhooks", "github.webhooks")
+    tag = hashlib.sha256("\\x00".join(binding).encode()).hexdigest()[:32]
+    physical_stream = "skymill:{" + tag + "}:stream:github.webhooks"
     for role, cfg in roles.items():
         deps = " ".join(cfg["dependencies"])
         path = app + "/credentials/" + role
@@ -113,6 +119,8 @@ def plan(artifact, sources, scope):
         "activation": "blocked-until-role-env-redis-acl-and-github-app-secrets-bound",
         "network": "private-no-published-http-ports",
         "rootfs": app + "/rootfs",
+        "skymill_binding_stream_key": physical_stream,
+        "old_scope_prefixed_acl_compatible": False,
         "store_mount": "/var/mnt/nixstore:/nix/store:ro",
     }
 
