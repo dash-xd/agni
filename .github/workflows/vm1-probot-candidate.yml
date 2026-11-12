@@ -16,6 +16,7 @@ jobs:
       - name: Validate five-role controller and renderers
         run: |
           bash -n local/fatline/startup-profile/runtime.sh
+          bash -n local/fatline/startup-profile/probot-guest-stage.sh
           bash -n local/fatline/qualification/probot-artifacts.sh
           python3 -m py_compile local/fatline/startup-profile/probot-render.py local/fatline/startup-profile/probot-stage.py local/fatline/coreos-services/probot-credentials.py
       - name: Profile and credential tests
