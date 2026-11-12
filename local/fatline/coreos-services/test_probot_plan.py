@@ -46,6 +46,10 @@ class ProbotGuestPlanTests(unittest.TestCase):
             self.assertIn("Volume=/var/mnt/nixstore:/nix/store:ro", unit)
             self.assertNotIn("PublishPort=", unit)
         self.assertIn("blocked-until", candidate["activation"])
+        self.assertTrue(candidate["skymill_binding_stream_key"].startswith("skymill:{"))
+        self.assertTrue(candidate["skymill_binding_stream_key"].endswith("}:stream:github.webhooks"))
+        self.assertFalse(candidate["old_scope_prefixed_acl_compatible"])
+        self.assertIn("api-key", candidate["roles"]["logma"]["credentials"])
 
     def test_mismatched_revision_denied(self):
         artifact, source = fixture()
