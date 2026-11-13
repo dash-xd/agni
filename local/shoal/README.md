@@ -200,3 +200,33 @@ Only `yes` is sufficient to plan an unattended clean shutdown.
 A successful preflight is not an offline backup and does not qualify
 the eventual QEMU link, guest network config or egress. Backing base
 images must remain available alongside any saved overlay.
+
+## Offline backup capture (requires already stopped guests)
+
+`ACTION=network-backup-capture` is implemented as a separately gated
+copy-and-verify operation. It refuses to copy either guest's QCOW2 while
+its QEMU container is running. It requires the managed container IDs
+and guest serial shutdown tail markers; it verifies base image digests
+and creates immutable, SHA256-checked copies of both overlays, manifests,
+known-host files, Ignition records, and their common base image.
+
+**Do not invoke capture while Farcaster or World 1 is running.**
+This action does not shut down guests, and `podman stop` is not a
+substitute for clean systemd shutdown. The current VMs have
+`CanPowerOff=challenge` and QEMU `-monitor none`, so there is no
+qualified unattended clean-shutdown request path yet. A serial marker
+alone is a conservative indicator, not a full attestation of guest
+filesystem consistency. Backups remain qualified only as checked
+offline copies, with that limitation recorded in the receipt.
+
+Once a genuinely graceful, independently observed shutdown is
+available, execute from the staged Agni revision:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-backup-capture
+```
+
+Never erase the original overlays or receipt directory as part of this
+operation. Restore and network activation are separate gates.
