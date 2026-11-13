@@ -33,6 +33,28 @@ case "$action" in
     grep -Fxq 'user default off' "$base/credentials/users.acl"
     printf 'AGNI_VM1_RUNTIME_INVENTORY=passed profile=%s redis=%s application_units=%s\n' "$profile" "$redis" "$units"
     ;;
+  probot-preflight)
+    [[ $# == 2 ]]
+    [[ -s "$base/credentials/users.acl" && -s "$base/config/redis.conf" ]]
+    [[ -d "$apps" && -d "$apps/credentials" ]]
+    [[ -d "$HOME/.config/containers/systemd" ]]
+    for principal in default publisher subscriber; do
+      awk -v name="$principal" '$1=="user" && $2==name {found++} END {exit found!=1}' "$base/credentials/users.acl"
+    done
+    grep -Fxq 'user default off' "$base/credentials/users.acl"
+    [[ "$(stat -c %a "$base/credentials/users.acl")" == 600 ]]
+    systemctl --user is-active --quiet "$scope-redis.service"
+    for role in redis nginx; do
+      [[ -s "$HOME/.config/containers/systemd/$scope-$role.container" ]]
+    done
+    if [[ -f "$apps/profile/profile.env" ]]; then
+      [[ -s "$apps/profile/manifest.json" && -s "$apps/bootstrap-template.acl" ]] || {
+        echo 'AGNI_PROBOT_GUEST_PREFLIGHT=blocked reason=incomplete-existing-profile' >&2
+        exit 1
+      }
+    fi
+    printf 'AGNI_PROBOT_GUEST_PREFLIGHT=passed scope=%s rootless=true store=9p-ro redis=active host_link=preserved activation=blocked\n' "$scope"
+    ;;
   store-check)
     [[ $# == 9 ]] || { echo 'Expected three store paths, three revisions and a Node executable' >&2; exit 2; }
     shift 2
