@@ -141,15 +141,13 @@ case "$action" in
     python="$(sed -n '1p' "$tools/python-path")"
     [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
     target="$apps/probot-migrations/$digest-${bundle_store##*/}"
-    if [[ -s "$target/rendered/profile.env" && -s "$target/rendered/users.acl" ]]; then
-      echo "AGNI_PROBOT_MIGRATION_STAGE=reused candidate=$target activation=blocked"
-      exit 0
-    fi
     [[ ! -e "$target" ]] || {
       echo 'AGNI_PROBOT_MIGRATION_STAGE=blocked reason=incomplete-private-generation' >&2
       exit 1
     }
     mkdir -m 700 -p "$apps/probot-migrations"
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
     podman run --rm --pull=never --network none \
       --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
       --read-only --read-only-tmpfs=false --security-opt label=disable \
@@ -168,6 +166,7 @@ case "$action" in
       --paths "$tool_store/migration-paths.json" \
       --bundle-store "$bundle_store" --candidate "$bundle_store" \
       --home "$HOME" --output "/run/migrations/$digest-${bundle_store##*/}" \
+      --display-dir "$apps/probot-migrations" \
       --acl-renderer "$tool_store/render-users-acl.py" \
       --credential-generator "$tool_store/probot-credentials.py" \
       --profile-renderer "$tool_store/probot-render.py" \
