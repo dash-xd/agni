@@ -67,7 +67,9 @@ case "$action" in
       echo 'AGNI_PROBOT_GUEST_STAGE=blocked reason=prior-service-credentials-missing' >&2
       exit 1
     }
-    target="$apps/probot-candidates/${bundle_store##*/}"
+    selected_spec="$(sha256sum "$apps/profile/manifest.json" | cut -d ' ' -f 1)"
+    current_acl="$(sha256sum "$base/credentials/users.acl" | cut -d ' ' -f 1)"
+    target="$apps/probot-candidates/${bundle_store##*/}-$selected_spec-$current_acl"
     if [[ -s "$target/rendered/profile.env" ]]; then
       echo "AGNI_PROBOT_GUEST_STAGE=reused candidate=$target activation=blocked"
       exit 0
