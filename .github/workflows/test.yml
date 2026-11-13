@@ -16,7 +16,9 @@ jobs:
       - name: Check new Go surface formatting
         run: gofmt -l main.go nativeexec | tee /dev/stderr | test -z "$(cat)"
       - name: Shoal binding contract (offline)
-        run: python3 local/shoal/test_binding.py
+        run: |
+          python3 local/shoal/test_binding.py
+          python3 local/shoal/test_storage.py
       - name: Vet
         run: go vet . ./nativeexec/... ./cmd/...
       - name: Build
