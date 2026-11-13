@@ -103,6 +103,33 @@ class MigrationVerificationTests(unittest.TestCase):
             self.assertEqual(result["roles"], 5)
             self.assertEqual(result["activation"], "blocked")
 
+    def test_podman_bind_mount_renamed_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate, assessment, acl, units, store = self.fixture(root)
+            mounted_candidate = root / "migration"
+            mounted_assessment = root / "assessment.json"
+            candidate.rename(mounted_candidate)
+            assessment.rename(mounted_assessment)
+            result = verifier.verify(mounted_candidate, mounted_assessment, acl, units, store,
+                                     generation=candidate.name)
+            self.assertEqual(result["roles"], 5)
+            self.assertEqual(result["activation"], "blocked")
+
+    def test_generation_digest_mismatch_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate, assessment, acl, units, store = self.fixture(Path(tmp))
+            with self.assertRaisesRegex(ValueError, "assessment digest or migration identity"):
+                verifier.verify(candidate, assessment, acl, units, store,
+                                generation="f" * 64 + "-" + HASH + "-candidate")
+
+    def test_modified_assessment_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate, assessment, acl, units, store = self.fixture(Path(tmp))
+            assessment.write_bytes(assessment.read_bytes() + b" ")
+            with self.assertRaisesRegex(ValueError, "assessment digest or migration identity"):
+                verifier.verify(candidate, assessment, acl, units, store)
+
     def test_legacy_unit_drift_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             candidate, assessment, acl, units, store = self.fixture(Path(tmp))
