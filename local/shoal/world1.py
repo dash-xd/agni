@@ -2,6 +2,7 @@
 """Shoal-owned World 1 lifecycle adapter over the generic Nix-Alpine host dispatcher."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -33,8 +34,12 @@ def execute(action):
     farcaster_state = state_root / farcaster["instance"]
     if not (farcaster_state / "build.txt").is_file() or not (farcaster_state / "base.qcow2").is_file():
         raise ValueError("Qualified Farcaster base artifacts are missing")
+    project = os.environ.get("NIX_XD_PROJECT", "")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", project):
+        raise ValueError("Selected project workspace name required")
     env = os.environ.copy()
     env.update({
+        "COREOS_FLAKE": "/workspaces/" + project + "/qemu/coreos-live/local",
         "COREOS_PROFILE": world["instance"],
         "COREOS_STATE_ROOT": str(state_root),
         "COREOS_ARTIFACT_STATE": str(farcaster_state),
