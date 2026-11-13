@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-action=${1:?Select adopt-plan, verify, stage, status or activate}
+action=${1:?Select adopt-plan, adopt-review, verify, stage, status or activate}
 scope=${2:?Select service scope}
 bundle_store=${3:-}
 [[ "$scope" == fatline-arm-vm1 ]] || exit 2
@@ -87,6 +87,30 @@ case "$action" in
       --output-dir /run/evidence --display-dir "$evidence" \
       --bundle "$bundle_store" --active-roles "$active"
     ;;
+  adopt-review)
+    [[ $# == 4 ]]
+    check_bundle
+    evidence="$apps/adoption-assessments"
+    digest="$4"
+    [[ "$digest" =~ ^[0-9a-f]{64}$ && -f "$evidence/$digest.json" && ! -L "$evidence/$digest.json" ]] || {
+      echo 'AGNI_PROBOT_ADOPTION_REVIEW=blocked reason=missing-immutable-evidence' >&2
+      exit 1
+    }
+    [[ -d "$apps/rootfs" && -x "$apps/rootfs/bin/busybox" ]] || exit 1
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$evidence,dst=/run/evidence,ro" \
+      --mount "type=bind,src=$candidate_store,dst=/run/candidate,ro" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-adoption-review.py" \
+      --assessment "/run/evidence/$digest.json" --bundle /run/candidate \
+      --bundle-store "$bundle_store"
+    ;;
   verify)
     [[ $# == 3 ]]
     check_bundle
@@ -132,5 +156,5 @@ case "$action" in
     echo 'AGNI_PROBOT_GUEST_ACTIVATION=blocked reason=real-github-app-binding-and-live-ingress-not-qualified' >&2
     exit 1
     ;;
-  *) echo 'Usage: adopt-plan|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
+  *) echo 'Usage: adopt-plan|adopt-review|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
 esac
