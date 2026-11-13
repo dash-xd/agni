@@ -29,6 +29,11 @@ class ActivationCheckTests(unittest.TestCase):
         api_key = base / "services/credentials/logma/api-key"
         api_key.write_text("private-api-key")
         api_key.chmod(0o600)
+        for role in (*planner.ROLES, "probot"):
+            (migration / "rendered" / (fixtures.SCOPE + "-" + role + ".container")).write_text(
+                "[Container]\nReadOnly=true\n")
+        (migration / "rendered" / (fixtures.SCOPE + ".network")).write_text(
+            "[Network]\nInternal=true\n")
         storage = root / "store"
         storage.mkdir()
         assessment_content = json.loads(assessment.read_text())
