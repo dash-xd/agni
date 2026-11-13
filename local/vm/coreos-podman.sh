@@ -56,12 +56,19 @@ if [[ "$artifacts" != "$state" ]]; then
     cp "$artifacts/build.txt" "$state/build.txt"
   fi
 fi
-# An existing guest's immutable build manifest is authoritative when the
-# caller did not explicitly select a store. An explicit empty selection
-# remains a request for no shared store and must still match the manifest.
+# Recover the previously selected shared store from the immutable VM manifest.
+# Explicit COREOS_NIX_STORE_VOLUME (including empty) must still match exactly.
 if [[ ! ${COREOS_NIX_STORE_VOLUME+x} && -f "$state/build.txt" ]]; then
-  recorded="$(sed -n 's/^shared_nix_volume=//p' "$state/build.txt")"
-  [[ "$recorded" != *
+  count="$(grep -c "^shared_nix_volume=" "$state/build.txt" || true)"
+  [[ "$count" == 0 || "$count" == 1 ]] || fail "Ambiguous shared store entries in VM manifest"
+  recorded="$(sed -n "s/^shared_nix_volume=//p" "$state/build.txt")"
+  if [[ -n "$recorded" && "$recorded" != none ]]; then
+    [[ "$recorded" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || fail "Invalid shared store volume in VM manifest"
+    store_volume="$recorded"
+    printf "AGNI_VM_STORE_SELECTION=manifest volume=%s\n" "$store_volume"
+  fi
+fi
+[[ "$name" =~ ^[a-z][a-z0-9-]{0,63}$ ]] || fail "Invalid CoreOS container name"
 runner_id() {
   local id
   id="$("${p[@]}" image inspect "$image" --format '{{.Id}}')" || fail "Missing ARM64 QEMU image: $image (run coreos-container-build)"
