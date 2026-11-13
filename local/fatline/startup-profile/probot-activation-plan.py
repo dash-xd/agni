@@ -99,9 +99,19 @@ def prepare(migration, assessment_path, installed_units, base, output, generatio
                         raise ValueError("Unexpected legacy Quadlet drop-in filename")
                     relative = Path(dropins.name) / file.name
                     checksums["quadlets"][str(relative)] = file_copy(file, rollback / "quadlets" / relative)
-        config = [Path("credentials/users.acl"), Path("config/redis.conf"), Path("config/nginx.conf"),
-                  Path("services/bootstrap-template.acl"), Path("services/boot-wait.sh")]
-        snapshot(base, rollback / "config", config, checksums["config"])
+        required_config = [Path("credentials/users.acl"), Path("config/redis.conf"),
+                           Path("config/nginx.conf")]
+        snapshot(base, rollback / "config", required_config, checksums["config"])
+        optional_config = [Path("services/bootstrap-template.acl"), Path("services/boot-wait.sh")]
+        absent_optional = []
+        for relative in optional_config:
+            source = base / relative
+            if source.is_symlink():
+                raise ValueError("Symlinked optional rollback input: " + str(relative))
+            if source.exists():
+                checksums["config"][str(relative)] = file_copy(source, rollback / "config" / relative)
+            else:
+                absent_optional.append(str(relative))
         credentials(base / "services/credentials", rollback / "credentials", checksums["credentials"])
         candidate_acl = hashlib.sha256((migration / "rendered/users.acl").read_bytes()).hexdigest()
         manifest = json.loads((migration / "rendered/manifest.json").read_text())
@@ -116,6 +126,7 @@ def prepare(migration, assessment_path, installed_units, base, output, generatio
             "service_invocations": invocations,
             "legacy_store_references": {role: baseline[role].get("store_references", []) for role in ROLES},
             "rollback_checksums": checksums,
+            "legacy_absent_optional_paths": absent_optional,
             "activation": {"allowed": False, "reason": "separate explicit activation authorization required",
                            "state": "planned-only", "operations_executed": []},
             "transition": [
