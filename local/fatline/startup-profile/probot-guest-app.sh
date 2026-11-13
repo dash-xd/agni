@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-action=${1:?Select adopt-plan, adopt-review, adopt-stage, migrate-verify, verify, stage, status or activate}
+action=${1:?Select adopt-plan, adopt-review, adopt-stage, migrate-verify, activation-plan, verify, stage, status or activate}
 scope=${2:?Select service scope}
 bundle_store=${3:-}
 [[ "$scope" == fatline-arm-vm1 ]] || exit 2
@@ -49,6 +49,78 @@ check_bundle() {
   [[ "$expected" == 4 ]] || exit 1
   echo 'AGNI_PROBOT_GUEST_BUNDLE=passed roles=3 node=visible credentials=excluded'
 }
+
+migrate_verify() {
+    [[ -d "$apps/rootfs" && -x "$apps/rootfs/bin/busybox" ]] || exit 1
+    candidates=()
+    shopt -s nullglob
+    for path in "$apps/probot-migrations/"*; do
+      [[ -d "$path" && ! -L "$path" ]] || exit 1
+      candidates+=("$path")
+    done
+    shopt -u nullglob
+    [[ "${#candidates[@]}" == 1 ]] || {
+      echo 'AGNI_PROBOT_MIGRATION_VERIFY=blocked reason=ambiguous-or-missing-generation' >&2
+      exit 1
+    }
+    target="${candidates[0]}"
+    basename="${target##*/}"
+    [[ "$basename" =~ ^([0-9a-f]{64})-([0-9a-z]{32}-candidate)$ ]] || exit 1
+    digest="${BASH_REMATCH[1]}"
+    bundle_store="/nix/store/${BASH_REMATCH[2]}"
+    check_bundle
+    evidence="$apps/adoption-assessments/$digest.json"
+    [[ -s "$evidence" && ! -L "$evidence" ]] || exit 1
+    [[ -s "$target/rendered/profile.env" && -s "$target/rendered/manifest.json" ]] || exit 1
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    before=()
+    for role in redis nginx logma skymill; do
+      systemctl --user is-active --quiet "$scope-$role.service" || exit 1
+      before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+      [[ -n "${before[${#before[@]}-1]}" ]] || exit 1
+    done
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$target,dst=/run/migration,ro" \
+      --mount "type=bind,src=$evidence,dst=/run/assessment.json,ro" \
+      --mount "type=bind,src=$base/credentials/users.acl,dst=/run/old-acl,ro" \
+      --mount "type=bind,src=$HOME/.config/containers/systemd,dst=/run/units,ro" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-migration-verify.py" \
+      --migration /run/migration --assessment /run/assessment.json \
+      --generation "$basename" \
+      --old-acl /run/old-acl --installed-units /run/units --store /nix/store
+    generator=/usr/lib/systemd/system-generators/podman-system-generator
+    [[ -x "$generator" ]] || {
+      echo 'AGNI_PROBOT_MIGRATION_VERIFY=blocked reason=quadlet-generator-not-found' >&2
+      exit 1
+    }
+    quadlet_output="$(mktemp)"
+    trap 'rm -f "$quadlet_output"' EXIT
+    QUADLET_UNIT_DIRS="$target/rendered" "$generator" --user --dryrun > "$quadlet_output"
+    for role in redis nginx logma skymill probot; do
+      grep -Fq "$scope-$role.service" "$quadlet_output" || {
+        echo "AGNI_PROBOT_MIGRATION_VERIFY=blocked reason=quadlet-not-generated role=$role" >&2
+        exit 1
+      }
+    done
+    echo 'AGNI_PROBOT_QUADLET_GENERATOR=passed roles=5 dryrun=true installed=unchanged'
+    after=()
+    for role in redis nginx logma skymill; do
+      systemctl --user is-active --quiet "$scope-$role.service" || exit 1
+      after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    [[ "${before[*]}" == "${after[*]}" ]] || {
+      echo 'AGNI_PROBOT_MIGRATION_VERIFY=blocked reason=live-service-invocation-changed' >&2
+      exit 1
+    }
+    echo "AGNI_PROBOT_MIGRATION_VERIFY=passed roles=5 candidate=$target activation=blocked redis_restart=none"
+}
+
 
 case "$action" in
   adopt-plan)
@@ -175,35 +247,25 @@ case "$action" in
     ;;
   migrate-verify)
     [[ $# == 2 ]]
-    [[ -d "$apps/rootfs" && -x "$apps/rootfs/bin/busybox" ]] || exit 1
-    candidates=()
-    shopt -s nullglob
-    for path in "$apps/probot-migrations/"*; do
-      [[ -d "$path" && ! -L "$path" ]] || exit 1
-      candidates+=("$path")
-    done
-    shopt -u nullglob
-    [[ "${#candidates[@]}" == 1 ]] || {
-      echo 'AGNI_PROBOT_MIGRATION_VERIFY=blocked reason=ambiguous-or-missing-generation' >&2
+    migrate_verify
+    ;;
+  activation-plan)
+    [[ $# == 2 ]]
+    migrate_verify
+    [[ ! -e "$apps/profile/profile.env" && ! -e "$apps/profile/manifest.json" ]] || {
+      echo 'AGNI_ACTIVATION_PLAN=blocked reason=profile-already-installed' >&2
       exit 1
     }
-    target="${candidates[0]}"
-    basename="${target##*/}"
-    [[ "$basename" =~ ^([0-9a-f]{64})-([0-9a-z]{32}-candidate)$ ]] || exit 1
-    digest="${BASH_REMATCH[1]}"
-    bundle_store="/nix/store/${BASH_REMATCH[2]}"
-    check_bundle
-    evidence="$apps/adoption-assessments/$digest.json"
-    [[ -s "$evidence" && ! -L "$evidence" ]] || exit 1
-    [[ -s "$target/rendered/profile.env" && -s "$target/rendered/manifest.json" ]] || exit 1
-    python="$(sed -n '1p' "$tools/python-path")"
-    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
-    before=()
-    for role in redis nginx logma skymill; do
-      systemctl --user is-active --quiet "$scope-$role.service" || exit 1
-      before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
-      [[ -n "${before[${#before[@]}-1]}" ]] || exit 1
-    done
+    plans="$apps/activation-plans"
+    plan="$plans/$basename"
+    [[ ! -e "$plan" ]] || {
+      echo "AGNI_ACTIVATION_PLAN=blocked reason=already-prepared candidate=$plan" >&2
+      exit 1
+    }
+    mkdir -p -m 700 "$plans"
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    id="$(cat /proc/sys/kernel/random/boot_id)"
     podman run --rm --pull=never --network none \
       --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
       --read-only --read-only-tmpfs=false --security-opt label=disable \
@@ -211,38 +273,27 @@ case "$action" in
       --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
       --mount "type=bind,src=$target,dst=/run/migration,ro" \
       --mount "type=bind,src=$evidence,dst=/run/assessment.json,ro" \
-      --mount "type=bind,src=$base/credentials/users.acl,dst=/run/old-acl,ro" \
+      --mount "type=bind,src=$base,dst=/run/base,ro" \
       --mount "type=bind,src=$HOME/.config/containers/systemd,dst=/run/units,ro" \
+      --mount "type=bind,src=$plans,dst=/run/plans,rw" \
       --tmpfs /tmp:rw,nosuid,nodev,size=4m \
-      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-migration-verify.py" \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-activation-plan.py" \
       --migration /run/migration --assessment /run/assessment.json \
-      --generation "$basename" \
-      --old-acl /run/old-acl --installed-units /run/units --store /nix/store
-    generator=/usr/lib/systemd/system-generators/podman-system-generator
-    [[ -x "$generator" ]] || {
-      echo 'AGNI_PROBOT_MIGRATION_VERIFY=blocked reason=quadlet-generator-not-found' >&2
-      exit 1
-    }
-    quadlet_output="$(mktemp)"
-    trap 'rm -f "$quadlet_output"' EXIT
-    QUADLET_UNIT_DIRS="$target/rendered" "$generator" --user --dryrun > "$quadlet_output"
-    for role in redis nginx logma skymill probot; do
-      grep -Fq "$scope-$role.service" "$quadlet_output" || {
-        echo "AGNI_PROBOT_MIGRATION_VERIFY=blocked reason=quadlet-not-generated role=$role" >&2
-        exit 1
-      }
-    done
-    echo 'AGNI_PROBOT_QUADLET_GENERATOR=passed roles=5 dryrun=true installed=unchanged'
-    after=()
+      --installed-units /run/units --base /run/base \
+      --output "/run/plans/$basename" --generation "$basename" --boot-id "$id" \
+      --redis-invocation "${before[0]}" --nginx-invocation "${before[1]}" \
+      --logma-invocation "${before[2]}" --skymill-invocation "${before[3]}"
+    after_plan=()
     for role in redis nginx logma skymill; do
       systemctl --user is-active --quiet "$scope-$role.service" || exit 1
-      after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+      after_plan+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
     done
-    [[ "${before[*]}" == "${after[*]}" ]] || {
-      echo 'AGNI_PROBOT_MIGRATION_VERIFY=blocked reason=live-service-invocation-changed' >&2
+    [[ "${before[*]}" == "${after_plan[*]}" ]] || {
+      echo 'AGNI_ACTIVATION_PLAN=blocked reason=live-invocation-changed' >&2
       exit 1
     }
-    echo "AGNI_PROBOT_MIGRATION_VERIFY=passed roles=5 candidate=$target activation=blocked redis_restart=none"
+    echo "AGNI_ACTIVATION_PLAN_PATH=$plan/plan.json"
+    echo 'AGNI_DEPLOYMENT_ACTIVATION_PLAN=passed deployment=vm1 rollback=prepared activation=blocked redis_restart=none'
     ;;
   verify)
     [[ $# == 3 ]]
@@ -289,5 +340,5 @@ case "$action" in
     echo 'AGNI_PROBOT_GUEST_ACTIVATION=blocked reason=real-github-app-binding-and-live-ingress-not-qualified' >&2
     exit 1
     ;;
-  *) echo 'Usage: adopt-plan|adopt-review|adopt-stage|migrate-verify|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
+  *) echo 'Usage: adopt-plan|adopt-review|adopt-stage|migrate-verify|activation-plan|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
 esac
