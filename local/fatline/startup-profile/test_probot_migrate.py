@@ -84,6 +84,16 @@ class MigrationSpecTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Redis ACL changed"):
                 self.resolve(report, units, acl)
 
+    def test_incomplete_quadlet_security_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for role in (*module.ROLES, "probot"):
+                (root / (BASE + "-" + role + ".container")).write_text("[Container]\\n")
+            (root / "profile.env").write_text("profile_scope=test\\n")
+            (root / "manifest.json").write_text("{}\\n")
+            with self.assertRaisesRegex(ValueError, "Missing Quadlet isolation"):
+                module.validate_rendered_profile(root)
+
     def test_unverified_home_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             report, units, acl = self.fixture(Path(temp))
