@@ -50,8 +50,14 @@ def execute(action):
     if action == "ignition":
         env["COREOS_SSH_PUBLIC_KEY"] = os.environ.get("SHOAL_SSH_PUBLIC_KEY",
                                                str(Path.home() / ".ssh/starwisp-test.pub"))
+    before = binding.bind("farcaster") if action == "start" else None
     print("AGNI_SHOAL_WORLD1_ACTION=" + action + " state=" + str(state_root / world["instance"]), flush=True)
     subprocess.run(["bash", str(VM), action], env=env, check=True)
+    if before is not None:
+        after = binding.bind("farcaster")
+        if before["bindings"] != after["bindings"] or before["planSha256"] != after["planSha256"]:
+            raise ValueError("Farcaster physical identity changed while starting World 1")
+        print("AGNI_SHOAL_FARCASTER_UNCHANGED=passed", flush=True)
 
 
 if __name__ == "__main__":
