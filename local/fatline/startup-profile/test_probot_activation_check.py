@@ -26,6 +26,9 @@ class ActivationCheckTests(unittest.TestCase):
     def setup_fixture(self, root):
         setup = fixtures.ActivationPlanTests()
         migration, assessment, units, base, output, generation = setup.fixture(root)
+        api_key = base / "services/credentials/logma/api-key"
+        api_key.write_text("private-api-key")
+        api_key.chmod(0o600)
         storage = root / "store"
         storage.mkdir()
         assessment_content = json.loads(assessment.read_text())
