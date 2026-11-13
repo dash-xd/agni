@@ -11,9 +11,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent
 PLAN = ROOT / "plan.json"
-SHA = re.compile(r"[0-9a-f]{40}\\Z")
-CID = re.compile(r"[0-9a-f]{64}\\Z")
-BOOT = re.compile(r"[0-9a-f-]{36}\\Z")
+SHA = re.compile(r"[0-9a-f]{40}\Z")
+CID = re.compile(r"[0-9a-f]{64}\Z")
+BOOT = re.compile(r"[0-9a-f-]{36}\Z")
 
 
 def run(*argv):
@@ -111,7 +111,7 @@ def bind(stage):
                                      delete=False) as handle:
         os.chmod(handle.name, 0o600)
         json.dump(receipt, handle, sort_keys=True, indent=2)
-        handle.write("\\n")
+        handle.write("\n")
         temporary = Path(handle.name)
     os.replace(temporary, destination)
     print(f"AGNI_SHOAL_BINDING=passed stage={stage} receipt={destination}")
