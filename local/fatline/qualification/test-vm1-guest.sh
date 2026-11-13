@@ -6,7 +6,7 @@ trap 'rm -rf "$temp"' EXIT
 export HOME="$temp/home"
 mkdir -p "$HOME/.local/state/nix-xd/fatline/fatline-arm-vm1/services" "$HOME/.config/containers/systemd" "$temp/bin"
 base="$HOME/.local/state/nix-xd/fatline/fatline-arm-vm1"
-mkdir -p "$base/credentials" "$base/config"
+mkdir -p "$base/credentials" "$base/config" "$base/services/credentials"
 printf 'user default off\nuser publisher on\nuser subscriber on\n' > "$base/credentials/users.acl"
 printf 'save ""\n' > "$base/config/redis.conf"
 cat > "$temp/bin/id" <<'SH'
@@ -29,6 +29,13 @@ chmod +x "$temp/bin/"*
 export PATH="$temp/bin:$PATH"
 out="$(bash "$root/coreos-services/vm1-check.sh" inventory fatline-arm-vm1)"
 grep -Fxq 'AGNI_VM1_RUNTIME_INVENTORY=passed profile=absent redis=active application_units=0' <<< "$out"
+out="$(bash "$root/coreos-services/vm1-check.sh" probot-preflight fatline-arm-vm1)"
+grep -Fq 'AGNI_PROBOT_GUEST_PREFLIGHT=passed scope=fatline-arm-vm1' <<< "$out"
+rm "$HOME/.config/containers/systemd/fatline-arm-vm1-nginx.container"
+if bash "$root/coreos-services/vm1-check.sh" probot-preflight fatline-arm-vm1 >/dev/null 2>&1; then
+  echo 'Guest preflight accepted missing runtime dependency' >&2
+  exit 1
+fi
 if bash "$root/coreos-services/vm1-check.sh" store-check fatline-arm-vm1 >/dev/null 2>&1; then
   echo 'Guest store qualifier accepted missing immutable paths' >&2
   exit 1
