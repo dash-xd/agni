@@ -1,56 +1,115 @@
-# One-Farcaster / one-World binding preflight
+# Shoal: one Farcaster, one World 1
 
-Agni owns the logical placement plan in `plan.json`. The physical entries
-preserve the existing Starwisp-based Farcaster candidate and reserve World 1.
-No VM is created and no application service is activated by the binding action.
+Agni owns the logical plan in `plan.json`. The physical Farcaster remains
+the already-qualified Starwisp VM. This stage adds **one** independently
+bootable World 1 with its own QCOW2 overlay, Ignition, boot ID, hostname
+and SSH host identity. Both use the same host-owned Nix store through
+read-only VirtIO 9P; they do **not** share a writable guest disk.
 
-Run from the sibling nix.xd checkout (the project checkout must be named
-`agni20261112` in the same workspace):
+The generic `nix.xd` Makefile only stages committed sources and invokes
+Agni host actions. World 1 runs in the existing `coreos-arm64` Podman
+Machine, without restarting or rewriting Starwisp.
 
-```sh
-AGNI_REV="$(git -C ~/workspace/agni20261112 rev-parse HEAD)"
-make project-host-run \
-  PROJECT=agni20261112 APPLICATION=shoal ACTION=bind \
-  PROJECT_REV="$AGNI_REV" SHOAL_STAGE=farcaster
-```
+## Prepare
 
-The action is read-only except for a receipt written to
-`~/.local/state/agni/shoal/receipts`. It checks the selected commit,
-the exact QEMU runner ID, the expected loopback SSH publication, strict
-pinned SSH host identity, and the guest boot ID. It uses
-`~/.local/state/nix-xd/coreos/<instance>/known_hosts` by default.
-Override `SHOAL_MACHINE`, `SHOAL_STATE_ROOT`, or `SHOAL_SSH_KEY`
-only when selecting a different existing runtime.
-
-To run the storage gate, stage the selected committed nix.xd checkout in
-Nix-Alpine, then invoke the Agni-owned storage action:
+From `~/workspace/nix.xd20261113.0`, fast-forward the Agni checkout
+and stage its new exact revision:
 
 ```sh
-make stage CHECKOUT="$(basename "$PWD")"
-make project-host-run \
-  PROJECT=agni20261112 APPLICATION=shoal ACTION=storage \
-  PROJECT_REV="$AGNI_REV" SHOAL_STAGE=farcaster PROVIDER=podman
+git -C ../agni20261113.0 pull --ff-only
+AGNI_REV="$(git -C ../agni20261113.0 rev-parse HEAD)"
+make stage PROVIDER=podman MACHINE=coreos-arm64 CHECKOUT=agni20261113.0
 ```
 
-This requires the selected Podman writer `nix-xd-arm`, its mounted
-`nix-xd-arm-store` volume, and the pre-existing QEMU runner. It executes
-the two rootless, read-only 9P readers per guest and reattests the physical
-binding afterwards. Both the binding and the storage receipt are
-content-addressed and written outside either Git checkout.
+The existing Starwisp artifact state must contain the qualified
+`build.txt` and `base.qcow2` at
+`~/.local/state/nix-xd/coreos/starwisp/`. No image rebuild or disk copy
+is needed: World 1 uses its **own** QCOW2 overlay referencing that base.
 
-Once World 1 is running, use `SHOAL_STAGE=world1` for **both** actions.
-That stage requires distinct Farcaster/World container IDs and boot IDs,
-and a successful storage probe in each VM.
-
-
-Binding evidence is **not** evidence that 9P, guest-local stores, the shared
-network, IPv4/IPv6 egress denial, Squid, or Fatline services work. Each must
-receive a separately verified gate; do not promote a successful binding to
-a Shoal or Fatline pass. This branch does not implement the shared network or application gates.
-
-Run the host-independent regression gate with:
+## First-boot lifecycle
 
 ```sh
-python3 ~/workspace/agni20261112/local/shoal/test_binding.py
-python3 ~/workspace/agni20261112/local/shoal/test_storage.py
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=world1-ignition
+
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=world1-preflight
+
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=world1-start
 ```
+
+`world1-ignition` selects the dedicated
+`#ignitionShoalWorld1_9p` Nix output. The user `wisp` is authorized
+with `~/.ssh/starwisp-test.pub` by default, or the explicit
+`SHOAL_SSH_PUBLIC_KEY=/absolute/path/to/key.pub` override.
+This is only an SSH *client authorization* key. The guest generates its
+own SSH **server host key** on first boot.
+
+`world1-start` is a managed, idempotent start: a subsequent run
+checks the recorded identity and existing overlay instead of creating
+a new VM. It does not restart Farcaster. It does not activate Logmash.
+
+## SSH host-key trust and binding
+
+Once the VM's SSH server is reachable:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=hostkey-plan
+```
+
+This shows the World 1 ED25519 host-key SHA256 fingerprint, but does **not**
+automatically trust it. Compare it against independent guest-console
+or other trusted out-of-band evidence where available. SSH keyscan by
+itself is **TOFU**, not cryptographic VM attestation.
+
+Then explicitly approve the displayed fingerprint (replace the
+placeholder, which is not a real fingerprint):
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=hostkey-enroll \
+  SHOAL_WORLD1_HOSTKEY_CONFIRM=SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT
+```
+
+Enrollment requires a matching managed World container ID, disallows
+reuse of Farcaster's host key, and writes
+`~/.local/state/nix-xd/coreos/shoal-world1/known_hosts`
+without overwriting a conflicting entry.
+
+With that pin established, the existing Agni actions check **both**
+physical guests and their independent boot IDs:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=bind SHOAL_STAGE=world1
+
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=storage SHOAL_STAGE=world1
+```
+
+A passing World storage gate proves two bound guests, read-only 9P
+and two disposable rootless readers **per guest**. It does not prove
+network connectivity, guest-local writable store independence, service
+placement, Probot or Logmash. Those require subsequent qualifications.
+
+## Local regression tests
+
+```sh
+python3 ../agni20261113.0/local/shoal/test_binding.py
+python3 ../agni20261113.0/local/shoal/test_storage.py
+python3 ../agni20261113.0/local/shoal/test_world1.py
+```
+
+For a damaged or failed *World 1 only*, use Agni's explicit VM
+`reset-failed` action with `COREOS_PROFILE=shoal-world1` and
+`COREOS_CONTAINER_NAME=coreos-shoal-world1`; do not reset Starwisp.
+The guest overlay and artifacts must be reconciled before recreation.
