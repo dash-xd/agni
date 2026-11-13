@@ -82,7 +82,7 @@ case "$action" in
       --mount "type=bind,src=$HOME/.config/containers/systemd,dst=/run/units,ro" \
       --mount "type=bind,src=$evidence,dst=/run/evidence,rw" \
       --tmpfs /tmp:rw,nosuid,nodev,size=4m \
-      --rootfs "$apps/rootfs" "$python" "$tools/probot-adoption.py" \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-adoption.py" \
       --scope "$scope" --base /run/base --units /run/units \
       --output-dir /run/evidence --bundle "$bundle_store" --active-roles "$active"
     ;;
