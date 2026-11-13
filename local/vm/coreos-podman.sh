@@ -84,7 +84,11 @@ build() {
   echo "BUILT profile=$profile state=$state"
 }
 ignition() {
-  [[ "$profile" == starwisp ]] || fail "Ignition generation currently supports PROFILE=starwisp only"
+  [[ "$profile" == starwisp || "$profile" == shoal-world1 ]] || fail "Unsupported CoreOS Ignition profile"
+  if [[ "$profile" == shoal-world1 ]]; then
+    [[ "$artifacts" != "$state" ]] || fail 'World 1 must inherit the immutable Farcaster base artifacts'
+    [[ -n "$store_volume" ]] || fail 'World 1 requires the existing read-only Nix store volume'
+  fi
   [[ -r "${COREOS_SSH_PUBLIC_KEY:-}" ]] || fail "Provide COREOS_SSH_PUBLIC_KEY path to an SSH ed25519 public key"
   [[ -d "$state" && -f "$artifacts/base.qcow2" ]] || fail "Build the ARM64 disk first"
   [[ ! -e "$state/config.ign" ]] || fail "Existing config.ign; refusing overwrite"
@@ -97,7 +101,12 @@ ignition() {
     butane="${flake%/local}/profiles/starwisp/butane/starwisp-9p.bu"
     output_name=ignitionStarwisp9p
   fi
+  if [[ "$profile" == shoal-world1 ]]; then
+    butane="${flake%/local}/profiles/shoal-world1/butane/world1-9p.bu"
+    output_name=ignitionShoalWorld1_9p
+  fi
   if [[ -n "$data_grants" ]]; then
+    [[ "$profile" == starwisp ]] || fail 'World 1 data 9P grants need a separately qualified profile'
     [[ -n "${COREOS_IGNITION_OUTPUT:-}" && -n "${COREOS_BUTANE_PROFILE:-}" ]] ||
       fail 'CoreOS data 9P exports require explicit COREOS_IGNITION_OUTPUT and COREOS_BUTANE_PROFILE'
     [[ "$COREOS_IGNITION_OUTPUT" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]] ||
@@ -108,7 +117,7 @@ ignition() {
     output_name="$COREOS_IGNITION_OUTPUT"
   fi
   "${p[@]}" exec "$scope" test -f "$butane" || fail "Missing staged Agni Starwisp Butane profile: $butane"
-  output="$("${p[@]}" exec "$scope" env COREOS_TEST_SSH_PUBLIC_KEY="$key" COREOS_STARWISP_BUTANE="$butane" COREOS_STARWISP_9P_BUTANE="$butane" \
+  output="$("${p[@]}" exec "$scope" env COREOS_TEST_SSH_PUBLIC_KEY="$key" COREOS_STARWISP_BUTANE="$butane" COREOS_STARWISP_9P_BUTANE="$butane" COREOS_WORLD1_BUTANE="$butane" \
     nix build --impure --no-write-lock-file --no-link --print-out-paths "$flake#$output_name")"
   [[ "$output" == /nix/store/* && "$output" != *$'\n'* ]] || fail 'Unexpected Ignition output path'
   "${p[@]}" cp "$scope:$output/config.ign" "$state/config.ign"
@@ -133,8 +142,12 @@ preflight() {
   if [[ "$artifacts" != "$state" && -f "$state/config.ign" ]]; then
     guest_config="$state/config.ign"
     expected_ignition_key=guest_ignition_sha256
-  elif [[ -n "$data_grants" && "$artifacts" != "$state" ]]; then
-    fail 'Independent data 9P guest requires its own Ignition'
+  elif [[ "$artifacts" != "$state" ]]; then
+    fail 'Independent guest requires its own Ignition'
+  fi
+  if [[ "$profile" == shoal-world1 ]]; then
+    [[ "$artifacts" != "$state" && -f "$state/config.ign" ]] || fail 'World 1 requires its own selected Ignition'
+    [[ -n "$store_volume" ]] || fail 'World 1 requires host-owned read-only Nix store'
   fi
   [[ -f "$guest_config" ]] || fail 'Missing selected guest config.ign; build its independent Ignition'
   [[ "$(shasum -a 256 "$guest_config" | awk '{print $1}')" == "$(sed -n "s/^$expected_ignition_key=//p" "$state/build.txt")" ]] ||
