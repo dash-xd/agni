@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import re
-import subprocess
 
 SCOPE = "fatline-arm-vm1"
 ROLES = ("redis", "nginx", "logma", "skymill", "probot")
@@ -99,6 +98,7 @@ def main():
     parser.add_argument("--units", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--bundle")
+    parser.add_argument("--active-roles", required=True)
     args = parser.parse_args()
     if args.scope != SCOPE:
         raise SystemExit("Unsupported guest scope")
@@ -106,13 +106,8 @@ def main():
         raise SystemExit("Invalid pinned bundle")
     if os.geteuid() == 0:
         raise SystemExit("Rootless guest required")
-    active = set()
-    for role in ROLES:
-        status = subprocess.run(["systemctl", "--user", "is-active", "--quiet", SCOPE + "-" + role + ".service"],
-                                check=False)
-        if status.returncode == 0:
-            active.add(role)
-    if "redis" not in active:
+    active = set(filter(None, args.active_roles.split(",")))
+    if not active <= set(ROLES) or "redis" not in active:
         raise SystemExit("Redis must remain active during adoption assessment")
     assessment = assess(args.base, args.units, active, bundle=args.bundle)
     state_root = args.output_dir
