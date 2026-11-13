@@ -146,3 +146,50 @@ blocked until a separate controlled activation and tested restoration
 path explicitly addresses RAM-only Redis data loss, application
 readiness and GitHub App/ingress authority. A passing verification
 never changes the installed profile or invokes systemctl reload/start.
+
+## Plan activation without changing running services
+
+```sh
+make -C local/fatline deployment-migrate-activation-plan DEPLOYMENT=vm1
+```
+
+This operation reuses the one verified migration generation, validates
+the exact Quadlets with the running guest's Quadlet generator, and stores
+one private, immutable activation plan under
+`services/activation-plans/<generation>/`. Its `plan.json` contains
+source/target identities, boot and service invocation IDs, the
+transition/readiness/rollback intent, and an explicit warning that
+RAM-only Redis stream contents are **not** recoverable by config rollback.
+
+The `rollback/` directory snapshots the original four Quadlets and
+their drop-ins, network definition, ACL, Redis/Nginx configs, runtime
+bootstrap template/script, and the original guest-private application
+credentials. The copy remains on VM storage with private permissions;
+values are not emitted in logs or placed in the Nix store. Plan creation
+does not alter existing files or reload/restart systemd.
+
+This is a **configuration rollback baseline**, not a tested rollback.
+Activation and automated restoration remain unimplemented and blocked.
+An existing plan is never silently replaced. If the VM's backing disk
+can be discarded, the private backup must be durably protected before
+a real activation; this development stage does not claim off-VM
+recovery or Redis stream durability.
+
+### Machine control boundary for later GCP orchestration
+
+Agni owns desired application generation, per-guest verification,
+activation readiness, and rollback semantics. The host-side
+`operations/guest-migration.sh` currently uses nix.xd's local guest
+transport for `starwisp`. Cloud orchestration should instead supply
+a machine adapter resolving a GCP project/zone/instance identity and
+remote execution credentials or guest-agent channel. A designated
+Farcaster/controller can coordinate selection and authorization across
+the planned multi-VM dual-stack subnet; no Agni operation should
+require a Mac host or use a subnet address as durable VM identity.
+
+For now **do not add a GCP API controller to the VM1 staging flow**.
+Keep the guest-local Agni operation and its evidence format stable;
+extract the transport and Nix-store visibility assumptions as concrete
+adapters when the GCP deployment is implemented. The current CoreOS
+guest implementation still specifically requires a read-only 9P Nix
+store; that is not yet a GCP-qualified transport.
