@@ -84,7 +84,8 @@ case "$action" in
       --tmpfs /tmp:rw,nosuid,nodev,size=4m \
       --rootfs "$apps/rootfs" "$python" "$tool_store/probot-adoption.py" \
       --scope "$scope" --base /run/base --units /run/units \
-      --output-dir /run/evidence --bundle "$bundle_store" --active-roles "$active"
+      --output-dir /run/evidence --display-dir "$evidence" \
+      --bundle "$bundle_store" --active-roles "$active"
     ;;
   verify)
     [[ $# == 3 ]]
