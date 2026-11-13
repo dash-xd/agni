@@ -25,7 +25,6 @@ class ActivationPlanTests(unittest.TestCase):
         for filename, value in (("credentials/users.acl", "user default off\nuser publisher on >secret\nuser subscriber on >secret\n"),
                                 ("config/redis.conf", "save \"\"\nappendonly no\n"),
                                 ("config/nginx.conf", "events {}\n"),
-                                ("services/bootstrap-template.acl", "user default off\n"),
                                 ("services/boot-wait.sh", "#!/bin/sh\n")):
             item = base / filename
             item.parent.mkdir(parents=True, exist_ok=True)
