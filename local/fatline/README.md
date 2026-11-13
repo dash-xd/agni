@@ -116,3 +116,33 @@ deployment metadata.
 enables Probot. An existing or partially staged private generation blocks a
 second staging attempt; that state must be reconciled explicitly. The
 five-role live activation gate remains separate and closed.
+
+## Verify an existing staged migration (no restaging)
+
+```sh
+make -C local/fatline deployment-migrate-verify DEPLOYMENT=vm1
+```
+
+Agni stages its own exact source revision in nix.xd and invokes the
+existing Nix-backed guest app with the named `migrate-verify` operation.
+Unlike `deployment-migrate-stage`, it never runs application bundle
+qualification or generates a new private candidate. The guest locates
+**exactly one** existing migration generation under
+`services/probot-migrations` and rejects absent/ambiguous selections.
+
+The verifier checks the content-addressed original assessment,
+unchanged legacy Quadlet hashes and Redis ACL, the five-role rendered
+manifest, private credential file permissions, Redis ACL identity
+preservation, all selected Nix executables and referenced store
+closures, network/credential isolation, and the full systemd dependency
+graph. It uses CoreOS's own Podman Quadlet generator with
+`QUADLET_UNIT_DIRS=<staged rendered directory> ... --user --dryrun`
+to validate translation without loading generated services. Finally,
+it compares existing service invocation IDs before/after qualification.
+
+Rollback preflight confirms that the original ACL and Quadlets remain
+available; it **does not** qualify a live rollback. Activation remains
+blocked until a separate controlled activation and tested restoration
+path explicitly addresses RAM-only Redis data loss, application
+readiness and GitHub App/ingress authority. A passing verification
+never changes the installed profile or invokes systemctl reload/start.
