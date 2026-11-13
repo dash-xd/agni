@@ -15,6 +15,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate five-role controller and renderers
         run: |
+          bash -n local/vm/coreos-podman.sh local/vm/coreos-hvf.sh
+          for action in local/vm/host-actions/*.sh; do bash -n "$action"; done
           bash -n local/fatline/coreos-services/vm1-check.sh
           bash -n local/fatline/qualification/test-vm1-guest.sh
           bash local/fatline/qualification/test-vm1-guest.sh
