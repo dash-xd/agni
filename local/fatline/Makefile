@@ -11,7 +11,7 @@ MACHINE ?= coreos-arm64
 export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
-.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify check-deployment
+.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan check-deployment
 
 help:
 	@printf '%s\n' \
@@ -20,6 +20,7 @@ help:
 	  'make deployment-review DEPLOYMENT=vm1         Review pinned migration compatibility' \
 	  'make deployment-migrate-stage DEPLOYMENT=vm1  Render private five-role migration generation; no activation' \
 	  'make deployment-migrate-verify DEPLOYMENT=vm1 Verify existing staged Quadlets; no rebuild or activation' \
+	  'make deployment-migrate-activation-plan DEPLOYMENT=vm1 Snapshot rollback baseline; no service restart' \
 	  'make check-deployment                       Check host workflow syntax and interface'
 
 deployment-assess:
@@ -36,6 +37,9 @@ deployment-migrate-stage:
 
 deployment-migrate-verify:
 	@bash operations/guest-migration.sh migrate-verify
+
+deployment-migrate-activation-plan:
+	@bash operations/guest-migration.sh migrate-activation-plan
 
 check-deployment:
 	@bash -n operations/guest-migration.sh
