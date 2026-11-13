@@ -9,6 +9,10 @@ base="$HOME/.local/state/nix-xd/fatline/fatline-arm-vm1"
 mkdir -p "$base/credentials" "$base/config" "$base/services/credentials"
 printf 'user default off\nuser publisher on\nuser subscriber on\n' > "$base/credentials/users.acl"
 printf 'save ""\n' > "$base/config/redis.conf"
+chmod 600 "$base/credentials/users.acl"
+for role in redis nginx; do
+  printf '[Container]\\n' > "$HOME/.config/containers/systemd/fatline-arm-vm1-$role.container"
+done
 cat > "$temp/bin/id" <<'SH'
 #!/bin/sh
 echo 1000
