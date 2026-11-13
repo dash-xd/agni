@@ -36,7 +36,7 @@ class BackupCaptureTests(unittest.TestCase):
             (state / "serial.log").write_text("CoreOS running normally\n")
             (state / "build.txt").write_text("runner=" + runner +
                 "\ndisk_sha256=" + backup_capture.digest(base) + "\n")
-            payload = [{"State": {"Running": False, "Status": "exited"}, "Id": cid}]
+            payload = [{"State": {"Running": False, "Status": "exited", "ExitCode": 0, "OOMKilled": False}, "Id": cid}]
             with patch.object(backup_capture, "call", return_value=json.dumps(payload)):
                 with self.assertRaisesRegex(ValueError, "clean shutdown marker"):
                     backup_capture.inspect_stopped("coreos-arm64",
