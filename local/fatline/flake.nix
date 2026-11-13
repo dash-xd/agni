@@ -179,7 +179,7 @@
             cp ${./startup-profile/runtime.sh} "$out/runtime.sh"
             cp ${./coreos-services/probot-credentials.py} "$out/probot-credentials.py"
             cp ${./scripts/render-users-acl.py} "$out/render-users-acl.py"
-            printf '%s\\n' "${pkgs.python3}/bin/python3" > "$out/python-path"
+            printf '%s\n' "${pkgs.python3}/bin/python3" > "$out/python-path"
             chmod 0555 "$out/probot-guest-stage.sh" "$out/runtime.sh"
           '';
           vm1-probot-guest-stage =
@@ -187,7 +187,7 @@
             in pkgs.runCommand "agni-vm1-probot-guest-stage" {} ''
               mkdir -p "$out"
               cp ${./startup-profile/probot-guest-app.sh} "$out/guest.sh"
-              substituteInPlace "$out/guest.sh" \\
+              substituteInPlace "$out/guest.sh" \
                 --replace-fail '@AGNI_PROBOT_GUEST_TOOL_STORE@' "${tools}"
               chmod 0555 "$out/guest.sh"
             '';
