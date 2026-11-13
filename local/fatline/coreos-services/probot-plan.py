@@ -5,6 +5,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from importlib.util import module_from_spec, spec_from_file_location
+
+spec = spec_from_file_location("agni_candidate_output", Path(__file__).with_name("candidate-output.py"))
+candidate_output = module_from_spec(spec)
+spec.loader.exec_module(candidate_output)
 import re
 
 STORE = re.compile(r"/nix/store/[a-z0-9]{32}-[A-Za-z0-9._+-]+")
@@ -130,20 +135,27 @@ def main():
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--sources", type=Path, required=True)
     parser.add_argument("--scope", default="fatline-arm-vm1")
-    parser.add_argument("--output", type=Path, required=True)
+    output = parser.add_mutually_exclusive_group(required=True)
+    output.add_argument("--output", type=Path)
+    output.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
     candidate = plan(json.loads(args.artifacts.read_text()),
                      json.loads(args.sources.read_text()), args.scope)
-    if args.output.exists():
+    if args.output_dir is not None:
+        selected = candidate_output.retain_candidate(args.output_dir, candidate, "guest-plan")
+    elif args.output.exists():
         prior = json.loads(args.output.read_text())
         if prior != candidate:
             raise SystemExit("Refusing to overwrite different guest composition")
+        selected = args.output
     else:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         tmp = args.output.with_suffix(args.output.suffix + ".tmp")
-        tmp.write_text(json.dumps(candidate, sort_keys=True, indent=2) + "\n")
+        tmp.write_text(json.dumps(candidate, sort_keys=True, indent=2) + "\\n")
         os.chmod(tmp, 0o600)
         os.replace(tmp, args.output)
+        selected = args.output
+    print("AGNI_PROBOT_GUEST_PLAN_PATH=" + str(selected))
     print("AGNI_PROBOT_GUEST_COMPOSITION=passed roles=3 scope=" + args.scope)
     print("AGNI_PROBOT_GUEST_ACTIVATION=blocked reason=runtime-authority-and-redis-acls-not-bound")
 
