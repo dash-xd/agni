@@ -273,3 +273,31 @@ make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
 
 No archive exists yet from the current live guests. Do not invoke this
 action without a real backup path and do not interrupt those guests.
+
+## Minimal World-to-Farcaster service relay (existing live guests)
+
+`ACTION=service-relay-probe` uses **temporary pinned SSH forwarding**
+through the local operator, so **neither CoreOS guest is restarted or
+reconfigured**. It binds one host loopback relay to the selected
+Farcaster guest-local TCP port, forwards World guest loopback port 18080
+back to that relay, and runs a real HTTP request *from World*. All
+tunnels are terminated afterward. No application is installed.
+
+The selected Farcaster service **must already be listening**; port 80
+and `/healthz` are defaults only, not proof those services exist.
+Override `SHOAL_FARCASTER_SERVICE_PORT` and `SHOAL_SERVICE_PATH` as
+needed. A passing result proves only application reachability via
+SSH transport. It does **not** prove direct VM networking, Squid policy,
+fail-closed egress, Fatline startup, or tenant isolation.
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=service-relay-probe
+```
+
+Because the current VMs were launched with independent QEMU user-mode
+NAT, this temporary relay is intentionally used instead of changing
+their NIC configuration. Once the actual Fatline HTTP endpoint is
+qualified, replace the relay with a real provider-independent guest link
+only if the integration test requires that.
