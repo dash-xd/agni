@@ -14,7 +14,7 @@ import migration
 
 ROOT = Path(__file__).resolve().parent
 SHUTDOWN_MARKERS = ("Powering off.", "Reached target System Power Off.",
-                    "Reached target Power-Off.", "Shutting down.")
+                    "Reached target Power-Off.")
 
 
 def call(*args):
@@ -115,7 +115,7 @@ def backup():
                 shutil.copyfile(original, path / filename)
             if digest(path / "overlay.qcow2") != item["overlaySha256"]:
                 raise ValueError("Overlay backup verification failed: " + stage)
-        # Keep the backing base so each overlay is portable with its image chain.
+        # Preserve backing bytes and provenance. Restoring an overlay also\n        # requires rebasing its original /artifacts/base.qcow2 reference.
         shared = staging / "base.qcow2"
         shutil.copyfile(migration.regular(artifact / "base.qcow2"), shared)
         if digest(shared) != states["farcaster"]["baseSha256"]:
