@@ -86,6 +86,7 @@ def main():
                  "output", "acl-renderer", "credential-generator",
                  "profile-renderer", "base-renderer", "stage-helper"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--display-dir", required=True)
     args = parser.parse_args()
     assessment_path = Path(args.assessment)
     raw = assessment_path.read_bytes()
@@ -132,7 +133,7 @@ def main():
         if len(old) != 1 or new != old:
             raise ValueError("Host-link ACL identity mutated: " + principal)
     print("AGNI_PROBOT_MIGRATION_STAGE=passed roles=5 host_link=preserved activation=blocked")
-    print("AGNI_PROBOT_MIGRATION_CANDIDATE=" + str(target))
+    print("AGNI_PROBOT_MIGRATION_CANDIDATE=" + str(Path(args.display_dir) / target.name))
 
 
 if __name__ == "__main__":
