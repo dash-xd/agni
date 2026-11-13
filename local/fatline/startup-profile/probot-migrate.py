@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 
@@ -131,6 +132,16 @@ def main():
         raise ValueError("Unexpected migration bootstrap dependencies")
     spec = build_spec(assessment, Path(args.unit_dir), Path(args.acl),
                       json.loads(Path(args.metadata).read_text()), args.home, paths["bundle"], paths["archive"])
+    for role in ("redis", "nginx", "probe"):
+        path = Path(spec[role])
+        if not path.is_file() or not os.access(path, os.X_OK):
+            raise ValueError("Selected Nix executable is not accessible: " + role)
+    if not Path(spec["archive"]).is_file():
+        raise ValueError("Pinned rootfs fallback archive missing from store")
+    startup = Path(spec["bundle"])
+    for item in ("bootstrap.sh", "boot-wait.sh", "metadata.json"):
+        if not (startup / item).is_file():
+            raise ValueError("Pinned startup bootstrap closure incomplete: " + item)
     target = Path(args.output)
     if target.exists():
         raise ValueError("Migration candidate already exists; never overwrite a private generation")
