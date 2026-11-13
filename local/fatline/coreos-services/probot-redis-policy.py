@@ -5,6 +5,11 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+from importlib.util import module_from_spec, spec_from_file_location
+
+spec = spec_from_file_location("agni_candidate_output", Path(__file__).with_name("candidate-output.py"))
+candidate_output = module_from_spec(spec)
+spec.loader.exec_module(candidate_output)
 
 ROLES = {"logma", "skymill", "bootstrap", "probot_state",
          "lifecycle_publish", "lifecycle_subscribe"}
@@ -54,16 +59,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--sources", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    output = parser.add_mutually_exclusive_group(required=True)
+    output.add_argument("--output", type=Path)
+    output.add_argument("--output-dir", type=Path)
     parser.add_argument("--scope", default="fatline-arm-vm1")
     args = parser.parse_args()
     policy = build_policy(json.loads(args.baseline.read_text()),
                           json.loads(args.sources.read_text()), args.scope)
     payload = json.dumps(policy, sort_keys=True, indent=2) + "\n"
-    if args.output.exists() and args.output.read_text() != payload:
-        raise SystemExit("Refusing to replace different Redis ACL policy")
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(payload)
+    if args.output_dir is not None:
+        selected = candidate_output.retain_candidate(args.output_dir, policy, "redis-policy")
+    else:
+        if args.output.exists() and args.output.read_text() != payload:
+            raise SystemExit("Refusing to replace different Redis ACL policy")
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(payload)
+        selected = args.output
+    print("AGNI_PROBOT_REDIS_POLICY_PATH=" + str(selected))
     print("AGNI_PROBOT_REDIS_POLICY=passed principals=6 secrets=excluded")
     print("AGNI_PROBOT_REDIS_ACTIVATION=blocked reason=runtime-credential-and-command-qualification")
 if __name__ == "__main__":
