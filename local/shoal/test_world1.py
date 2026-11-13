@@ -60,6 +60,32 @@ class World1Tests(unittest.TestCase):
                 self.assertEqual(selected["COREOS_ARTIFACT_STATE"], str(farcaster.resolve()))
                 self.assertEqual(selected["COREOS_NIX_STORE_VOLUME"], "nix-xd-arm-store")
 
+    def test_managed_start_preserves_farcaster_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            farcaster = Path(tmp) / "starwisp"
+            farcaster.mkdir()
+            (farcaster / "build.txt").write_text("shared_nix_volume=nix-xd-arm-store\n")
+            (farcaster / "base.qcow2").touch()
+            before = {"bindings": {"farcaster": {"bootId": "first"}}, "planSha256": "fixture"}
+            with patch.dict(os.environ, {
+                "SHOAL_STATE_ROOT": tmp, "NIX_XD_SELECTED_PROJECT_REV": "a" * 40,
+                "NIX_XD_PROJECT": "agni20261113.0",
+            }), patch.object(world1.binding, "run", return_value="a" * 40), \\
+                 patch.object(world1.binding, "bind", side_effect=[before, before]) as bind, \\
+                 patch.object(world1.subprocess, "run") as run:
+                world1.execute("start")
+                self.assertEqual(bind.call_count, 2)
+                run.assert_called_once()
+            after = {"bindings": {"farcaster": {"bootId": "different"}}, "planSha256": "fixture"}
+            with patch.dict(os.environ, {
+                "SHOAL_STATE_ROOT": tmp, "NIX_XD_SELECTED_PROJECT_REV": "a" * 40,
+                "NIX_XD_PROJECT": "agni20261113.0",
+            }), patch.object(world1.binding, "run", return_value="a" * 40), \\
+                 patch.object(world1.binding, "bind", side_effect=[before, after]), \\
+                 patch.object(world1.subprocess, "run"):
+                with self.assertRaisesRegex(ValueError, "Farcaster physical identity changed"):
+                    world1.execute("start")
+
     def test_missing_base_refuses_to_start(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(os.environ, {"SHOAL_STATE_ROOT": tmp,
