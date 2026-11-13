@@ -25,6 +25,11 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 [[ "$flake" == /workspaces/* && "$flake" != *..* ]] || fail 'COREOS_FLAKE must be a safe staged /workspaces path'
 command -v podman >/dev/null || fail 'Podman client is required'
 p=(podman --connection "$machine")
+project="${NIX_XD_PROJECT:?Select the dated Agni source checkout}"
+project_revision="${NIX_XD_SELECTED_PROJECT_REV:?Pin exact Agni source revision}"
+[[ "$project_revision" =~ ^[a-f0-9]{40}$ ]] || fail 'Invalid selected source revision'
+staged="$( "${p[@]}" exec "$scope" cat "/workspaces/$project/.nix-xd-source-revision" 2>/dev/null || true )"
+[[ "$staged" == "$project_revision" ]] || fail 'Dated Agni host source and Nix-Alpine source differ'
 [[ "$(podman machine inspect "$machine" --format '{{.State}}')" == running ]] || fail 'Podman Machine is not running'
 arch="$("${p[@]}" info --format '{{.Host.Arch}}')"
 [[ "$arch" == aarch64 || "$arch" == arm64 ]] || fail "Expected ARM64 machine; got $arch"
