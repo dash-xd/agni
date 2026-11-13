@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Attested storage qualification for Agni's selected Shoal guests."""
+import json
 import os
 from pathlib import Path
 import re
@@ -98,7 +99,7 @@ def qualify(stage):
     if stage not in ("farcaster", "world1"):
         raise ValueError("Only one Farcaster and one World are supported")
     before = binding.bind(stage)
-    writer_scope = "nix-xd-arm"
+    writer_scope = json.loads(binding.PLAN.read_text())["sharedStore"]["owner"]
     executor = writer(writer_scope, before["machine"])
     flake, revision = staged_flake(executor)
     rootfs = run(executor + ["nix", "build", "--no-link", "--no-write-lock-file",
