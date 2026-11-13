@@ -216,6 +216,7 @@ case "$action" in
       --tmpfs /tmp:rw,nosuid,nodev,size=4m \
       --rootfs "$apps/rootfs" "$python" "$tool_store/probot-migration-verify.py" \
       --migration /run/migration --assessment /run/assessment.json \
+      --generation "$basename" \
       --old-acl /run/old-acl --installed-units /run/units --store /nix/store
     generator=/usr/lib/systemd/system-generators/podman-system-generator
     [[ -x "$generator" ]] || {
