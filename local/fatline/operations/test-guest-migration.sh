@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage; do
+for operation in assess verify review migrate-stage migrate-verify; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
