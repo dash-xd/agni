@@ -73,6 +73,8 @@ class ActivationPlanTests(unittest.TestCase):
             old = (paths[3] / "credentials/users.acl").read_bytes()
             plan = self.call(paths)
             self.assertFalse(plan["activation"]["allowed"])
+            self.assertIn("services/bootstrap-template.acl", plan["legacy_absent_optional_paths"])
+            self.assertNotIn("services/boot-wait.sh", plan["legacy_absent_optional_paths"])
             self.assertFalse(plan["rollback"]["executed"])
             self.assertTrue(plan["data_loss"]["restart_loses_ram_only_streams"])
             self.assertEqual(plan["rollback"]["legacy_store_roots"], "must-remain-pinned-by-store-owner-through-rollback-window")
@@ -81,6 +83,22 @@ class ActivationPlanTests(unittest.TestCase):
             self.assertEqual((paths[4] / "plan.json").stat().st_mode & 0o777, 0o600)
             self.assertEqual((paths[4] / "rollback/credentials/logma/redis").stat().st_mode & 0o777, 0o600)
             self.assertNotIn("secret-value", (paths[4] / "plan.json").read_text())
+
+    def test_missing_mandatory_legacy_config_blocks_preparation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self.fixture(Path(directory))
+            (paths[3] / "config/redis.conf").unlink()
+            with self.assertRaisesRegex(ValueError, "Missing rollback input"):
+                self.call(paths)
+            self.assertFalse(paths[4].exists())
+
+    def test_missing_both_optional_profile_files_is_recorded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self.fixture(Path(directory))
+            (paths[3] / "services/boot-wait.sh").unlink()
+            plan = self.call(paths)
+            self.assertEqual(set(plan["legacy_absent_optional_paths"]),
+                             {"services/bootstrap-template.acl", "services/boot-wait.sh"})
 
     def test_repeat_does_not_overwrite_private_snapshot(self):
         with tempfile.TemporaryDirectory() as directory:
