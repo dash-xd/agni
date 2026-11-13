@@ -79,6 +79,34 @@ def build_spec(assessment, unit_dir, acl, metadata, home, bundle, archive):
             "aclDigest": hashlib.sha256(acl.read_bytes()).hexdigest()}
 
 
+def validate_rendered_profile(rendered, scope=BASE):
+    roles = (*ROLES, "probot")
+    for role in roles:
+        file = rendered / (scope + "-" + role + ".container")
+        if not file.is_file():
+            raise ValueError("Missing staged Quadlet: " + role)
+        text = file.read_text()
+        required = ("[Container]", "ReadOnly=true", "NoNewPrivileges=true",
+                    "DropCapability=all", "Volume=/var/mnt/nixstore:/nix/store:ro")
+        if any(token not in text for token in required):
+            raise ValueError("Missing Quadlet isolation contract: " + role)
+        if role != "nginx" and "PublishPort=" in text:
+            raise ValueError("Unexpected published application port: " + role)
+        if role in ("logma", "skymill", "probot"):
+            if "Volume=" not in text or ":/run/credentials:ro" not in text:
+                raise ValueError("Missing private credential mount: " + role)
+    probot = (rendered / (scope + "-probot.container")).read_text()
+    for item in ("PROBOT_RUNTIME_WORKER_ENABLED=false", "SKYMILL_URL=http://skymill:8081",
+                 "Requires=" + scope + "-redis.service " + scope + "-skymill.service " + scope + "-logma.service"):
+        if item not in probot:
+            raise ValueError("Incomplete Probot activation dependency or worker gate")
+    if "Upholds=" + scope + "-nginx.service " + scope + "-logma.service " + scope + "-skymill.service " + scope + "-probot.service" not in (rendered / (scope + "-redis.container")).read_text():
+        raise ValueError("Redis lifecycle dependency graph incomplete")
+    if not (rendered / "profile.env").is_file() or not (rendered / "manifest.json").is_file():
+        raise ValueError("Missing consolidated profile manifest")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in ("assessment", "unit-dir", "acl", "credentials", "metadata",
@@ -122,9 +150,7 @@ def main():
                 target / "rendered", Path(args.acl_renderer), Path(args.credential_generator),
                 Path(args.profile_renderer), Path(args.base_renderer))
     rendered = target / "rendered"
-    expected = [rendered / (BASE + "-" + role + ".container") for role in (*ROLES, "probot")]
-    if not all(path.is_file() for path in expected):
-        raise ValueError("Five-role Quadlet render incomplete")
+    validate_rendered_profile(rendered)
     candidate_acl = (rendered / "users.acl").read_text().splitlines()
     prior_acl = Path(args.acl).read_text().splitlines()
     for principal in ("publisher", "subscriber"):
