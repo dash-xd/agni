@@ -245,3 +245,18 @@ profile remains an explicit migration blocker. The next implementation
 must select a compatible immutable base profile from verified store and
 credential provenance, then qualify a staged handover prior to any live
 systemd/Redis changes. The existing `stage` action remains fail-closed.
+
+## Pinned adoption evidence review
+
+`#vm1-probot-guest-stage` supports `adopt-review SCOPE BUNDLE_STORE
+ASSESSMENT_SHA256`. It verifies the existing content-addressed adoption
+evidence and selected bundle in a read-only rootless container, and prints
+the current Quadlet store references, selected application store paths,
+service activity and presence-only credential prerequisites. It refuses
+evidence from another bundle. The action neither mutates the current
+profile nor restarts Redis.
+
+A passing `AGNI_PROBOT_ADOPTION_REVIEW` is a planning result only. The
+migration must still qualify a compatible base startup-profile generation,
+including required service credentials and lifecycle hooks, before private
+staging or explicit activation is permitted.
