@@ -55,9 +55,10 @@ def assess(base, units, active_roles, *, bundle=None):
             raise ValueError("Active role has no Quadlet: " + role)
     if not {"redis", "nginx"} <= set(unit_rows):
         raise ValueError("Missing Redis/Nginx Quadlet prerequisites")
-    present_profile = (apps / "profile" / "profile.env").exists()
-    complete_profile = all((apps / item).is_file() for item in
-                           ("profile/profile.env", "profile/manifest.json", "bootstrap-template.acl"))
+    profile_files = tuple(apps / item for item in
+                          ("profile/profile.env", "profile/manifest.json", "bootstrap-template.acl"))
+    present_profile = any(path.exists() for path in profile_files)
+    complete_profile = all(path.is_file() for path in profile_files)
     if present_profile and not complete_profile:
         raise ValueError("Partial consolidated startup profile present")
     base_credentials = {role: (apps / "credentials" / role / "redis").is_file()
@@ -97,6 +98,7 @@ def main():
     parser.add_argument("--base", type=Path, required=True)
     parser.add_argument("--units", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--display-dir", type=Path)
     parser.add_argument("--bundle")
     parser.add_argument("--active-roles", required=True)
     args = parser.parse_args()
@@ -122,7 +124,8 @@ def main():
         fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "wb") as handle:
             handle.write(output)
-    print("AGNI_PROBOT_ADOPTION_ASSESSMENT_PATH=" + str(destination))
+    display = (args.display_dir or state_root) / destination.name
+    print("AGNI_PROBOT_ADOPTION_ASSESSMENT_PATH=" + str(display))
     print("AGNI_PROBOT_ADOPTION_ASSESSMENT=passed state=" + assessment["status"] +
           " units=" + str(len(assessment["quadlets"])) + " redis=active activation=blocked")
 
