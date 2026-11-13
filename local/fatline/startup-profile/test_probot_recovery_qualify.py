@@ -56,7 +56,7 @@ class RecoveryTests(unittest.TestCase):
             values = self.setup(Path(directory))
             role = "nginx"
             name = fixtures.fixtures.SCOPE + "-" + role + ".container"
-            legacy = "[Unit]\\nDescription=Legacy Nginx\\n[Container]\\nExec=nginx\\n"
+            legacy = "[Unit]\nDescription=Legacy Nginx\n[Container]\nExec=nginx\n"
             import hashlib
             import json
             plan_file = values[4] / "plan.json"
@@ -73,8 +73,8 @@ class RecoveryTests(unittest.TestCase):
             values = self.setup(Path(directory))
             name = fixtures.fixtures.SCOPE + "-redis.container"
             saved = values[4] / "rollback/quadlets" / name
-            saved.write_text("[Unit]\\nRequires=" + fixtures.fixtures.SCOPE +
-                             "-probot.service\\n[Container]\\nExec=redis\\n")
+            saved.write_text("[Unit]\nRequires=" + fixtures.fixtures.SCOPE +
+                             "-probot.service\n[Container]\nExec=redis\n")
             import hashlib
             import json
             plan_file = values[4] / "plan.json"
