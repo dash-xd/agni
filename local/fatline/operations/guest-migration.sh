@@ -3,7 +3,7 @@ set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/output.sh"
 
 # Host-side application workflow. nix.xd remains a generic Nix/SSH transport.
-operation=${1:?Choose assess, verify, review, migrate-stage, migrate-verify, migrate-activation-plan or migrate-activation-check}
+operation=${1:?Choose assess, verify, review, migrate-stage, migrate-verify, migrate-activation-plan, migrate-activation-check or migrate-recovery-qualify}
 deployment=${DEPLOYMENT:-vm1}
 nix_xd=${NIX_XD_DIR:-}
 provider=${PROVIDER:-podman}
@@ -62,21 +62,27 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
 
-if [[ "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check ]]; then
+if [[ "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify ]]; then
   guest_action=migrate-verify
   [[ "$operation" != migrate-activation-plan ]] || guest_action=activation-plan
   [[ "$operation" != migrate-activation-check ]] || guest_action=activation-check
+  [[ "$operation" != migrate-recovery-qualify ]] || guest_action=recovery-qualify
   run_step "$log_dir/$guest_action.log" guest "$guest_action"
   grep -Fq 'AGNI_PROBOT_QUADLET_GENERATOR=passed roles=5 ' "$log_dir/$guest_action.log" || fail quadlet-generation-not-qualified
   grep -Fq 'AGNI_PROBOT_MIGRATION_VERIFY=passed roles=5 ' "$log_dir/$guest_action.log" || fail migration-verification-not-qualified
   if [[ "$operation" == migrate-activation-check ]]; then
     grep -Fq 'AGNI_ACTIVATION_BASELINE=passed ' "$log_dir/$guest_action.log" || fail activation-baseline-not-qualified
     grep -Fq 'AGNI_ACTIVATION_CHECK=passed ' "$log_dir/$guest_action.log" || fail activation-preflight-not-qualified
+  fi
+  if [[ "$operation" == migrate-recovery-qualify ]]; then
+    grep -Fq 'AGNI_RECOVERY_RESTORE=passed roles=4 ' "$log_dir/$guest_action.log" || fail recovery-restore-not-qualified
+    grep -Fq 'AGNI_RECOVERY_QUADLET=passed roles=4 ' "$log_dir/$guest_action.log" || fail recovery-quadlet-not-qualified
+    grep -Fq 'AGNI_RECOVERY_QUALIFICATION=passed ' "$log_dir/$guest_action.log" || fail recovery-not-qualified
   fi
   if [[ "$operation" == migrate-activation-plan ]]; then
     grep -Fq 'AGNI_DEPLOYMENT_ACTIVATION_PLAN=passed deployment=vm1 ' "$log_dir/$guest_action.log" || fail activation-plan-not-qualified
