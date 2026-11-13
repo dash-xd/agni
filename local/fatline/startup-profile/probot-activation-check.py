@@ -19,10 +19,11 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify(plan_dir, migration, assessment_path, installed_units, base, store, boot_id, invocations):
-    if plan_dir.is_symlink() or not plan_dir.is_dir() or not GENERATION.fullmatch(plan_dir.name):
+def verify(plan_dir, migration, assessment_path, installed_units, base, store, boot_id, invocations, generation=None):
+    if plan_dir.is_symlink() or not plan_dir.is_dir() or not GENERATION.fullmatch(generation or plan_dir.name):
         raise ValueError("Invalid private activation plan directory")
-    if migration.name != plan_dir.name:
+    selected = generation or plan_dir.name
+    if generation is None and migration.name != selected:
         raise ValueError("Selected generation changed")
     plan_path = plan_dir / "plan.json"
     if plan_path.stat().st_mode & 0o077 or plan_path.is_symlink():
@@ -30,7 +31,7 @@ def verify(plan_dir, migration, assessment_path, installed_units, base, store, b
     plan = json.loads(plan_path.read_bytes())
     if plan.get("schema") != 1 or plan.get("kind") != "agni.deployment.activation-plan":
         raise ValueError("Unexpected activation plan schema")
-    if plan.get("deployment") != "vm1" or plan.get("scope") != SCOPE or plan.get("generation") != plan_dir.name:
+    if plan.get("deployment") != "vm1" or plan.get("scope") != SCOPE or plan.get("generation") != selected:
         raise ValueError("Activation plan identity changed")
     if plan.get("activation", {}).get("allowed") is not False or plan["activation"].get("operations_executed") != []:
         raise ValueError("Activation is no longer blocked/untouched")
@@ -42,7 +43,7 @@ def verify(plan_dir, migration, assessment_path, installed_units, base, store, b
     if assessment_hash != plan.get("assessment_sha256"):
         raise ValueError("Original assessment changed")
     assessment = json.loads(assessment_path.read_text())
-    if plan_dir.name != assessment_hash + "-" + assessment["bundle"].split("/")[-1]:
+    if selected != assessment_hash + "-" + assessment["bundle"].split("/")[-1]:
         raise ValueError("Assessment does not select this generation")
     checksums = plan["rollback_checksums"]
     mappings = {
@@ -99,7 +100,7 @@ def verify(plan_dir, migration, assessment_path, installed_units, base, store, b
     # Planning cannot authorize a destructive activation or assert that the
     # application-level readiness/GitHub App credentials already exist.
     return {
-        "generation": plan_dir.name,
+        "generation": selected,
         "eligible": False,
         "blocking": ["explicit-data-loss-authorization", "strict-readiness-fixtures",
                      "github-app-ingress-binding", "qualified-rollback-executor",
@@ -112,13 +113,14 @@ def main():
     for name in ("plan-dir", "migration", "assessment", "installed-units", "base",
                  "store", "boot-id"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--generation", required=True)
     for role in ROLES:
         parser.add_argument("--" + role + "-invocation", required=True)
     args = parser.parse_args()
     report = verify(
         Path(args.plan_dir), Path(args.migration), Path(args.assessment),
         Path(args.installed_units), Path(args.base), Path(args.store), args.boot_id,
-        {role: getattr(args, role + "_invocation") for role in ROLES})
+        {role: getattr(args, role + "_invocation") for role in ROLES}, generation=args.generation)
     print("AGNI_ACTIVATION_BASELINE=passed snapshot=verified live=unchanged legacy_store=visible")
     print("AGNI_ACTIVATION_CHECK=passed generation=" + report["generation"] +
           " readiness=blocked activation=blocked redis_restart=none")
