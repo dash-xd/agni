@@ -140,7 +140,9 @@ make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
 
 This validates the exact Agni revision, current two-VM physical binding,
 original QEMU user-mode network arguments, rootless management tools and
-guest network tools, and records (but does not require) noninteractive sudo.\nGuest network mutation must be provisioned declaratively in CoreOS rather\nthan granting the login account unrestricted administrative access.\nIts receipt explicitly leaves
+guest network tools, and records (but does not require) noninteractive sudo.
+Guest network mutation must be provisioned declaratively in CoreOS rather\nthan granting the login account unrestricted administrative access.
+Its receipt explicitly leaves
 `network`, `egress` and `services` as **not assessed**.
 
 A future explicit migration must safely stop/recreate QEMU containers
@@ -148,3 +150,32 @@ against the **existing** guest overlays, and requalify new boot IDs and
 storage. Do not delete existing identity/storage receipts: they describe
 the previously qualified physical configuration. Do not reuse them as
 evidence for the new QEMU network topology.
+
+
+## Network migration preparation (unapplied)
+
+After network preflight passes, run:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-migration-prepare
+```
+
+The read-only action validates exact running container/manifest IDs,
+boot identities, original QEMU user-mode networks and existing QCOW2 overlay
+paths. It inspects guest IPv4 addresses/routes through pinned SSH and creates
+candidate MAC-matched NetworkManager keyfiles and QEMU socket arguments
+under `~/.local/state/agni/shoal/network-migration/`.
+
+It does **not** install the keyfiles, copy live QCOW2 disks, restart a VM,
+or activate networking. Every result explicitly reports
+`AGNI_SHOAL_MIGRATION_ACTIVATE=blocked` and leaves all network/egress
+gates as not assessed.
+
+The outstanding cutover requirements are a narrowly scoped, qualified
+root-owned network configuration installer for already-initialized CoreOS,
+consistent stopped-guest backups of both existing overlays, management SSH
+survivability testing, and fail-closed IPv4/IPv6/ Squid policy qualification.
+Historical binding and storage receipts are retained but cannot attest
+the post-restart physical topology.
