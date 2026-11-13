@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/output.sh"
 
 # Host-side application workflow. nix.xd remains a generic Nix/SSH transport.
 operation=${1:?Choose assess, verify, review or migrate-stage}
@@ -55,14 +56,6 @@ PY
     GUEST_SSH_USER="$guest_user" GUEST_SSH_PORT="$guest_port" \
     GUEST_SSH_HOST="$guest_host" GUEST_SSH_KEY="$guest_key"
 }
-capture_value() {
-  local key="$1" file="$2" value
-  mapfile -t found < <(sed -n "s/^$key=//p" "$file")
-  (( ${#found[@]} == 1 )) || fail "missing-or-duplicate-output:$key"
-  value="${found[0]}"
-  [[ -n "$value" ]] || fail "empty-output:$key"
-  printf '%s' "$value"
-}
 run_step() {
   local output="$1";shift
   "$@" | tee "$output"
@@ -76,7 +69,7 @@ grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-sou
 run_step "$log_dir/bundle.log" xd_make qualify QUALIFY_APP=1 FLAKE="$flake" \
   TARGET='#qualify-integration' ARGS='--scenario probot-webhook --phase guest-bundle'
 grep -Fxq 'AGNI_PROBOT_GUEST_BUNDLE=passed roles=3 credentials=excluded activation=blocked' "$log_dir/bundle.log" || fail bundle-not-qualified
-bundle="$(capture_value AGNI_PROBOT_GUEST_BUNDLE_PATH "$log_dir/bundle.log")"
+bundle="$(agni_capture_value AGNI_PROBOT_GUEST_BUNDLE_PATH "$log_dir/bundle.log")"
 [[ "$bundle" =~ ^/nix/store/[a-z0-9]{32}-candidate$ ]] || fail invalid-qualified-bundle
 
 if [[ "$operation" == verify ]]; then
@@ -88,7 +81,7 @@ fi
 
 run_step "$log_dir/assess.log" guest adopt-plan "$bundle"
 grep -Fq 'AGNI_PROBOT_ADOPTION_ASSESSMENT=passed ' "$log_dir/assess.log" || fail adoption-assessment-not-qualified
-assessment_path="$(capture_value AGNI_PROBOT_ADOPTION_ASSESSMENT_PATH "$log_dir/assess.log")"
+assessment_path="$(agni_capture_value AGNI_PROBOT_ADOPTION_ASSESSMENT_PATH "$log_dir/assess.log")"
 [[ "$assessment_path" =~ /([0-9a-f]{64})\.json$ ]] || fail invalid-assessment-evidence
 assessment="${BASH_REMATCH[1]}"
 if [[ "$operation" == assess ]]; then
