@@ -21,6 +21,8 @@ help:
 	  'make deployment-migrate-stage DEPLOYMENT=vm1  Render private five-role migration generation; no activation' \
 	  'make deployment-migrate-verify DEPLOYMENT=vm1 Verify existing staged Quadlets; no rebuild or activation' \
 	  'make deployment-migrate-activation-plan DEPLOYMENT=vm1 Snapshot rollback baseline; no service restart' \
+	  'make deployment-migrate-activation-check DEPLOYMENT=vm1  Revalidate rollback snapshot and live baseline; no restart' \
+	  'make deployment-migrate-activate DEPLOYMENT=vm1         Blocked until readiness and rollback qualification' \
 	  'make check-deployment                       Check host workflow syntax and interface'
 
 deployment-assess:
