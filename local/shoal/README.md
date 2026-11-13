@@ -253,3 +253,23 @@ a separately approved one-time non-graceful sandbox migration. Unrestricted
 `sudo` and crash-consistent copying must not be misrepresented as graceful.
 The QMP endpoint must remain exposed only on the host loopback; production
 deployments should prefer an authenticated or Unix-domain control channel.
+
+## Offline archive verification
+
+`ACTION=network-backup-verify` takes an explicit `SHOAL_BACKUP_PATH`
+under the managed Shoal backup directory. It verifies the original
+content-addressed receipt, both overlay SHA256 values and sizes, the
+shared base SHA256, and runner/container provenance. It does not boot,
+rewrite, stop, or restore either VM. A successful archive check is
+**not** a successful rollback: the QCOW2 backing path must still be
+reconciled and the recovered guests booted in an isolated test.
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-backup-verify \
+  SHOAL_BACKUP_PATH=/absolute/path/to/existing/archive
+```
+
+No archive exists yet from the current live guests. Do not invoke this
+action without a real backup path and do not interrupt those guests.
