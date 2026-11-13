@@ -54,12 +54,37 @@ case "$action" in
   adopt-plan)
     [[ $# == 3 ]]
     check_bundle
-    python="/var/mnt/nixstore/$(sed -n '1p' "$tools/python-path" | sed 's#^/nix/store/##')"
-    [[ "$python" == /var/mnt/nixstore/*/bin/python3 && -x "$python" ]] || {
-      echo 'AGNI_PROBOT_ADOPTION_ASSESSMENT=blocked reason=python-store-runtime-unavailable' >&2
+    [[ -d "$apps/rootfs" && -x "$apps/rootfs/bin/busybox" ]] || {
+      echo 'AGNI_PROBOT_ADOPTION_ASSESSMENT=blocked reason=guest-rootfs-missing' >&2
       exit 1
     }
-    "$python" "$tools/probot-adoption.py" --scope "$scope" --home "$HOME" --bundle "$bundle_store"
+    active_roles=()
+    for role in redis nginx logma skymill probot; do
+      if systemctl --user is-active --quiet "$scope-$role.service"; then
+        active_roles+=("$role")
+      fi
+    done
+    [[ " ${active_roles[*]} " == *" redis "* ]] || {
+      echo 'AGNI_PROBOT_ADOPTION_ASSESSMENT=blocked reason=redis-not-active' >&2
+      exit 1
+    }
+    active="$(IFS=,; echo "${active_roles[*]}")"
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    evidence="$apps/adoption-assessments"
+    mkdir -p -m 700 "$evidence"
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$base,dst=/run/base,ro" \
+      --mount "type=bind,src=$HOME/.config/containers/systemd,dst=/run/units,ro" \
+      --mount "type=bind,src=$evidence,dst=/run/evidence,rw" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tools/probot-adoption.py" \
+      --scope "$scope" --base /run/base --units /run/units \
+      --output-dir /run/evidence --bundle "$bundle_store" --active-roles "$active"
     ;;
   verify)
     [[ $# == 3 ]]
