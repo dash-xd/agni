@@ -30,6 +30,10 @@
         path = builtins.toPath (builtins.getEnv "COREOS_STARWISP_9P_BUTANE");
         name = "starwisp-9p-profile.bu";
       };
+      armWorld1Source = builtins.path {
+        path = builtins.toPath (builtins.getEnv "COREOS_WORLD1_BUTANE");
+        name = "shoal-world1-9p-profile.bu";
+      };
       mkArmStarwispIgnition = name: source: assert armValidSSHKey; armPkgs.runCommand name {
         nativeBuildInputs = [ armPkgs.butane armPkgs.coreutils ];
         COREOS_TEST_SSH_PUBLIC_KEY = armTestSSHKey;
@@ -42,6 +46,7 @@
       armStarwispIgnition = mkArmStarwispIgnition "starwisp-ignition-aarch64" armStarwispSource;
       armStarwisp9pIgnition = mkArmStarwispIgnition "starwisp-9p-ignition-aarch64" armStarwisp9pSource;
       armStarwispData9pIgnition = mkArmStarwispIgnition "starwisp-data-9p-ignition-aarch64" armStarwisp9pSource;
+      armWorld1Ignition = mkArmStarwispIgnition "shoal-world1-9p-ignition-aarch64" armWorld1Source;
       armQemu = armPkgs.qemu.override { enableBlobs = true; };
       armEntrypoint = armPkgs.writeShellScriptBin "agni-coreos-qemu" ''
         set -euo pipefail
@@ -260,6 +265,7 @@
         ignitionStarwisp = armStarwispIgnition;
         ignitionStarwisp9p = armStarwisp9pIgnition;
         ignitionStarwispData9p = armStarwispData9pIgnition;
+        ignitionShoalWorld1_9p = armWorld1Ignition;
       };
       apps.${system}.astrochicken-inputs = {
         type = "app";
