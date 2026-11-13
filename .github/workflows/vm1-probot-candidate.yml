@@ -46,6 +46,7 @@ jobs:
           python3 local/fatline/startup-profile/test_probot_adoption_review.py
           python3 -m py_compile local/fatline/startup-profile/probot-migrate.py
           python3 local/fatline/startup-profile/test_probot_migrate.py
+          make -C local/fatline check-deployment
           bash -n local/fatline/qualification/probot-artifacts.sh
           python3 -m py_compile local/fatline/startup-profile/probot-render.py local/fatline/startup-profile/probot-stage.py local/fatline/coreos-services/probot-credentials.py local/fatline/coreos-services/candidate-output.py local/fatline/coreos-services/probot-plan.py local/fatline/coreos-services/probot-redis-policy.py
           python3 local/fatline/coreos-services/test_candidate_output.py
