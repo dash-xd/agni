@@ -190,6 +190,7 @@
             cp ${./startup-profile/probot-migration-verify.py} "$out/probot-migration-verify.py"
             cp ${./startup-profile/probot-activation-plan.py} "$out/probot-activation-plan.py"
             cp ${./startup-profile/probot-activation-check.py} "$out/probot-activation-check.py"
+            cp ${./startup-profile/probot-recovery-qualify.py} "$out/probot-recovery-qualify.py"
             cp ${self.packages.${system}.coreos-startup-profile}/metadata.json "$out/metadata.json"
             cat > "$out/migration-paths.json" <<'JSON'
             ${builtins.toJSON { bundle = "${self.packages.${system}.coreos-startup-profile}"; archive = "${self.packages.${system}.probot-rootfs-archive}"; }}
