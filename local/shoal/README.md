@@ -229,3 +229,27 @@ make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
 
 Never erase the original overlays or receipt directory as part of this
 operation. Restore and network activation are separate gates.
+
+## Future opt-in QMP shutdown control
+
+The generic Agni QEMU runner now supports `COREOS_QMP_HOST_PORT` at **new
+launch time only**. It adds a loopback-only host publication of QEMU's
+control channel, and records the selected QMP port in the managed VM manifest.
+An existing launch must never silently acquire a new control endpoint;
+managed start compares the explicit selection with the manifest.
+
+For future Agni-managed Shoal launches the reserved host ports are
+`42222` (Farcaster) and `42223` (World 1). Agni's
+`ACTION=network-powerdown-qmp` requires `SHOAL_POWERDOWN_STAGE` and a
+matching `SHOAL_CONFIRM_POWERDOWN` before inspecting the running managed
+container, its manifest and the loopback-published QMP port. It sends a
+QMP `system_powerdown` ACPI request and waits for normal QEMU exit.
+It never sends `quit`, calls `podman stop`, or forces shutdown.
+
+**The existing two qualified VMs were launched without QMP.** They cannot
+use this action. Do not execute it against those guests. Their clean-shutdown
+transition still requires an explicit guest-authorized shutdown channel or
+a separately approved one-time non-graceful sandbox migration. Unrestricted
+`sudo` and crash-consistent copying must not be misrepresented as graceful.
+The QMP endpoint must remain exposed only on the host loopback; production
+deployments should prefer an authenticated or Unix-domain control channel.

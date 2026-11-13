@@ -8,6 +8,7 @@ scope="${NIX_XD_SCOPE:-nix-xd-arm}"
 profile="${COREOS_PROFILE:-starwisp}"
 root="${COREOS_STATE_ROOT:-$HOME/.local/state/nix-xd/coreos}"
 port="${COREOS_SSH_PORT:-2222}"
+qmp_host_port="${COREOS_QMP_HOST_PORT:-}"
 ram="${COREOS_RAM_MIB:-2048}"
 cpus="${COREOS_CPUS:-2}"
 flake="${COREOS_FLAKE:-${NIX_XD_SELECTED_PROJECT_FLAKE%/local/vm}/qemu/coreos-live/local}"
@@ -20,6 +21,10 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 [[ "$scope" =~ ^[a-z][a-z0-9-]{0,39}$ ]] || fail 'Invalid scope'
 [[ "$profile" =~ ^[a-z][a-z0-9-]{0,39}$ ]] || fail 'Invalid profile'
 [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1024 && port <= 65535 )) || fail 'Invalid port'
+if [[ -n "$qmp_host_port" ]]; then
+  [[ "$qmp_host_port" =~ ^[0-9]+$ ]] && (( qmp_host_port >= 1024 && qmp_host_port <= 65535 )) || fail 'Invalid QMP host port'
+  [[ "$qmp_host_port" != "$port" ]] || fail 'QMP must not collide with SSH forwarding'
+fi
 [[ "$ram" =~ ^[0-9]+$ ]] && (( ram >= 2048 && ram <= 65536 )) || fail 'COREOS_RAM_MIB must be 2048..65536'
 [[ "$cpus" =~ ^[0-9]+$ ]] && (( cpus >= 1 && cpus <= 64 )) || fail 'COREOS_CPUS must be 1..64'
 [[ "$flake" == /workspaces/* && "$flake" != *..* ]] || fail 'COREOS_FLAKE must be a safe staged /workspaces path'
@@ -197,16 +202,22 @@ boot() {
     qemu_mode=run-shared-nix
   fi
   local cid
+  local qmp_publish=() qmp_args=()
+  if [[ -n "$qmp_host_port" ]]; then
+    qmp_publish=(--publish "127.0.0.1:$qmp_host_port:4444")
+    qmp_args=(-qmp "tcp:0.0.0.0:4444,server=on,wait=off")
+    printf 'qmp_host_port=%s\n' "$qmp_host_port" >> "$state/manifest.txt"
+  fi
   cid="$("${p[@]}" run --detach --pull=never --name "$name" --volume "$state:/state:rw" \
     "${mounts[@]}" \
-    --publish "127.0.0.1:$port:2222" "$id" "$qemu_mode" \
+    --publish "127.0.0.1:$port:2222" "${qmp_publish[@]}" "$id" "$qemu_mode" \
     -machine virt -accel tcg,thread=multi -cpu cortex-a72 -m "$ram" -smp "$cpus" \
     -drive if=none,id=disk0,file=/state/overlay.qcow2,format=qcow2 \
     -device virtio-blk-pci,drive=disk0 \
     ${qemu_data_args[@]+"${qemu_data_args[@]}"} \
     -fw_cfg "name=opt/com.coreos/config,file=$guest_config_path" \
     -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
-    -display none -serial file:/state/serial.log -monitor none)"
+    -display none -serial file:/state/serial.log -monitor none "${qmp_args[@]}")"
   [[ "$cid" =~ ^[a-f0-9]{64}$ ]] || fail 'Unexpected QEMU container identity'
   printf 'container_id=%s\n'  "$cid" >> "$state/manifest.txt"
   printf '%s\n' "$cid"
@@ -274,6 +285,9 @@ start() {
       recorded_artifacts="$(sed -n 's/^artifact_state=//p' "$state/manifest.txt")"
       [[ "$recorded_artifacts" == "$artifacts" || ( -z "$recorded_artifacts" && "$artifacts" == "$state" ) ]] || fail 'VM artifact binding changed'
       grep -Fxq "port=$port" "$state/manifest.txt" || fail 'VM SSH port differs from recorded boot'
+      local recorded_qmp
+      recorded_qmp="$(sed -n 's/^qmp_host_port=//p' "$state/manifest.txt")"
+      [[ "$recorded_qmp" == "$qmp_host_port" ]] || fail 'Managed VM QMP endpoint differs from recorded launch'
       grep -Fxq "runner=$(runner_id)" "$state/manifest.txt" || fail 'VM runner differs from recorded boot'
       actual_image="$("${p[@]}" inspect "$name" --format '{{.Image}}')"
       [[ "$actual_image" == sha256:* ]] || actual_image="sha256:$actual_image"
