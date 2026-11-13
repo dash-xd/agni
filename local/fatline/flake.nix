@@ -170,6 +170,27 @@
           host-link-vm2 = import ./host-link { inherit pkgs; scope = "fatline-arm-vm2"; };
           coreos-services-vm1 = import ./coreos-services { inherit pkgs; };
           coreos-startup-profile = import ./startup-profile { inherit pkgs; };
+          probot-guest-tools = pkgs.runCommand "agni-probot-vm1-guest-tools" {} ''
+            mkdir -p "$out"
+            cp ${./startup-profile/probot-guest-stage.sh} "$out/probot-guest-stage.sh"
+            cp ${./startup-profile/probot-stage.py} "$out/probot-stage.py"
+            cp ${./startup-profile/probot-render.py} "$out/probot-render.py"
+            cp ${./startup-profile/render.py} "$out/render.py"
+            cp ${./startup-profile/runtime.sh} "$out/runtime.sh"
+            cp ${./coreos-services/probot-credentials.py} "$out/probot-credentials.py"
+            cp ${./scripts/render-users-acl.py} "$out/render-users-acl.py"
+            printf '%s\\n' "${pkgs.python3}/bin/python3" > "$out/python-path"
+            chmod 0555 "$out/probot-guest-stage.sh" "$out/runtime.sh"
+          '';
+          vm1-probot-guest-stage =
+            let tools = self.packages.${system}.probot-guest-tools;
+            in pkgs.runCommand "agni-vm1-probot-guest-stage" {} ''
+              mkdir -p "$out"
+              cp ${./startup-profile/probot-guest-app.sh} "$out/guest.sh"
+              substituteInPlace "$out/guest.sh" \\
+                --replace-fail '@AGNI_PROBOT_GUEST_TOOL_STORE@' "${tools}"
+              chmod 0555 "$out/guest.sh"
+            '';
           vm1-guest-check = pkgs.runCommand "agni-vm1-guest-check-v1" {} ''
             mkdir -p "$out"
             cp ${./coreos-services/vm1-check.sh} "$out/guest.sh"
