@@ -21,6 +21,10 @@ jobs:
           python3 local/shoal/test_storage.py
           python3 local/shoal/test_world1.py
           bash -n local/vm/coreos-podman.sh local/shoal/host-actions/*.sh
+      - name: Shoal Python syntax and offline regression tests
+        run: |
+          python3 -m compileall -q local/shoal
+          python3 -m unittest discover -s local/shoal -p 'test_*.py'
       - name: Vet
         run: go vet . ./nativeexec/... ./cmd/...
       - name: Build
