@@ -37,6 +37,9 @@ jobs:
           bash local/fatline/qualification/test-vm1-guest.sh
           bash -n local/fatline/startup-profile/runtime.sh
           bash -n local/fatline/startup-profile/probot-guest-stage.sh
+          bash -n local/fatline/startup-profile/probot-guest-app.sh
+          python3 -m py_compile local/fatline/qualification/probot-guest-bundle.py
+          python3 local/fatline/qualification/test_probot_guest_bundle.py
           bash -n local/fatline/qualification/probot-artifacts.sh
           python3 -m py_compile local/fatline/startup-profile/probot-render.py local/fatline/startup-profile/probot-stage.py local/fatline/coreos-services/probot-credentials.py local/fatline/coreos-services/candidate-output.py local/fatline/coreos-services/probot-plan.py local/fatline/coreos-services/probot-redis-policy.py
           python3 local/fatline/coreos-services/test_candidate_output.py
