@@ -185,3 +185,37 @@ The new application-owned path replaces the two obsolete Probot-specific
 host preflight targets. Other, older Fatline host controllers remain available
 only for explicit recovery of generations created by those controllers,
 until their Agni-owned replacement qualifies against the live VM.
+
+## Immutable Probot guest handoff (November 2026)
+
+`#qualify-integration --scenario probot-webhook --phase guest-bundle`
+reruns the pinned source, ARM64 artifacts, ACL and guest planners. It copies
+**only non-secret** artifacts.json, sources.json, policy.json, guest-plan.json
+and artifacts.tsv into a SHA256-verified directory, imports that candidate
+with `nix-store --add`, and retains a GC root in the Nix-Alpine writer.
+The output `AGNI_PROBOT_GUEST_BUNDLE_PATH` selects an exact store object.
+
+`#vm1-probot-guest-stage` is an Agni-owned guest app executable via the
+generic nix.xd `guest-app` transport. Actions:
+
+- `verify SCOPE BUNDLE_STORE`: read-only guest-side bundle checksums and
+  exact Skymill, Logma, Probot Node files + Node executable visibility
+  through the existing 9P mount. Does not touch Redis or service files.
+- `stage SCOPE BUNDLE_STORE`: additionally requires the **already installed**
+  base startup-profile manifest and private service credentials. Uses the
+  existing guest credential generator, retains publisher/subscriber ACL
+  identities and renders a new privately stored candidate with
+  `probot-guest-stage.sh`. Does not activate services or restart Redis.
+  Its state path is keyed by the bundle, base profile and current ACL hashes.
+- `status SCOPE`: delegates to Agni's installed startup-profile runtime
+  status path; it cannot manufacture an installed profile.
+- `activate SCOPE BUNDLE_STORE`: currently fails closed. A real GitHub App
+  Binding and delivery ingress qualification must precede activation.
+
+The existing VM1 preflight does **not** prove that a consolidated base
+startup profile is installed. A missing base profile is a dependency,
+not an instruction to fabricate manifests or restart the existing Redis.
+The candidate transfer is OS-neutral as long as the selected guest exposes
+the qualified Nix store paths; the current staging implementation uses the
+Fedora CoreOS Podman/Quadlet adapter and must be adapted and qualified
+independently before reuse on Grml.
