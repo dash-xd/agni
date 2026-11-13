@@ -56,18 +56,9 @@ if [[ "$artifacts" != "$state" ]]; then
     cp "$artifacts/build.txt" "$state/build.txt"
   fi
 fi
-# The existing build manifest identifies the previously selected store.
-# Explicit COREOS_NIX_STORE_VOLUME, including empty, must match the manifest.
-if [[ ! ${COREOS_NIX_STORE_VOLUME+x} && -f "$state/build.txt" ]]; then
-  count="$(grep -c "^shared_nix_volume=" "$state/build.txt" || true)"
-  [[ "$count" == 0 || "$count" == 1 ]] || fail "Ambiguous shared Nix store in VM manifest"
-  recorded="$(sed -n "s/^shared_nix_volume=//p" "$state/build.txt")"
-  if [[ -n "$recorded" && "$recorded" != none ]]; then
-    [[ "$recorded" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || fail "Invalid shared store volume in manifest"
-    store_volume="$recorded"
-    printf "AGNI_VM_STORE_SELECTION=manifest volume=%s\n" "$store_volume"
-  fi
-fi
+# Empty and absent selections both mean: use the existing VM's recorded store.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/store-selection.sh"
+store_volume="$(agni_vm_select_store_volume "$state/build.txt")"
 [[ "$name" =~ ^[a-z][a-z0-9-]{0,63}$ ]] || fail "Invalid CoreOS container name"
 runner_id() {
   local id
