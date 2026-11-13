@@ -96,6 +96,15 @@ def verify(migration, assessment_path, old_acl, installed_units, store):
     for path in (spec["bundle"], spec["archive"]):
         if not STORE.fullmatch(path) or not (store / path.removeprefix("/nix/store/")).exists():
             raise ValueError("Missing pinned bootstrap dependency")
+    startup = store / spec["bundle"].removeprefix("/nix/store/")
+    for item in ("bootstrap.sh", "boot-wait.sh", "metadata.json"):
+        if not (startup / item).is_file():
+            raise ValueError("Missing startup-profile dependency: " + item)
+    for role in ROLES:
+        unit = (rendered / (SCOPE + "-" + role + ".container")).read_text()
+        for item in set(STORE.findall(unit)):
+            if not (store / item.removeprefix("/nix/store/")).exists():
+                raise ValueError("Missing Nix closure referenced by Quadlet: " + role)
     old_lines = current_acl.decode().splitlines()
     new_lines = (rendered / "users.acl").read_text().splitlines()
     for principal in ("publisher", "subscriber"):
