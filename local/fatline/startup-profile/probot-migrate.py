@@ -82,7 +82,7 @@ def build_spec(assessment, unit_dir, acl, metadata, home, bundle, archive):
 def main():
     parser = argparse.ArgumentParser()
     for name in ("assessment", "unit-dir", "acl", "credentials", "metadata",
-                 "bundle", "archive", "bundle-store", "candidate", "home",
+                 "paths", "bundle-store", "candidate", "home",
                  "output", "acl-renderer", "credential-generator",
                  "profile-renderer", "base-renderer", "stage-helper"):
         parser.add_argument("--" + name, required=True)
@@ -97,8 +97,11 @@ def main():
     source = Path(args.candidate)
     if not (source / "artifacts.json").is_file() or not (source / "policy.json").is_file():
         raise ValueError("Pinned application candidate incomplete")
+    paths = json.loads(Path(args.paths).read_text())
+    if set(paths) != {"bundle", "archive"}:
+        raise ValueError("Unexpected migration bootstrap dependencies")
     spec = build_spec(assessment, Path(args.unit_dir), Path(args.acl),
-                      json.loads(Path(args.metadata).read_text()), args.home, args.bundle, args.archive)
+                      json.loads(Path(args.metadata).read_text()), args.home, paths["bundle"], paths["archive"])
     target = Path(args.output)
     if target.exists():
         raise ValueError("Migration candidate already exists; never overwrite a private generation")
