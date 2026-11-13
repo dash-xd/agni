@@ -22,16 +22,35 @@ pinned SSH host identity, and the guest boot ID. It uses
 Override `SHOAL_MACHINE`, `SHOAL_STATE_ROOT`, or `SHOAL_SSH_KEY`
 only when selecting a different existing runtime.
 
-Once World 1 is running, use `SHOAL_STAGE=world1`. That stage requires
-both Farcaster and World 1 to have distinct container and boot identities.
+To run the storage gate, stage the selected committed nix.xd checkout in
+Nix-Alpine, then invoke the Agni-owned storage action:
+
+```sh
+make stage CHECKOUT="$(basename "$PWD")"
+make project-host-run \
+  PROJECT=agni20261112 APPLICATION=shoal ACTION=storage \
+  PROJECT_REV="$AGNI_REV" SHOAL_STAGE=farcaster PROVIDER=podman
+```
+
+This requires the selected Podman writer `nix-xd-arm`, its mounted
+`nix-xd-arm-store` volume, and the pre-existing QEMU runner. It executes
+the two rootless, read-only 9P readers per guest and reattests the physical
+binding afterwards. Both the binding and the storage receipt are
+content-addressed and written outside either Git checkout.
+
+Once World 1 is running, use `SHOAL_STAGE=world1` for **both** actions.
+That stage requires distinct Farcaster/World container IDs and boot IDs,
+and a successful storage probe in each VM.
+
 
 Binding evidence is **not** evidence that 9P, guest-local stores, the shared
 network, IPv4/IPv6 egress denial, Squid, or Fatline services work. Each must
 receive a separately verified gate; do not promote a successful binding to
-a Shoal or Fatline pass. This branch does not implement those gates.
+a Shoal or Fatline pass. This branch does not implement the shared network or application gates.
 
 Run the host-independent regression gate with:
 
 ```sh
 python3 ~/workspace/agni20261112/local/shoal/test_binding.py
+python3 ~/workspace/agni20261112/local/shoal/test_storage.py
 ```
