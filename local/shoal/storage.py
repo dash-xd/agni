@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Attested storage qualification for Agni's selected Shoal guests."""
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import binding
 
 STORE = re.compile(r"/nix/store/[a-z0-9]{32}-[A-Za-z0-9._+-]+\Z")
@@ -98,6 +100,8 @@ def guest_probe(record, ssh_key, rootfs, digest):
 def qualify(stage):
     if stage not in ("farcaster", "world1"):
         raise ValueError("Only one Farcaster and one World are supported")
+    if os.environ.get("NIX_XD_PROVIDER") != "podman":
+        raise ValueError("Shoal QEMU storage gate requires the Podman provider")
     before = binding.bind(stage)
     writer_scope = json.loads(binding.PLAN.read_text())["sharedStore"]["owner"]
     executor = writer(writer_scope, before["machine"])
@@ -125,6 +129,36 @@ def qualify(stage):
     after = binding.bind(stage)
     if before["bindings"] != after["bindings"] or before["planSha256"] != after["planSha256"]:
         raise ValueError("Physical placement changed during storage qualification")
+    receipt = {
+        "schemaVersion": 1, "gate": "storage", "result": "passed",
+        "stage": stage, "planSha256": before["planSha256"],
+        "agniRevision": before["agniRevision"], "nixxdRevision": revision,
+        "writerScope": writer_scope, "mount": "read-only-9p",
+        "probeRootfs": rootfs, "busyboxSha256": digest,
+        "bindings": after["bindings"],
+        "readersPerGuest": 2,
+        "guestLocalStore": "not-assessed", "network": "not-assessed",
+        "services": "not-assessed", "endToEnd": "not-assessed",
+    }
+    root = Path(os.environ.get("SHOAL_RECEIPT_ROOT",
+                str(Path.home() / ".local/state/agni/shoal/receipts"))).expanduser()
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    payload = json.dumps(receipt, sort_keys=True, indent=2) + "\n"
+    receipt_sha = hashlib.sha256(payload.encode()).hexdigest()
+    destination = root / ("storage-" + receipt_sha + ".json")
+    with tempfile.NamedTemporaryFile("w", dir=root, prefix=".storage-", delete=False) as handle:
+        os.chmod(handle.name, 0o600)
+        handle.write(payload)
+        pending = Path(handle.name)
+    try:
+        try:
+            os.link(pending, destination)
+        except FileExistsError:
+            if destination.read_text() != payload:
+                raise ValueError("Existing storage evidence digest collision")
+    finally:
+        pending.unlink(missing_ok=True)
+    print("AGNI_SHOAL_STORAGE_RECEIPT=" + str(destination), flush=True)
     print("AGNI_SHOAL_STORAGE=passed stage=" + stage + " nixxd_revision=" + revision +
           " writer=" + writer_scope + " 9p=read-only", flush=True)
     print("AGNI_SHOAL_GUEST_LOCAL_STORE=not-assessed")
