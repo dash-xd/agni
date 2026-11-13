@@ -75,6 +75,7 @@ class ActivationPlanTests(unittest.TestCase):
             self.assertFalse(plan["activation"]["allowed"])
             self.assertFalse(plan["rollback"]["executed"])
             self.assertTrue(plan["data_loss"]["restart_loses_ram_only_streams"])
+            self.assertEqual(plan["rollback"]["legacy_store_roots"], "must-remain-pinned-by-store-owner-through-rollback-window")
             self.assertEqual(old, (paths[3] / "credentials/users.acl").read_bytes())
             self.assertEqual(old, (paths[4] / "rollback/config/credentials/users.acl").read_bytes())
             self.assertEqual((paths[4] / "plan.json").stat().st_mode & 0o777, 0o600)
