@@ -106,14 +106,23 @@ def bind(stage):
     outdir = Path(os.environ.get("SHOAL_RECEIPT_ROOT",
                   str(Path.home() / ".local/state/agni/shoal/receipts"))).expanduser()
     outdir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    destination = outdir / (receipt["planSha256"] + "-" + revision + "-" + stage + ".json")
+    payload = json.dumps(receipt, sort_keys=True, indent=2) + "\n"
+    digest = hashlib.sha256(payload.encode()).hexdigest()
+    destination = outdir / (receipt["planSha256"] + "-" + revision + "-" +
+                            stage + "-" + digest + ".json")
     with tempfile.NamedTemporaryFile(mode="w", dir=outdir, prefix=".binding-",
                                      delete=False) as handle:
         os.chmod(handle.name, 0o600)
-        json.dump(receipt, handle, sort_keys=True, indent=2)
-        handle.write("\n")
+        handle.write(payload)
         temporary = Path(handle.name)
-    os.replace(temporary, destination)
+    try:
+        try:
+            os.link(temporary, destination)
+        except FileExistsError:
+            if destination.read_text() != payload:
+                raise ValueError("Existing binding receipt digest collision")
+    finally:
+        temporary.unlink(missing_ok=True)
     print(f"AGNI_SHOAL_BINDING=passed stage={stage} receipt={destination}")
     print("AGNI_SHOAL_APPLICATION=not-assessed")
     return receipt
