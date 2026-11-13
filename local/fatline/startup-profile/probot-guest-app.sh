@@ -316,7 +316,7 @@ case "$action" in
       --mount "type=bind,src=$plan,dst=/run/plan,ro" \
       --tmpfs /tmp:rw,nosuid,nodev,size=4m \
       --rootfs "$apps/rootfs" "$python" "$tool_store/probot-activation-check.py" \
-      --plan-dir /run/plan --migration /run/migration \
+      --plan-dir /run/plan --migration /run/migration --generation "$basename" \
       --assessment /run/assessment.json --installed-units /run/units \
       --base /run/base --store /nix/store --boot-id "$id" \
       --redis-invocation "${before[0]}" --nginx-invocation "${before[1]}" \
