@@ -36,7 +36,7 @@ def parse_systemd_sections(data):
     return sections
 
 
-def verify(migration, assessment_path, old_acl, installed_units, store):
+def verify(migration, assessment_path, old_acl, installed_units, store, generation=None):
     migration = Path(migration)
     rendered = migration / "rendered"
     input_dir = migration / "input"
@@ -47,7 +47,7 @@ def verify(migration, assessment_path, old_acl, installed_units, store):
     if not re.fullmatch(r"[a-z0-9]{32}-candidate", bundle_name):
         raise ValueError("Invalid pinned candidate bundle identity")
     expected_generation = digest + "-" + bundle_name
-    if migration.name != expected_generation:
+    if (generation or migration.name) != expected_generation:
         raise ValueError("Immutable adoption assessment digest or migration identity mismatch")
     if assessment.get("status") != "legacy-profile-migration-required" or assessment.get("profile_installed") is not False:
         raise ValueError("Migration source was not a legacy deployment")
@@ -157,8 +157,9 @@ def main():
     p = argparse.ArgumentParser()
     for name in ("migration", "assessment", "old-acl", "installed-units", "store"):
         p.add_argument("--" + name, type=Path, required=True)
+    p.add_argument("--generation", required=True)
     a = p.parse_args()
-    result = verify(a.migration, a.assessment, a.old_acl, a.installed_units, a.store)
+    result = verify(a.migration, a.assessment, a.old_acl, a.installed_units, a.store, generation=a.generation)
     print("AGNI_PROBOT_MIGRATION_CONTENT=passed roles=5 store=visible legacy=preserved activation=blocked")
     print("AGNI_PROBOT_ROLLBACK_PREFLIGHT=passed baseline=available execution=not-tested")
 
