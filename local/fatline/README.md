@@ -81,3 +81,38 @@ binding keyspace is incompatible with those old ACL patterns. A future
 scoped ACLs, then provision the App authority and verify a real webhook
 through Skymill durable settlement and both Logma observers. It remains
 fail-closed until those changes are complete.
+
+## Deployment operations (first-class Agni interface)
+
+From the Agni checkout, choose the deployment and intended lifecycle operation.
+The `local/fatline/Makefile` intentionally exposes **no** JSON array, Nix
+store path, source hash or assessment digest to the operator:
+
+```sh
+make -C local/fatline deployment-verify DEPLOYMENT=vm1
+make -C local/fatline deployment-assess DEPLOYMENT=vm1
+make -C local/fatline deployment-review DEPLOYMENT=vm1
+make -C local/fatline deployment-migrate-stage DEPLOYMENT=vm1
+```
+
+The checked-in `vm1` deployment selects the
+`fatline-arm-vm1` application scope and `starwisp` guest adapter.
+The host-side workflow invokes generic nix.xd `stage`, qualifies the exact
+immutable application bundle, captures its store identity, qualifies and
+captures current guest adoption evidence, checks migration compatibility
+and finally stages a private five-role candidate. All values are pinned
+**per invocation**, not inferred from an unspecified `latest` file.
+The SSH adapter still accepts `ARGS_JSON` internally; only Agni constructs
+it. nix.xd remains independent of deployment names and application phases.
+
+For the sibling workspace layout the Makefile defaults to
+`../../../nix.xd20261112`; override `NIX_XD_DIR` for other checkouts.
+Host-specific SSH identity, port, VM and state root can be configured via
+`GUEST_SSH_KEY`, `GUEST_SSH_PORT`, `GUEST_VM_INSTANCE` and
+`GUEST_STATE_ROOT`. These are **transport** settings, not application
+deployment metadata.
+
+`deployment-migrate-stage` never invokes the installer, restarts Redis or
+enables Probot. An existing or partially staged private generation blocks a
+second staging attempt; that state must be reconciled explicitly. The
+five-role live activation gate remains separate and closed.
