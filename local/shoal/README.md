@@ -207,8 +207,7 @@ images must remain available alongside any saved overlay.
 copy-and-verify operation. It refuses to copy either guest's QCOW2 while
 its QEMU container is running. It requires the managed container IDs
 and guest serial shutdown tail markers; it verifies base image digests
-and creates immutable, SHA256-checked copies of both overlays, manifests,
-known-host files, Ignition records, and their common base image.
+and creates immutable, SHA256-checked copies of both overlays, manifests,\nknown-host files, Ignition records, and their common base image.\nThe copied overlays retain their original QEMU backing-file reference;\nthese archives are **not** bootable or self-contained until a separate\nrestore action validates and rebases their backing chain.
 
 **Do not invoke capture while Farcaster or World 1 is running.**
 This action does not shut down guests, and `podman stop` is not a
