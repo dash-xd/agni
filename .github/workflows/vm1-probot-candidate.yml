@@ -17,6 +17,20 @@ jobs:
         run: |
           bash -n local/vm/coreos-podman.sh local/vm/coreos-hvf.sh local/vm/store-selection.sh
           bash local/vm/tests/store-selection.sh
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          base=Path("local/fatline/qualification")
+          selection=json.loads((base/"probot-webhook-ghxd-sources.json").read_text())
+          qualification=json.loads((base/"probot-webhook-sources.json").read_text())
+          assert selection["schema"] == qualification["schema"] == 1
+          assert set(selection["sources"]) == set(qualification["sources"])
+          for name, expected in qualification["sources"].items():
+              actual=selection["sources"][name]
+              assert actual["checkout"] == expected["checkout"]
+              assert actual["revision"] == expected["revision"]
+              assert actual["repository"] == "xd-dash/" + name
+          PY
           for action in local/vm/host-actions/*.sh; do bash -n "$action"; done
           bash -n local/fatline/coreos-services/vm1-check.sh
           bash -n local/fatline/qualification/test-vm1-guest.sh
