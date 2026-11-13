@@ -225,3 +225,40 @@ is present as a deliberately fail-closed interface. There is no
 functional live cutover behind this command yet. An activation executor
 must not reuse the read-only preflight as blanket approval or claim
 Redis in-memory data would be restored by configuration rollback.
+
+## Isolated legacy recovery qualification
+
+```sh
+make -C local/fatline deployment-migrate-recovery-qualify DEPLOYMENT=vm1
+```
+
+This read-only operation reuses the existing VM1 private activation plan and
+five-role candidate. It first runs `activation-check` to detect source
+drift. Inside an isolated, ephemeral workspace on CoreOS, it restores
+the saved legacy four-role Quadlets, network, configs, and private
+credentials from their checksum-verified snapshot. It validates the
+reconstructed four-role systemd dependencies and invokes the VM's
+Podman Quadlet generator with `--user --dryrun` against **only** the
+restored units. The temporary recovered files are removed when the
+operation ends, and the existing service invocation IDs are compared
+before/after.
+
+This gate does not install Quadlets, reload systemd, restart Redis,
+perform an actual rollback, or claim that the old application processes
+will pass runtime readiness. It verifies **config restoration and
+generator acceptance** only.
+
+The gate also rechecks **visibility** of original Nix executables,
+but VM1 has a read-only guest mount of its Nix-Alpine owner's store.
+Only the store owner can attest that roots for the old closures are
+protected against garbage collection. Accordingly, the result
+explicitly reports `root_retention=unverified`; a separate
+owner-side GC-root retention receipt is still required before
+destructive activation. Redis remains RAM-only and in-memory stream
+contents are not recoverable through this restoration procedure.
+
+For GCP/Farcaster, this remains a guest-local Agni application gate.
+Farcaster may later acquire the owner-side store retention receipt
+and invoke these same guest checks via a GCP machine/guest adapter;
+nothing here assumes a Mac host or claims to control nested CoreOS
+instances through the GCE API.
