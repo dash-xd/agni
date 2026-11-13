@@ -262,3 +262,43 @@ Farcaster may later acquire the owner-side store retention receipt
 and invoke these same guest checks via a GCP machine/guest adapter;
 nothing here assumes a Mac host or claims to control nested CoreOS
 instances through the GCE API.
+
+## Local disposable VM1 activation (explicitly not production)
+
+The five-role candidate can be installed using the existing Agni startup-profile
+installer after the immutable migration, activation-plan, and baseline gates have
+passed. The sandbox action invokes the existing isolated recovery qualification
+before the cutover; it does **not** duplicate the installer, reset the CoreOS VM,
+or touch World 1. Only VM1's application services are stopped/restarted.
+
+The operator must explicitly acknowledge that Redis is RAM-only and loses its
+current data on restart:
+
+```sh
+make -C local/fatline deployment-migrate-activation-plan DEPLOYMENT=vm1
+make -C local/fatline deployment-migrate-activate-sandbox DEPLOYMENT=vm1 \\
+  REDIS_DATA_LOSS_ACK=DISCARD-VM1-REDIS-MEMORY
+```
+
+The sandbox path verifies the plan's source/boot/invocation fingerprints,
+private snapshot and original store visibility, performs the isolated legacy
+recovery gate, then calls the already-existing `runtime.sh install-probot`
+with the selected rendered generation. It checks user-systemd/Podman status,
+read-only store/credential mounts, Redis bootstrap revocation and records the
+active generation. If installation fails, the target is **not** reported as
+qualified; automatic rollback is not implemented and must not be assumed.
+
+This is a rootless guest application operation. Neither Redis's bootstrap ACL
+principal nor a Linux root user is an ongoing application identity. The Nix
+store owner builds and retains closures; the CoreOS `wisp` systemd user manages
+rootless Podman containers; each service authenticates to Redis with its own
+ACL principal. Redis is configured with one logical database (DB 0); separation
+comes from ACL commands, key prefixes, channel patterns and private credentials,
+not Redis DB numbers. Prajapati's tenant registry is a caller authorization
+contract, not a substitute for Redis ACL isolation.
+
+The Probot worker remains disabled in the selected manifest and no GitHub App
+installation/ingress authority is installed by this action. A passing sandbox
+activation establishes local startup and bootstrap revocation only; webhook
+settlement, cross-tenant adversarial ACL denial, and World 1 integration remain
+separate gates. Production `deployment-migrate-activate` remains blocked.

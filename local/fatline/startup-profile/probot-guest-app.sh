@@ -389,6 +389,28 @@ case "$action" in
     }
     echo 'AGNI_RECOVERY_QUALIFICATION=passed restore=isolated roles=4 activation=blocked redis_restart=none root_retention=unverified'
     ;;
+  migrate-activate-sandbox)
+    [[ $# == 3 && "$3" == "DISCARD-VM1-REDIS-MEMORY" ]] || {
+      echo 'AGNI_SANDBOX_ACTIVATION=blocked reason=explicit-ephemeral-redis-ack-required' >&2
+      exit 2
+    }
+    # The existing snapshot/boot/invocation gate must pass immediately before mutation.
+    activation_check
+    [[ ! -e "$apps/activated-probot-generation" ]] || {
+      echo 'AGNI_SANDBOX_ACTIVATION=blocked reason=generation-already-activated' >&2
+      exit 1
+    }
+    # This path intentionally qualifies only a disposable local application runtime.
+    # It does not authorize GitHub App ingress, enable the worker, or claim delivery.
+    bash "$tools/runtime.sh" install-probot "$scope" "$target/rendered"
+    bash "$tools/runtime.sh" status "$scope"
+    # Verify the runtime Redis bootstrap principal is disabled after service startup.
+    source "$target/rendered/profile.env"
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    printf '%s\n' "$basename" > "$apps/activated-probot-generation"
+    chmod 600 "$apps/activated-probot-generation"
+    echo "AGNI_SANDBOX_ACTIVATION=passed generation=$basename roles=5 bootstrap=revoked webhook=not-qualified redis_data=discarded"
+    ;;
   migrate-activate)
     echo 'AGNI_ACTIVATION=blocked reason=readiness-rollback-and-data-loss-authorization-not-yet-qualified' >&2
     exit 1

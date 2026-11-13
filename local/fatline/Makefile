@@ -11,7 +11,7 @@ MACHINE ?= coreos-arm64
 export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
-.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate check-deployment
+.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox check-deployment
 
 help:
 	@printf '%s\n' \
@@ -23,7 +23,8 @@ help:
 	  'make deployment-migrate-activation-plan DEPLOYMENT=vm1 Snapshot rollback baseline; no service restart' \
 	  'make deployment-migrate-activation-check DEPLOYMENT=vm1  Revalidate rollback snapshot and live baseline; no restart' \
 	  'make deployment-migrate-recovery-qualify DEPLOYMENT=vm1 Isolated legacy rollback restore; no restart' \
-	  'make deployment-migrate-activate DEPLOYMENT=vm1         Blocked until readiness and rollback qualification' \
+	  'make deployment-migrate-activate DEPLOYMENT=vm1         Production activation remains blocked' \
+	  'make deployment-migrate-activate-sandbox DEPLOYMENT=vm1 REDIS_DATA_LOSS_ACK=DISCARD-VM1-REDIS-MEMORY  Local disposable five-role cutover' \
 	  'make check-deployment                       Check host workflow syntax and interface'
 
 deployment-assess:
@@ -48,6 +49,9 @@ deployment-migrate-activation-check:
 
 deployment-migrate-recovery-qualify:
 	@bash operations/guest-migration.sh migrate-recovery-qualify
+
+deployment-migrate-activate-sandbox:
+	@bash operations/guest-migration.sh migrate-activate-sandbox
 
 deployment-migrate-activate:
 	@echo 'AGNI_ACTIVATION=blocked reason=readiness-rollback-and-data-loss-authorization-not-yet-qualified' >&2

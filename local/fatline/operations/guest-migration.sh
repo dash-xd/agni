@@ -3,7 +3,7 @@ set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/output.sh"
 
 # Host-side application workflow. nix.xd remains a generic Nix/SSH transport.
-operation=${1:?Choose assess, verify, review, migrate-stage, migrate-verify, migrate-activation-plan, migrate-activation-check or migrate-recovery-qualify}
+operation=${1:?Choose assess, verify, review, migrate-stage, migrate-verify, migrate-activation-plan, migrate-activation-check or migrate-recovery-qualify or migrate-activate-sandbox}
 deployment=${DEPLOYMENT:-vm1}
 nix_xd=${NIX_XD_DIR:-}
 provider=${PROVIDER:-podman}
@@ -62,10 +62,20 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
+
+if [[ "$operation" == migrate-activate-sandbox ]]; then
+  [[ "${REDIS_DATA_LOSS_ACK:-}" == DISCARD-VM1-REDIS-MEMORY ]] || fail explicit-ephemeral-redis-ack-required
+  run_step "$log_dir/recovery-qualify.log" guest recovery-qualify
+  grep -Fq 'AGNI_RECOVERY_QUALIFICATION=passed ' "$log_dir/recovery-qualify.log" || fail recovery-qualification-not-passed
+  run_step "$log_dir/activate-sandbox.log" guest migrate-activate-sandbox "$REDIS_DATA_LOSS_ACK"
+  grep -Fq 'AGNI_SANDBOX_ACTIVATION=passed ' "$log_dir/activate-sandbox.log" || fail sandbox-activation-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=migrate-activate-sandbox webhook=not-qualified'
+  exit 0
+fi
 
 if [[ "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify ]]; then
   guest_action=migrate-verify

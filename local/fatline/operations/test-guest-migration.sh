@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -41,6 +41,15 @@ blocked="$(make --no-print-directory -s -C "$here" deployment-migrate-activate D
 status=$?
 set -e
 [[ $status != 0 && "$blocked" == *'AGNI_ACTIVATION=blocked'* ]]
+# The sandbox cutover also requires a specific, explicit acknowledgement.
+set +e
+sandbox_blocked="$(make --no-print-directory -s -C "$here" deployment-migrate-activate-sandbox DEPLOYMENT=vm1 2>&1)"
+sandbox_status=$?
+set -e
+[[ $sandbox_status != 0 && "$sandbox_blocked" == *'explicit-ephemeral-redis-ack-required'* ]]
+grep -Fq '    activation_check' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'install-probot "$scope" "$target/rendered"' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'bootstrap.sh" verify "$scope" "$profile_probe"' "$here/startup-profile/probot-guest-app.sh"
 # nix.xd executes the guest via a Bash stream, where $0 is bash itself.
 # Recovery must invoke the shared preflight function, not bash "$0".
 grep -Fq 'activation_check() {' "$here/startup-profile/probot-guest-app.sh"
