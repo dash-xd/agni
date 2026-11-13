@@ -260,3 +260,43 @@ A passing `AGNI_PROBOT_ADOPTION_REVIEW` is a planning result only. The
 migration must still qualify a compatible base startup-profile generation,
 including required service credentials and lifecycle hooks, before private
 staging or explicit activation is permitted.
+
+## Controlled legacy VM1 migration staging (November 2026)
+
+`#vm1-probot-guest-stage` now supports
+`adopt-stage fatline-arm-vm1 BUNDLE_STORE ASSESSMENT_SHA256`. This is
+**not** the legacy `stage` action; it works when no consolidated profile
+has yet been installed.
+
+The stage action verifies the exact guest candidate, checks that all
+four original services remain active, and takes the scoped lifecycle lock.
+A separate rootless Podman process receives read-only mounts for the
+previous ACL, old private role credentials, Quadlets and assessment, and
+the authoritative read-only Nix store. It uses the assessment hashes to
+reject any changed Redis ACL or Quadlet, resolves the actual Redis/nginx
+executables and loopback proxy port, and obtains the bootstrap probe,
+startup-profile bundle and fallback static rootfs archive from Agni's
+immutable Nix package (not user-selected host commands).
+
+The generated spec uses the observed CoreOS rootless home path
+(`/var/home/wisp` or `/home/wisp`), not a hard-coded home in the new
+migration resolver. The existing guest-private generator retains
+publisher/subscriber ACL identities plus Logma, Skymill and bootstrap
+credential values and produces scoped Probot credentials and five-role
+Quadlets. Staging validates read-only Nix mounts, private credential
+mounts, dependency edges and unpublished application ports.
+
+The operation writes only a private generation under
+`services/probot-migrations/`, keyed by the exact assessment digest
+and bundle store identity. It never changes active ACLs, systemd
+definitions, the installed startup profile or Redis. A repeated
+attempt refuses the existing generation rather than silently reusing
+potentially stale credentials. A failed partial generation must be
+reviewed before another attempt.
+
+The generated profile still has
+`PROBOT_RUNTIME_WORKER_ENABLED=false`, and activating it remains
+explicitly blocked pending GitHub App Binding and ingress qualification.
+Further guest runtime qualification must verify the complete migration
+handoff before an Agni-owned `activate` action is permitted to stop
+or replace the legacy services.
