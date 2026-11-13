@@ -70,8 +70,8 @@ class World1Tests(unittest.TestCase):
             with patch.dict(os.environ, {
                 "SHOAL_STATE_ROOT": tmp, "NIX_XD_SELECTED_PROJECT_REV": "a" * 40,
                 "NIX_XD_PROJECT": "agni20261113.0",
-            }), patch.object(world1.binding, "run", return_value="a" * 40), \\
-                 patch.object(world1.binding, "bind", side_effect=[before, before]) as bind, \\
+            }), patch.object(world1.binding, "run", return_value="a" * 40), \
+                 patch.object(world1.binding, "bind", side_effect=[before, before]) as bind, \
                  patch.object(world1.subprocess, "run") as run:
                 world1.execute("start")
                 self.assertEqual(bind.call_count, 2)
@@ -80,8 +80,8 @@ class World1Tests(unittest.TestCase):
             with patch.dict(os.environ, {
                 "SHOAL_STATE_ROOT": tmp, "NIX_XD_SELECTED_PROJECT_REV": "a" * 40,
                 "NIX_XD_PROJECT": "agni20261113.0",
-            }), patch.object(world1.binding, "run", return_value="a" * 40), \\
-                 patch.object(world1.binding, "bind", side_effect=[before, after]), \\
+            }), patch.object(world1.binding, "run", return_value="a" * 40), \
+                 patch.object(world1.binding, "bind", side_effect=[before, after]), \
                  patch.object(world1.subprocess, "run"):
                 with self.assertRaisesRegex(ValueError, "Farcaster physical identity changed"):
                     world1.execute("start")
