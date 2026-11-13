@@ -19,6 +19,8 @@ jobs:
         run: |
           python3 local/shoal/test_binding.py
           python3 local/shoal/test_storage.py
+          python3 local/shoal/test_world1.py
+          bash -n local/vm/coreos-podman.sh local/shoal/host-actions/*.sh
       - name: Vet
         run: go vet . ./nativeexec/... ./cmd/...
       - name: Build
