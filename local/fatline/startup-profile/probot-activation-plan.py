@@ -89,6 +89,18 @@ def prepare(migration, assessment_path, installed_units, base, output, generatio
         units = [Path(SCOPE + "-" + role + ".container") for role in ROLES]
         units.append(Path(SCOPE + ".network"))
         snapshot(installed_units, rollback / "quadlets", units, checksums["quadlets"])
+        for role in ROLES:
+            dropins = installed_units / (SCOPE + "-" + role + ".container.d")
+            if dropins.is_symlink():
+                raise ValueError("Symlinked legacy Quadlet drop-in directory")
+            if dropins.exists():
+                if not dropins.is_dir():
+                    raise ValueError("Invalid legacy Quadlet drop-in directory")
+                for file in sorted(dropins.iterdir()):
+                    if not FILENAME.fullmatch(file.name):
+                        raise ValueError("Unexpected legacy Quadlet drop-in filename")
+                    relative = Path(dropins.name) / file.name
+                    checksums["quadlets"][str(relative)] = file_copy(file, rollback / "quadlets" / relative)
         config = [Path("credentials/users.acl"), Path("config/redis.conf"), Path("config/nginx.conf"),
                   Path("services/bootstrap-template.acl"), Path("services/boot-wait.sh")]
         snapshot(base, rollback / "config", config, checksums["config"])
