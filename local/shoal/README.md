@@ -179,3 +179,24 @@ consistent stopped-guest backups of both existing overlays, management SSH
 survivability testing, and fail-closed IPv4/IPv6/ Squid policy qualification.
 Historical binding and storage receipts are retained but cannot attest
 the post-restart physical topology.
+
+## Graceful shutdown and offline backup capability gate
+
+Before adding disruptive network cutover, inspect both guests using:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-backup-preflight
+```
+
+This action reads both managed overlay files, recorded QEMU image digests
+and live physical bindings; uses non-mutating logind `CanPowerOff` to
+discover whether `wisp` may shut each guest down cleanly; and checks
+conservative local disk capacity for later stopped-guest copies. It never
+shuts down a VM or copies a live QCOW2. Results include
+`shutdown_authorization=yes|challenge|no|na|unknown`.
+Only `yes` is sufficient to plan an unattended clean shutdown.
+A successful preflight is not an offline backup and does not qualify
+the eventual QEMU link, guest network config or egress. Backing base
+images must remain available alongside any saved overlay.
