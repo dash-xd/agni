@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-action=${1:?Select adopt-plan, adopt-review, verify, stage, status or activate}
+action=${1:?Select adopt-plan, adopt-review, adopt-stage, verify, stage, status or activate}
 scope=${2:?Select service scope}
 bundle_store=${3:-}
 [[ "$scope" == fatline-arm-vm1 ]] || exit 2
@@ -111,6 +111,69 @@ case "$action" in
       --assessment "/run/evidence/$digest.json" --bundle /run/candidate \
       --bundle-store "$bundle_store"
     ;;
+  adopt-stage)
+    [[ $# == 4 ]]
+    check_bundle
+    digest="$4"
+    evidence="$apps/adoption-assessments"
+    [[ "$digest" =~ ^[0-9a-f]{64}$ && -f "$evidence/$digest.json" && ! -L "$evidence/$digest.json" ]] || {
+      echo 'AGNI_PROBOT_MIGRATION_STAGE=blocked reason=missing-immutable-assessment' >&2
+      exit 1
+    }
+    [[ -d "$apps/rootfs" && -x "$apps/rootfs/bin/busybox" ]] || {
+      echo 'AGNI_PROBOT_MIGRATION_STAGE=blocked reason=legacy-rootfs-missing' >&2
+      exit 1
+    }
+    for role in redis nginx logma skymill; do
+      systemctl --user is-active --quiet "$scope-$role.service" || {
+        echo "AGNI_PROBOT_MIGRATION_STAGE=blocked reason=legacy-service-not-active role=$role" >&2
+        exit 1
+      }
+    done
+    for role in logma skymill bootstrap; do
+      [[ -s "$apps/credentials/$role/redis" ]] || exit 1
+    done
+    [[ -s "$apps/credentials/logma/api-key" ]] || exit 1
+    [[ ! -e "$apps/profile/profile.env" && ! -e "$apps/profile/manifest.json" ]] || {
+      echo 'AGNI_PROBOT_MIGRATION_STAGE=blocked reason=consolidated-profile-already-exists' >&2
+      exit 1
+    }
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    target="$apps/probot-migrations/$digest-${bundle_store##*/}"
+    if [[ -s "$target/rendered/profile.env" && -s "$target/rendered/users.acl" ]]; then
+      echo "AGNI_PROBOT_MIGRATION_STAGE=reused candidate=$target activation=blocked"
+      exit 0
+    fi
+    [[ ! -e "$target" ]] || {
+      echo 'AGNI_PROBOT_MIGRATION_STAGE=blocked reason=incomplete-private-generation' >&2
+      exit 1
+    }
+    mkdir -m 700 -p "$apps/probot-migrations"
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$base/credentials/users.acl,dst=/run/old-acl,ro" \
+      --mount "type=bind,src=$apps/credentials,dst=/run/old-credentials,ro" \
+      --mount "type=bind,src=$HOME/.config/containers/systemd,dst=/run/units,ro" \
+      --mount "type=bind,src=$evidence,dst=/run/evidence,ro" \
+      --mount "type=bind,src=$apps/probot-migrations,dst=/run/migrations,rw" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-migrate.py" \
+      --assessment "/run/evidence/$digest.json" \
+      --unit-dir /run/units --acl /run/old-acl --credentials /run/old-credentials \
+      --metadata "$tool_store/metadata.json" \
+      --bundle "$tool_store" --archive "$tool_store/rootfs.tar" \
+      --bundle-store "$bundle_store" --candidate "$bundle_store" \
+      --home "$HOME" --output "/run/migrations/$digest-${bundle_store##*/}" \
+      --acl-renderer "$tool_store/render-users-acl.py" \
+      --credential-generator "$tool_store/probot-credentials.py" \
+      --profile-renderer "$tool_store/probot-render.py" \
+      --base-renderer "$tool_store/render.py" \
+      --stage-helper "$tool_store/probot-stage.py"
+    ;;
   verify)
     [[ $# == 3 ]]
     check_bundle
@@ -156,5 +219,5 @@ case "$action" in
     echo 'AGNI_PROBOT_GUEST_ACTIVATION=blocked reason=real-github-app-binding-and-live-ingress-not-qualified' >&2
     exit 1
     ;;
-  *) echo 'Usage: adopt-plan|adopt-review|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
+  *) echo 'Usage: adopt-plan|adopt-review|adopt-stage|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
 esac
