@@ -97,7 +97,7 @@ if [[ "$phase" == acl-plan ]]; then
     --baseline "${AGNI_PROBOT_REDIS_BASELINE:?Redis ACL baseline required}" \
     --sources "$AGNI_PROBOT_SOURCES" \
     --scope fatline-arm-vm1 \
-    --output "$state/redis-policy-vm1.json"
+    --output-dir "$state/candidates/redis-policy"
   echo 'AGNI_PROBOT_ACL_PLAN=passed activation=blocked'
   exit 0
 fi
@@ -120,7 +120,7 @@ if [[ "$phase" == guest-plan ]]; then
     --artifacts "$state/artifacts.json" \
     --sources "$AGNI_PROBOT_SOURCES" \
     --scope fatline-arm-vm1 \
-    --output "$state/guest-plan-vm1.json"
+    --output-dir "$state/candidates/guest-plan"
   echo 'AGNI_PROBOT_GUEST_PLAN=passed activation=blocked'
   exit 0
 fi
