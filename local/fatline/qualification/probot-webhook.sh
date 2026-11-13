@@ -21,7 +21,7 @@ while (($#)); do
   esac
 done
 [[ "$scenario" == probot-webhook ]] || { echo 'Select --scenario probot-webhook' >&2; exit 2; }
-[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == acl-plan || "$phase" == acl-runtime || "$phase" == service-profile || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|acl-plan|acl-runtime|service-profile|live' >&2; exit 2; }
+[[ "$phase" == preflight || "$phase" == artifacts || "$phase" == guest-plan || "$phase" == acl-plan || "$phase" == acl-runtime || "$phase" == service-profile || "$phase" == guest-bundle || "$phase" == live ]] || { echo 'Select --phase preflight|artifacts|guest-plan|acl-plan|acl-runtime|service-profile|guest-bundle|live' >&2; exit 2; }
 
 [[ "$(uname -s)" == Linux && "$(uname -m)" == aarch64 ]] || {
   echo 'PROBOT_WEBHOOK=blocked reason=requires-arm64-nix-alpine' >&2
@@ -88,6 +88,30 @@ bash "${AGNI_PROBOT_ARTIFACT_BUILDER:?Artifact builder must be supplied by pinne
 if [[ "$phase" == artifacts ]]; then
   echo 'AGNI_PROBOT_ARTIFACT_PREFLIGHT=passed'
   echo 'AGNI_PROBOT_WEBHOOK_INTEGRATION=pending phase=guest-compose-and-github-binding'
+  exit 0
+fi
+if [[ "$phase" == guest-bundle ]]; then
+  state="$HOME/.local/state/agni/probot-webhook"
+  python3 "${AGNI_PROBOT_REDIS_PLANNER_TEST:?}" 
+  python3 "${AGNI_PROBOT_GUEST_PLANNER_TEST:?}"
+  policy="$(python3 "${AGNI_PROBOT_REDIS_PLANNER:?}" \
+    --baseline "${AGNI_PROBOT_REDIS_BASELINE:?}" \
+    --sources "$AGNI_PROBOT_SOURCES" --scope fatline-arm-vm1 \
+    --output-dir "$state/candidates/redis-policy" | sed -n 's/^AGNI_PROBOT_REDIS_POLICY_PATH=//p')"
+  plan="$(python3 "${AGNI_PROBOT_GUEST_PLANNER:?}" \
+    --artifacts "$state/artifacts.json" --sources "$AGNI_PROBOT_SOURCES" \
+    --scope fatline-arm-vm1 --output-dir "$state/candidates/guest-plan" | sed -n 's/^AGNI_PROBOT_GUEST_PLAN_PATH=//p')"
+  [[ -s "$policy" && -s "$plan" ]] || exit 1
+  work="$(mktemp -d "$state/guest-bundle.XXXXXXXX")"
+  trap 'rm -rf -- "$work"' EXIT
+  python3 "${AGNI_PROBOT_GUEST_BUNDLE_BUILDER:?}" \
+    --artifacts "$state/artifacts.json" --sources "$AGNI_PROBOT_SOURCES" \
+    --policy "$policy" --plan "$plan" --output "$work/candidate"
+  bundle="$(nix-store --add "$work/candidate")"
+  [[ "$bundle" =~ ^/nix/store/[0-9a-z]{32}-candidate$ ]] || exit 1
+  nix-store --realise --add-root "$state/gcroots/guest-bundle-${bundle##*/}" "$bundle" >/dev/null
+  echo "AGNI_PROBOT_GUEST_BUNDLE_PATH=$bundle"
+  echo 'AGNI_PROBOT_GUEST_BUNDLE=passed roles=3 credentials=excluded activation=blocked'
   exit 0
 fi
 if [[ "$phase" == acl-plan ]]; then
