@@ -30,6 +30,21 @@ class NetworkTests(unittest.TestCase):
         self.assertIn("AGNI_SHOAL_NETWORK=not-assessed", source)
         self.assertIn("StrictHostKeyChecking=yes", source)
 
+    def test_unprivileged_guest_is_valid_for_readonly_preflight(self):
+        response = "arch=aarch64\\nsudo=no\\nnmcli=yes\\nipv4=yes"
+        placement = {"sshPort": 2222, "sshUser": "wisp", "sshHost": "127.0.0.1"}
+        with patch.object(network, "run", return_value=response):
+            observed = network.guest_preflight(placement, Path("/known_hosts"), Path("/key"))
+        self.assertEqual(observed["sudo"], "no")
+        self.assertEqual(observed["nmcli"], "yes")
+
+    def test_missing_network_tools_is_rejected(self):
+        response = "arch=aarch64\\nsudo=no\\nnmcli=no\\nipv4=yes"
+        placement = {"sshPort": 2222, "sshUser": "wisp", "sshHost": "127.0.0.1"}
+        with patch.object(network, "run", return_value=response):
+            with self.assertRaisesRegex(ValueError, "network tooling"):
+                network.guest_preflight(placement, Path("/known_hosts"), Path("/key"))
+
     def test_mismatched_runner_is_rejected(self):
         item = [{"Id": "a" * 64, "State": {"Running": True},
                  "Config": {"Cmd": ["-netdev", "user,id=n0,hostfwd=tcp::2222-:22"]},

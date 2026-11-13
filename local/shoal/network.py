@@ -51,8 +51,12 @@ def guest_preflight(placement, known, key):
     values = dict(line.split("=", 1) for line in guest.splitlines() if "=" in line)
     if values.get("arch") not in ("aarch64", "arm64"):
         raise ValueError("Unexpected guest architecture")
-    if any(values.get(k) != "yes" for k in ("sudo", "nmcli", "ipv4")):
+    if any(values.get(k) != "yes" for k in ("nmcli", "ipv4")):
         raise ValueError(f"Guest network tooling is not ready: {values}")
+    if values.get("sudo") not in ("yes", "no"):
+        raise ValueError("Guest administrative capability not reported")
+    # Administrative privilege is optional for preflight: guest network
+    # configuration belongs in immutable CoreOS provisioning, not SSH.
     return values
 
 
@@ -86,7 +90,7 @@ def qualify():
         observed = inspect_runner(machine, placement, receipt["containerId"])
         observed["guest"] = guest_preflight(placement, state / placement["instance"] / "known_hosts", key)
         observations[name] = observed
-        print(f"AGNI_SHOAL_NETWORK_GUEST=preflight-passed placement={name}", flush=True)
+        print(f"AGNI_SHOAL_NETWORK_GUEST=preflight-passed placement={name} sudo={observed['guest']['sudo']}", flush=True)
     receipt = {"schemaVersion": 1, "stage": "network-preflight",
                "agniRevision": revisions, "planSha256": hashlib.sha256(plan_raw).hexdigest(),
                "binding": bound["bindings"], "observations": observations,

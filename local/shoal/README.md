@@ -140,7 +140,7 @@ make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
 
 This validates the exact Agni revision, current two-VM physical binding,
 original QEMU user-mode network arguments, rootless management tools and
-guest noninteractive sudo/network tooling. Its receipt explicitly leaves
+guest network tools, and records (but does not require) noninteractive sudo.\nGuest network mutation must be provisioned declaratively in CoreOS rather\nthan granting the login account unrestricted administrative access.\nIts receipt explicitly leaves
 `network`, `egress` and `services` as **not assessed**.
 
 A future explicit migration must safely stop/recreate QEMU containers
