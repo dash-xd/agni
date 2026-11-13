@@ -4,10 +4,11 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 from importlib.util import module_from_spec, spec_from_file_location
 
-spec = spec_from_file_location("agni_candidate_output", Path(__file__).with_name("candidate-output.py"))
+spec = spec_from_file_location("agni_candidate_output", Path(os.environ.get("AGNI_CANDIDATE_OUTPUT", str(Path(__file__).with_name("candidate-output.py")))))
 candidate_output = module_from_spec(spec)
 spec.loader.exec_module(candidate_output)
 
