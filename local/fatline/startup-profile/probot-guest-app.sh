@@ -165,7 +165,7 @@ case "$action" in
       --assessment "/run/evidence/$digest.json" \
       --unit-dir /run/units --acl /run/old-acl --credentials /run/old-credentials \
       --metadata "$tool_store/metadata.json" \
-      --bundle "$tool_store" --archive "$tool_store/rootfs.tar" \
+      --paths "$tool_store/migration-paths.json" \
       --bundle-store "$bundle_store" --candidate "$bundle_store" \
       --home "$HOME" --output "/run/migrations/$digest-${bundle_store##*/}" \
       --acl-renderer "$tool_store/render-users-acl.py" \
