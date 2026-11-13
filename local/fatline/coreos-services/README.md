@@ -219,3 +219,29 @@ The candidate transfer is OS-neutral as long as the selected guest exposes
 the qualified Nix store paths; the current staging implementation uses the
 Fedora CoreOS Podman/Quadlet adapter and must be adapted and qualified
 independently before reuse on Grml.
+
+## Legacy VM1 startup-profile adoption assessment
+
+When `inventory` reports `profile=absent` but the existing host-link Redis
+and two application Quadlets remain active, **do not write an invented
+`services/profile/manifest.json` or invoke `install-probot`**. The legacy
+two-service guest installer does not have the consolidated startup-profile
+bootstrap and systemd lifecycle hooks.
+
+Agni's `#vm1-probot-guest-stage` package now accepts
+`adopt-plan fatline-arm-vm1 /nix/store/<sha>-candidate`.
+This verifies the exact bundle and runs a separate read-only adoption assessor
+inside rootless Podman. It observes host systemd states without restarting
+anything, reads existing Quadlet definitions, fingerprints their Nix store
+references and current Redis/host-link ACL identities, and writes only a
+private content-addressed assessment JSON under
+`services/adoption-assessments/`. No ACL contents or credentials appear in
+the assessment. The output distinguishes a complete consolidated profile,
+a legacy runtime requiring migration, and missing runtime dependencies.
+
+`AGNI_PROBOT_ADOPTION_ASSESSMENT=passed` means the observation completed,
+**not** that migration or activation has passed. An absent consolidated
+profile remains an explicit migration blocker. The next implementation
+must select a compatible immutable base profile from verified store and
+credential provenance, then qualify a staged handover prior to any live
+systemd/Redis changes. The existing `stage` action remains fail-closed.
