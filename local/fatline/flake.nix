@@ -170,6 +170,13 @@
           host-link-vm2 = import ./host-link { inherit pkgs; scope = "fatline-arm-vm2"; };
           coreos-services-vm1 = import ./coreos-services { inherit pkgs; };
           coreos-startup-profile = import ./startup-profile { inherit pkgs; };
+          probot-rootfs-archive = pkgs.runCommand "agni-vm1-probot-rootfs.tar" { nativeBuildInputs = [ pkgs.gnutar ]; } ''
+            mkdir -p rootfs/bin rootfs/etc rootfs/run rootfs/tmp rootfs/var/lib
+            cp ${pkgs.pkgsStatic.busybox}/bin/busybox rootfs/bin/busybox
+            chmod 0555 rootfs/bin/busybox
+            ln -s busybox rootfs/bin/sh
+            tar -C rootfs -cf "$out" .
+          '';
           probot-guest-tools = pkgs.runCommand "agni-probot-vm1-guest-tools" {} ''
             mkdir -p "$out"
             cp ${./startup-profile/probot-guest-stage.sh} "$out/probot-guest-stage.sh"
@@ -179,6 +186,11 @@
             cp ${./startup-profile/runtime.sh} "$out/runtime.sh"
             cp ${./startup-profile/probot-adoption.py} "$out/probot-adoption.py"
             cp ${./startup-profile/probot-adoption-review.py} "$out/probot-adoption-review.py"
+            cp ${./startup-profile/probot-migrate.py} "$out/probot-migrate.py"
+            cp ${./startup-profile/probot-stage.py} "$out/probot-stage.py"
+            cat > "$out/migration-paths.json" <<'JSON'
+            ${builtins.toJSON { bundle = "${self.packages.${system}.coreos-startup-profile}"; archive = "${self.packages.${system}.probot-rootfs-archive}"; }}
+            JSON
             cp ${./coreos-services/probot-credentials.py} "$out/probot-credentials.py"
             cp ${./scripts/render-users-acl.py} "$out/render-users-acl.py"
             printf '%s\n' "${pkgs.python3}/bin/python3" > "$out/python-path"
