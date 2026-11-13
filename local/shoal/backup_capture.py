@@ -40,7 +40,7 @@ def inspect_stopped(machine, placement, state, artifact_state):
     item = details[0]
     if item.get("State", {}).get("Running") or item.get("State", {}).get("Status") != "exited":
         raise ValueError(name + " is not stopped; refusing a live QCOW2 copy")
-    manifest = migration.manifest(state / "manifest.txt")
+    if item.get("State", {}).get("ExitCode") != 0 or item.get("State", {}).get("OOMKilled"):\n        raise ValueError(name + " QEMU did not exit normally")\n    manifest = migration.manifest(state / "manifest.txt")
     if manifest.get("container_id") != item.get("Id") or manifest.get("port") != str(placement["sshPort"]):
         raise ValueError(name + " managed container identity mismatch")
     if manifest.get("runner") is None or not manifest["runner"].startswith("sha256:"):
