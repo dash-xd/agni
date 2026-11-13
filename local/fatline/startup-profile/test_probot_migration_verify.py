@@ -41,6 +41,8 @@ class MigrationVerificationTests(unittest.TestCase):
         (probot / "serve.js").write_text("route")
         (store / (HASH + "-archive")).write_text("tar")
         (store / (HASH + "-bundle")).mkdir()
+        for name in ("bootstrap.sh", "boot-wait.sh", "metadata.json"):
+            (store / (HASH + "-bundle") / name).write_text("asset")
         acl = root / "users.acl"
         acl.write_text("user default off\nuser publisher on >secret\nuser subscriber on >secret\n")
         new_acl = acl.read_bytes()
