@@ -54,13 +54,20 @@ def systemd_graph(quadlets):
         if "[Container]" not in data:
             raise ValueError("Not a Quadlet: " + role)
         graph[role] = fields
-    redis = SCOPE + "-redis.service"
-    for role in ("nginx", "logma", "skymill"):
-        if redis not in graph[role].get("Requires", set()) or redis not in graph[role].get("After", set()):
-            raise ValueError("Recovered dependency mismatch: " + role)
-    nginx = SCOPE + "-nginx.service"
-    if nginx not in graph["logma"].get("Requires", set()) or nginx not in graph["logma"].get("After", set()):
-        raise ValueError("Recovered Logma/Nginx dependency mismatch")
+    # The legacy graph is authoritative: it is checksum-pinned by the
+    # adoption assessment and the recovery manifest. Do not impose the
+    # consolidated five-role dependency graph on these older units.
+    permitted = {SCOPE + "-" + role + ".service" for role in ROLES}
+    for role, fields in graph.items():
+        own = SCOPE + "-" + role + ".service"
+        for field in ("Requires", "Wants", "After", "Before", "BindsTo", "PartOf", "Upholds"):
+            for unit in fields.get(field, set()):
+                if unit == own:
+                    raise ValueError("Recovered service self-dependency: " + role)
+                if unit == SCOPE + "-probot.service":
+                    raise ValueError("Recovered graph references staged Probot")
+                if unit.startswith(SCOPE + "-") and unit.endswith(".service") and unit not in permitted:
+                    raise ValueError("Unexpected scoped recovered dependency: " + unit)
     if (quadlets / (SCOPE + "-probot.container")).exists():
         raise ValueError("Recovered graph unexpectedly includes Probot")
 
