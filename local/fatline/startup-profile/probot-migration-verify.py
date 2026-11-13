@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Verify a staged VM1 generation with immutable inputs. Never activate services."""
 import argparse
-import configparser
 import hashlib
 import json
 import os
@@ -18,6 +17,24 @@ def read_json(path):
     if path.is_symlink() or not path.is_file():
         raise ValueError("Missing or symlinked generation input: " + str(path))
     return json.loads(path.read_text())
+
+
+def parse_systemd_sections(data):
+    sections = {}
+    section = None
+    for raw in data.splitlines():
+        line = raw.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1]
+            sections.setdefault(section, {})
+        elif section is not None and "=" in line:
+            key, value = line.split("=", 1)
+            sections[section].setdefault(key, []).append(value)
+        else:
+            raise ValueError("Malformed staged systemd directive")
+    return sections
 
 
 def verify(migration, assessment_path, old_acl, installed_units, store):
@@ -105,12 +122,11 @@ def verify(migration, assessment_path, old_acl, installed_units, store):
         file = rendered / (SCOPE + "-" + role + ".container")
         if file.is_symlink():
             raise ValueError("Symlinked staged Quadlet")
-        parser = configparser.ConfigParser(interpolation=None, strict=False)
-        parser.read_string(file.read_text())
-        if not parser.has_section("Container") or not parser.has_section("Unit"):
+        sections = parse_systemd_sections(file.read_text())
+        if "Container" not in sections or "Unit" not in sections:
             raise ValueError("Incomplete Quadlet sections: " + role)
         for field, values in required[role].items():
-            actual = set(parser["Unit"].get(field, "").split())
+            actual = set(word for entry in sections["Unit"].get(field, []) for word in entry.split())
             if not values <= actual:
                 raise ValueError("Missing dependency: " + role + "." + field)
         source = file.read_text()
