@@ -41,4 +41,9 @@ blocked="$(make --no-print-directory -s -C "$here" deployment-migrate-activate D
 status=$?
 set -e
 [[ $status != 0 && "$blocked" == *'AGNI_ACTIVATION=blocked'* ]]
+# nix.xd executes the guest via a Bash stream, where $0 is bash itself.
+# Recovery must invoke the shared preflight function, not bash "$0".
+grep -Fq 'activation_check() {' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq '    activation_check' "$here/startup-profile/probot-guest-app.sh"
+! grep -Fq 'bash "$0" activation-check' "$here/startup-profile/probot-guest-app.sh"
 echo 'AGNI_DEPLOYMENT_INTERFACE_TEST=passed named-operations=true json=transport-only bash32-compatible=true'
