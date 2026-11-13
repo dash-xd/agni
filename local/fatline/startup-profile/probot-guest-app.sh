@@ -122,6 +122,34 @@ migrate_verify() {
 }
 
 
+activation_check() {
+    migrate_verify
+    plan="$apps/activation-plans/$basename"
+    [[ -s "$plan/plan.json" && ! -L "$plan" ]] || {
+      echo 'AGNI_ACTIVATION_CHECK=blocked reason=missing-private-plan' >&2
+      exit 1
+    }
+    id="$(cat /proc/sys/kernel/random/boot_id)"
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$target,dst=/run/migration,ro" \
+      --mount "type=bind,src=$evidence,dst=/run/assessment.json,ro" \
+      --mount "type=bind,src=$base,dst=/run/base,ro" \
+      --mount "type=bind,src=$HOME/.config/containers/systemd,dst=/run/units,ro" \
+      --mount "type=bind,src=$plan,dst=/run/plan,ro" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-activation-check.py" \
+      --plan-dir /run/plan --migration /run/migration --generation "$basename" \
+      --assessment /run/assessment.json --installed-units /run/units \
+      --base /run/base --store /nix/store --boot-id "$id" \
+      --redis-invocation "${before[0]}" --nginx-invocation "${before[1]}" \
+      --logma-invocation "${before[2]}" --skymill-invocation "${before[3]}"
+}
+
+
 case "$action" in
   adopt-plan)
     [[ $# == 3 ]]
@@ -297,34 +325,11 @@ case "$action" in
     ;;
   activation-check)
     [[ $# == 2 ]]
-    migrate_verify
-    plan="$apps/activation-plans/$basename"
-    [[ -s "$plan/plan.json" && ! -L "$plan" ]] || {
-      echo 'AGNI_ACTIVATION_CHECK=blocked reason=missing-private-plan' >&2
-      exit 1
-    }
-    id="$(cat /proc/sys/kernel/random/boot_id)"
-    podman run --rm --pull=never --network none \
-      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
-      --read-only --read-only-tmpfs=false --security-opt label=disable \
-      --cap-drop all --security-opt no-new-privileges \
-      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
-      --mount "type=bind,src=$target,dst=/run/migration,ro" \
-      --mount "type=bind,src=$evidence,dst=/run/assessment.json,ro" \
-      --mount "type=bind,src=$base,dst=/run/base,ro" \
-      --mount "type=bind,src=$HOME/.config/containers/systemd,dst=/run/units,ro" \
-      --mount "type=bind,src=$plan,dst=/run/plan,ro" \
-      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
-      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-activation-check.py" \
-      --plan-dir /run/plan --migration /run/migration --generation "$basename" \
-      --assessment /run/assessment.json --installed-units /run/units \
-      --base /run/base --store /nix/store --boot-id "$id" \
-      --redis-invocation "${before[0]}" --nginx-invocation "${before[1]}" \
-      --logma-invocation "${before[2]}" --skymill-invocation "${before[3]}"
+    activation_check
     ;;
   recovery-qualify)
     [[ $# == 2 ]]
-    bash "$0" activation-check "$scope"
+    activation_check
     shopt -s nullglob
     snapshots=("$apps/activation-plans/"*)
     staged=("$apps/probot-migrations/"*)
