@@ -14,7 +14,7 @@ output "subnetwork_ipv6_prefix" {
 }
 
 output "egress_proxy_ip" {
-  value = var.egress_proxy_ip
+  value = local.egress_proxy_ip
 }
 
 output "instances" {
