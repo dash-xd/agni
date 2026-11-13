@@ -24,7 +24,7 @@ def stage(spec_path, artifacts_path, sources_path, policy_path, old_acl,
     sources = json.loads(sources_path.read_text())
     if spec.get("schema") != 1 or spec.get("scope") != "fatline-arm-vm1":
         raise ValueError("Expected exact VM1 profile")
-    if spec.get("home") != "/home/wisp":
+    if spec.get("home") not in ("/home/wisp", "/var/home/wisp"):
         raise ValueError("Guest profile must resolve to rootless wisp home")
     if sources.get("schema") != 1 or sources.get("scenario") != "probot-webhook":
         raise ValueError("Expected exact webhook source manifest")
