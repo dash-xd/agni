@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-activate; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -35,4 +35,10 @@ bad="$(DEPLOYMENT=unsupported NIX_XD_DIR=/nonexistent bash "$here/operations/gue
 status=$?
 set -e
 [[ $status != 0 && "$bad" == *'unsupported-deployment'* ]]
+# The activation target must reject even if the user tries to invoke it directly.
+set +e
+blocked="$(make --no-print-directory -s -C "$here" deployment-migrate-activate DEPLOYMENT=vm1 2>&1)"
+status=$?
+set -e
+[[ $status != 0 && "$blocked" == *'AGNI_ACTIVATION=blocked'* ]]
 echo 'AGNI_DEPLOYMENT_INTERFACE_TEST=passed named-operations=true json=transport-only bash32-compatible=true'
