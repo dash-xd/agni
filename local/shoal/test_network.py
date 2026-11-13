@@ -31,7 +31,7 @@ class NetworkTests(unittest.TestCase):
         self.assertIn("StrictHostKeyChecking=yes", source)
 
     def test_unprivileged_guest_is_valid_for_readonly_preflight(self):
-        response = "arch=aarch64\\nsudo=no\\nnmcli=yes\\nipv4=yes"
+        response = "arch=aarch64\nsudo=no\nnmcli=yes\nipv4=yes"
         placement = {"sshPort": 2222, "sshUser": "wisp", "sshHost": "127.0.0.1"}
         with patch.object(network, "run", return_value=response):
             observed = network.guest_preflight(placement, Path("/known_hosts"), Path("/key"))
@@ -39,7 +39,7 @@ class NetworkTests(unittest.TestCase):
         self.assertEqual(observed["nmcli"], "yes")
 
     def test_missing_network_tools_is_rejected(self):
-        response = "arch=aarch64\\nsudo=no\\nnmcli=no\\nipv4=yes"
+        response = "arch=aarch64\nsudo=no\nnmcli=no\nipv4=yes"
         placement = {"sshPort": 2222, "sshUser": "wisp", "sshHost": "127.0.0.1"}
         with patch.object(network, "run", return_value=response):
             with self.assertRaisesRegex(ValueError, "network tooling"):
