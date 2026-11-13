@@ -193,3 +193,35 @@ extract the transport and Nix-store visibility assumptions as concrete
 adapters when the GCP deployment is implemented. The current CoreOS
 guest implementation still specifically requires a read-only 9P Nix
 store; that is not yet a GCP-qualified transport.
+
+## Activation preflight (read-only, does not authorize cutover)
+
+After the private activation plan has been prepared on VM1, run:
+
+```sh
+make -C local/fatline deployment-migrate-activation-check DEPLOYMENT=vm1
+```
+
+The workflow reuses the exact existing guest generation and private
+activation-plan directory. It first reruns the five-role static and
+Podman Quadlet generator checks, then verifies each snapshotted legacy
+Quadlet/network/config/credential against its SHA-256 and current live
+counterpart, the guest boot ID and the four systemd invocation IDs,
+the original assessment and staged target ACL, and visibility of legacy
+Nix store executables. No new artifact candidate or activation plan is
+created, and no service is stopped or restarted. A subsequent reboot,
+service restart or baseline change fails closed rather than silently
+reusing stale authorization evidence.
+
+`AGNI_ACTIVATION_CHECK=passed` means the **baseline was verified**,
+not that activation is permitted. The check still reports
+`readiness=blocked activation=blocked` and explicitly lists unresolved
+gates: live application readiness, GitHub App/ingress binding, a tested
+rollback executor, retention of legacy store roots, and operator
+acknowledgement of Redis RAM-only stream loss.
+
+`make -C local/fatline deployment-migrate-activate DEPLOYMENT=vm1`
+is present as a deliberately fail-closed interface. There is no
+functional live cutover behind this command yet. An activation executor
+must not reuse the read-only preflight as blanket approval or claim
+Redis in-memory data would be restored by configuration rollback.
