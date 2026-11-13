@@ -40,7 +40,9 @@ def inspect_stopped(machine, placement, state, artifact_state):
     item = details[0]
     if item.get("State", {}).get("Running") or item.get("State", {}).get("Status") != "exited":
         raise ValueError(name + " is not stopped; refusing a live QCOW2 copy")
-    if item.get("State", {}).get("ExitCode") != 0 or item.get("State", {}).get("OOMKilled"):\n        raise ValueError(name + " QEMU did not exit normally")\n    manifest = migration.manifest(state / "manifest.txt")
+    if item.get("State", {}).get("ExitCode") != 0 or item.get("State", {}).get("OOMKilled"):
+        raise ValueError(name + " QEMU did not exit normally")
+    manifest = migration.manifest(state / "manifest.txt")
     if manifest.get("container_id") != item.get("Id") or manifest.get("port") != str(placement["sshPort"]):
         raise ValueError(name + " managed container identity mismatch")
     if manifest.get("runner") is None or not manifest["runner"].startswith("sha256:"):
@@ -115,7 +117,7 @@ def backup():
                 shutil.copyfile(original, path / filename)
             if digest(path / "overlay.qcow2") != item["overlaySha256"]:
                 raise ValueError("Overlay backup verification failed: " + stage)
-        # Preserve backing bytes and provenance. Restoring an overlay also\n        # requires rebasing its original /artifacts/base.qcow2 reference.
+        # Preserve backing bytes and provenance; restore must validate the backing path.
         shared = staging / "base.qcow2"
         shutil.copyfile(migration.regular(artifact / "base.qcow2"), shared)
         if digest(shared) != states["farcaster"]["baseSha256"]:
