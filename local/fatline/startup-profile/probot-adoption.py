@@ -95,7 +95,9 @@ def assess(base, units, active_roles, *, bundle=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scope", required=True)
-    parser.add_argument("--home", type=Path, required=True)
+    parser.add_argument("--base", type=Path, required=True)
+    parser.add_argument("--units", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--bundle")
     args = parser.parse_args()
     if args.scope != SCOPE:
@@ -112,10 +114,8 @@ def main():
             active.add(role)
     if "redis" not in active:
         raise SystemExit("Redis must remain active during adoption assessment")
-    base = args.home / ".local/state/nix-xd/fatline" / SCOPE
-    units = args.home / ".config/containers/systemd"
-    assessment = assess(base, units, active, bundle=args.bundle)
-    state_root = base / "services" / "adoption-assessments"
+    assessment = assess(args.base, args.units, active, bundle=args.bundle)
+    state_root = args.output_dir
     output = (json.dumps(assessment, indent=2, sort_keys=True) + "\n").encode()
     key = hashlib.sha256(output).hexdigest()
     destination = state_root / (key + ".json")
