@@ -10,7 +10,6 @@ import re
 SCOPE = "fatline-arm-vm1"
 ROLES = ("redis", "nginx", "logma", "skymill", "probot")
 STORE = re.compile(r"/nix/store/[a-z0-9]{32}-[A-Za-z0-9._+-]+")
-SHA = re.compile(r"[0-9a-f]{64}")
 
 
 def read_json(path):
@@ -42,12 +41,14 @@ def verify(migration, assessment_path, old_acl, installed_units, store):
     rendered = migration / "rendered"
     input_dir = migration / "input"
     evidence_bytes = assessment_path.read_bytes()
-    if not SHA.fullmatch(assessment_path.stem) or hashlib.sha256(evidence_bytes).hexdigest() != assessment_path.stem:
-        raise ValueError("Immutable adoption assessment digest mismatch")
+    digest = hashlib.sha256(evidence_bytes).hexdigest()
     assessment = json.loads(evidence_bytes)
     bundle_name = assessment["bundle"].split("/")[-1]
-    if migration.name != assessment_path.stem + "-" + bundle_name:
-        raise ValueError("Migration identity does not match assessment bundle")
+    if not re.fullmatch(r"[a-z0-9]{32}-candidate", bundle_name):
+        raise ValueError("Invalid pinned candidate bundle identity")
+    expected_generation = digest + "-" + bundle_name
+    if migration.name != expected_generation:
+        raise ValueError("Immutable adoption assessment digest or migration identity mismatch")
     if assessment.get("status") != "legacy-profile-migration-required" or assessment.get("profile_installed") is not False:
         raise ValueError("Migration source was not a legacy deployment")
     if assessment.get("scope") != SCOPE or assessment.get("activation") != "blocked":
