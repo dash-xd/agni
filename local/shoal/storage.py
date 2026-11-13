@@ -18,7 +18,7 @@ store="$mountpoint/$(basename "$SHOAL_PROBE_ROOTFS")"
 test -L "$store/bin/sh"
 busybox="$(readlink "$store/bin/sh")"
 [[ "$busybox" == /nix/store/*/bin/busybox ]]
-actual="$(sha256sum "$mountpoint/$(basename "$(dirname "$(dirname "$busybox")")")/bin/busybox" | cut -d ' ' -f 1)"
+actual="$(sha256sum "$mountpoint/${busybox#/nix/store/}" | cut -d ' ' -f 1)"
 [[ "$actual" == "$SHOAL_EXPECTED_BUSYBOX_SHA256" ]]
 test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
 boot="$(cat /proc/sys/kernel/random/boot_id)"
