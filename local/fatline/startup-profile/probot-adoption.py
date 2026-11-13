@@ -33,7 +33,7 @@ def assess(base, units, active_roles, *, bundle=None):
         if name in identities:
             raise ValueError("Duplicate Redis ACL identity")
         identities[name] = hashlib.sha256(line.encode()).hexdigest()
-    if not set(HOST_IDENTITIES) <= identities:
+    if not set(HOST_IDENTITIES) <= set(identities):
         raise ValueError("Missing existing host-link identities")
     if not re.search(r"(?m)^user default off$", acl.read_text()):
         raise ValueError("Default Redis user is not disabled")
