@@ -23,17 +23,21 @@
     "mode": "read-only",
     "guestProtocol": "9p"
   },
+  "networkCandidate": {
+    "transport": "qemu-socket-over-private-podman-network",
+    "podmanNetwork": "shoal-transport",
+    "podmanInternal": true,
+    "egress": "deny-by-default",
+    "transitCIDR": "172.30.255.0/30",
+    "farcasterIPv4": "172.30.255.1",
+    "world1IPv4": "172.30.255.2",
+    "qemuSocketPort": 25001,
+    "requiresControlledRecreation": true,
+    "applied": false
+  },
   "application": {
-    "farcaster": [
-      "redis",
-      "nginx",
-      "logma",
-      "skymill",
-      "squid"
-    ],
-    "world1": [
-      "logmash"
-    ]
+    "farcaster": ["redis", "nginx", "logma", "skymill", "squid"],
+    "world1": ["logmash"]
   },
   "gates": {
     "binding": "required",

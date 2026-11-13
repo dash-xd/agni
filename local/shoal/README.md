@@ -113,3 +113,38 @@ For a damaged or failed *World 1 only*, use Agni's explicit VM
 `reset-failed` action with `COREOS_PROFILE=shoal-world1` and
 `COREOS_CONTAINER_NAME=coreos-shoal-world1`; do not reset Starwisp.
 The guest overlay and artifacts must be reconciled before recreation.
+
+
+## Inter-VM network candidate (preflight only)
+
+The declared `networkCandidate` is a **proposal**, not a deployed
+network. The running VMs each use a separate QEMU user-mode NAT backend.
+Neither existing 127.0.0.1 SSH forwarding port provides VM-to-VM routing.
+
+The proposed transport is a QEMU socket pair over a dedicated internal
+Podman network with static guest transit addresses. Guest default
+routes must not use the transit NIC, and the existing QEMU user backend
+must be hardened with `restrict=on` while preserving its explicit
+host-to-guest SSH forwarding. IPv4 and IPv6 guest egress, management
+reachability, inter-VM service ACLs, and Squid policy require separate
+runtime tests. No connectivity or egress guarantee is made by the plan.
+
+First, run the **read-only** Agni network prerequisite check after staging
+the updated source:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-preflight
+```
+
+This validates the exact Agni revision, current two-VM physical binding,
+original QEMU user-mode network arguments, rootless management tools and
+guest noninteractive sudo/network tooling. Its receipt explicitly leaves
+`network`, `egress` and `services` as **not assessed**.
+
+A future explicit migration must safely stop/recreate QEMU containers
+against the **existing** guest overlays, and requalify new boot IDs and
+storage. Do not delete existing identity/storage receipts: they describe
+the previously qualified physical configuration. Do not reuse them as
+evidence for the new QEMU network topology.
