@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-action=${1:?Select verify, stage, status or activate}
+action=${1:?Select adopt-plan, verify, stage, status or activate}
 scope=${2:?Select service scope}
 bundle_store=${3:-}
 [[ "$scope" == fatline-arm-vm1 ]] || exit 2
@@ -51,6 +51,16 @@ check_bundle() {
 }
 
 case "$action" in
+  adopt-plan)
+    [[ $# == 3 ]]
+    check_bundle
+    python="/var/mnt/nixstore/$(sed -n '1p' "$tools/python-path" | sed 's#^/nix/store/##')"
+    [[ "$python" == /var/mnt/nixstore/*/bin/python3 && -x "$python" ]] || {
+      echo 'AGNI_PROBOT_ADOPTION_ASSESSMENT=blocked reason=python-store-runtime-unavailable' >&2
+      exit 1
+    }
+    "$python" "$tools/probot-adoption.py" --scope "$scope" --home "$HOME" --bundle "$bundle_store"
+    ;;
   verify)
     [[ $# == 3 ]]
     check_bundle
@@ -96,5 +106,5 @@ case "$action" in
     echo 'AGNI_PROBOT_GUEST_ACTIVATION=blocked reason=real-github-app-binding-and-live-ingress-not-qualified' >&2
     exit 1
     ;;
-  *) echo 'Usage: verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
+  *) echo 'Usage: adopt-plan|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
 esac
