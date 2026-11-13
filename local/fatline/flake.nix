@@ -178,6 +178,7 @@
             cp ${./startup-profile/render.py} "$out/render.py"
             cp ${./startup-profile/runtime.sh} "$out/runtime.sh"
             cp ${./startup-profile/probot-adoption.py} "$out/probot-adoption.py"
+            cp ${./startup-profile/probot-adoption-review.py} "$out/probot-adoption-review.py"
             cp ${./coreos-services/probot-credentials.py} "$out/probot-credentials.py"
             cp ${./scripts/render-users-acl.py} "$out/render-users-acl.py"
             printf '%s\n' "${pkgs.python3}/bin/python3" > "$out/python-path"
