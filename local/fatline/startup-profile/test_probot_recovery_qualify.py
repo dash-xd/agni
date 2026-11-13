@@ -51,6 +51,39 @@ class RecoveryTests(unittest.TestCase):
             self.assertEqual((destination / "quadlets" / (fixtures.fixtures.SCOPE + "-redis.container")).read_bytes(),
                              baseline[fixtures.fixtures.SCOPE + "-redis.container"])
 
+    def test_checksum_pinned_legacy_graph_without_consolidated_edges(self):
+        with tempfile.TemporaryDirectory() as directory:
+            values = self.setup(Path(directory))
+            role = "nginx"
+            name = fixtures.fixtures.SCOPE + "-" + role + ".container"
+            legacy = "[Unit]\\nDescription=Legacy Nginx\\n[Container]\\nExec=nginx\\n"
+            import hashlib
+            import json
+            plan_file = values[4] / "plan.json"
+            plan = json.loads(plan_file.read_text())
+            saved = values[4] / "rollback/quadlets" / name
+            saved.write_text(legacy)
+            plan["rollback_checksums"]["quadlets"][name] = hashlib.sha256(saved.read_bytes()).hexdigest()
+            plan_file.write_text(json.dumps(plan))
+            result = recovery.recover(values[4], Path(directory) / "restore", values[5])
+            self.assertEqual(result["roles"], 4)
+
+    def test_recovered_probot_dependency_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            values = self.setup(Path(directory))
+            name = fixtures.fixtures.SCOPE + "-redis.container"
+            saved = values[4] / "rollback/quadlets" / name
+            saved.write_text("[Unit]\\nRequires=" + fixtures.fixtures.SCOPE +
+                             "-probot.service\\n[Container]\\nExec=redis\\n")
+            import hashlib
+            import json
+            plan_file = values[4] / "plan.json"
+            plan = json.loads(plan_file.read_text())
+            plan["rollback_checksums"]["quadlets"][name] = hashlib.sha256(saved.read_bytes()).hexdigest()
+            plan_file.write_text(json.dumps(plan))
+            with self.assertRaisesRegex(ValueError, "references staged Probot"):
+                recovery.recover(values[4], Path(directory) / "restore", values[5])
+
     def test_tampered_snapshot_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             values = self.setup(Path(directory))
