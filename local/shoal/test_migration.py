@@ -21,7 +21,7 @@ class MigrationTests(unittest.TestCase):
             self.assertIn("never-default=true", profile)
             self.assertIn("method=disabled", profile)
             self.assertNotIn("gateway=", profile)
-            self.assertNotIn("dns=", profile)
+            self.assertFalse(any(line.startswith("dns=") for line in profile.splitlines()))
 
     def test_duplicate_manifest_keys_block(self):
         with tempfile.TemporaryDirectory() as tmp:
