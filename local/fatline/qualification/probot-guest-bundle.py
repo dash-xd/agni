@@ -14,7 +14,7 @@ def assemble(artifacts_path, sources_path, policy_path, plan_path, output):
     sources = json.loads(sources_path.read_text())
     policy = json.loads(policy_path.read_text())
     plan = json.loads(plan_path.read_text())
-    if artifacts.get("schema") != sources.get("schema") != 1:
+    if artifacts.get("schema") != 1 or sources.get("schema") != 1:
         raise ValueError("Unsupported source schema")
     if sources.get("schema") != 1 or sources.get("scenario") != "probot-webhook":
         raise ValueError("Unexpected source selection")
