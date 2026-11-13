@@ -3,7 +3,7 @@ set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/output.sh"
 
 # Host-side application workflow. nix.xd remains a generic Nix/SSH transport.
-operation=${1:?Choose assess, verify, review or migrate-stage}
+operation=${1:?Choose assess, verify, review, migrate-stage or migrate-verify}
 deployment=${DEPLOYMENT:-vm1}
 nix_xd=${NIX_XD_DIR:-}
 provider=${PROVIDER:-podman}
@@ -42,10 +42,11 @@ xd_make() {
     PROVIDER="$provider" SCOPE="$owner_scope"
 }
 guest() {
-  local mode="$1" bundle="$2" assessment="${3:-}" args
+  local mode="$1" bundle="${2:-}" assessment="${3:-}" args
   args="$(python3 - "$mode" "$profile_scope" "$bundle" "$assessment" <<'PY'
 import json,sys
-items=sys.argv[1:4]
+items=sys.argv[1:3]
+if sys.argv[3]: items.append(sys.argv[3])
 if sys.argv[4]: items.append(sys.argv[4])
 print(json.dumps(items,separators=(',',':')))
 PY
@@ -61,10 +62,18 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
+
+if [[ "$operation" == migrate-verify ]]; then
+  run_step "$log_dir/migrate-verify.log" guest migrate-verify
+  grep -Fq 'AGNI_PROBOT_QUADLET_GENERATOR=passed roles=5 ' "$log_dir/migrate-verify.log" || fail quadlet-generation-not-qualified
+  grep -Fq 'AGNI_PROBOT_MIGRATION_VERIFY=passed roles=5 ' "$log_dir/migrate-verify.log" || fail migration-verification-not-qualified
+  echo "AGNI_DEPLOYMENT=passed deployment=$deployment operation=migrate-verify activation=blocked"
+  exit 0
+fi
 
 run_step "$log_dir/bundle.log" xd_make qualify QUALIFY_APP=1 FLAKE="$flake" \
   TARGET='#qualify-integration' ARGS='--scenario probot-webhook --phase guest-bundle'
