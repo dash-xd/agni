@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-action=${1:?Select adopt-plan, adopt-review, adopt-stage, migrate-verify, activation-plan, activation-check, migrate-activate, verify, stage, status or activate}
+action=${1:?Select adopt-plan, adopt-review, adopt-stage, migrate-verify, activation-plan, activation-check, recovery-qualify, migrate-activate, verify, stage, status or activate}
 scope=${2:?Select service scope}
 bundle_store=${3:-}
 [[ "$scope" == fatline-arm-vm1 ]] || exit 2
@@ -322,6 +322,68 @@ case "$action" in
       --redis-invocation "${before[0]}" --nginx-invocation "${before[1]}" \
       --logma-invocation "${before[2]}" --skymill-invocation "${before[3]}"
     ;;
+  recovery-qualify)
+    [[ $# == 2 ]]
+    bash "$0" activation-check "$scope"
+    shopt -s nullglob
+    snapshots=("$apps/activation-plans/"*)
+    staged=("$apps/probot-migrations/"*)
+    shopt -u nullglob
+    [[ ${#snapshots[@]} == 1 && ${#staged[@]} == 1 ]] || {
+      echo 'AGNI_RECOVERY=blocked reason=ambiguous-generation' >&2
+      exit 1
+    }
+    plan="${snapshots[0]}"
+    target="${staged[0]}"
+    [[ "$plan" == "$apps/activation-plans/${target##*/}" && ! -L "$plan" ]] || exit 1
+    basename="${target##*/}"
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    old_invocations=()
+    for role in redis nginx logma skymill; do
+      systemctl --user is-active --quiet "$scope-$role.service" || exit 1
+      old_invocations+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    tmp="$(mktemp -d)"
+    chmod 700 "$tmp"
+    trap 'rm -rf -- "$tmp"' EXIT
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$plan,dst=/run/plan,ro" \
+      --mount "type=bind,src=$tmp,dst=/run/output,rw" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-recovery-qualify.py" \
+      --plan-dir /run/plan --output /run/output/restored --generation "$basename"
+    generator=/usr/lib/systemd/system-generators/podman-system-generator
+    [[ -x "$generator" ]] || exit 1
+    recovered="$tmp/restored/quadlets"
+    generated="$tmp/quadlet-dryrun.log"
+    QUADLET_UNIT_DIRS="$recovered" "$generator" --user --dryrun > "$generated"
+    for role in redis nginx logma skymill; do
+      grep -Fq "$scope-$role.service" "$generated" || {
+        echo "AGNI_RECOVERY=blocked reason=missing-recovered-service role=$role" >&2
+        exit 1
+      }
+    done
+    if grep -Fq "$scope-probot.service" "$generated"; then
+      echo 'AGNI_RECOVERY=blocked reason=unexpected-probot-service' >&2
+      exit 1
+    fi
+    echo 'AGNI_RECOVERY_QUADLET=passed roles=4 dryrun=true installed=unchanged'
+    new_invocations=()
+    for role in redis nginx logma skymill; do
+      systemctl --user is-active --quiet "$scope-$role.service" || exit 1
+      new_invocations+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    [[ "${old_invocations[*]}" == "${new_invocations[*]}" ]] || {
+      echo 'AGNI_RECOVERY=blocked reason=live-service-invocation-changed' >&2
+      exit 1
+    }
+    echo 'AGNI_RECOVERY_QUALIFICATION=passed restore=isolated roles=4 activation=blocked redis_restart=none root_retention=unverified'
+    ;;
   migrate-activate)
     echo 'AGNI_ACTIVATION=blocked reason=readiness-rollback-and-data-loss-authorization-not-yet-qualified' >&2
     exit 1
@@ -371,5 +433,5 @@ case "$action" in
     echo 'AGNI_PROBOT_GUEST_ACTIVATION=blocked reason=real-github-app-binding-and-live-ingress-not-qualified' >&2
     exit 1
     ;;
-  *) echo 'Usage: adopt-plan|adopt-review|adopt-stage|migrate-verify|activation-plan|activation-check|migrate-activate|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
+  *) echo 'Usage: adopt-plan|adopt-review|adopt-stage|migrate-verify|activation-plan|activation-check|recovery-qualify|migrate-activate|verify|stage|status|activate SCOPE [BUNDLE_STORE_PATH]' >&2;exit 2 ;;
 esac
