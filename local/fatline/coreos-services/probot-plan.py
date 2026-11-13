@@ -151,7 +151,7 @@ def main():
     else:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         tmp = args.output.with_suffix(args.output.suffix + ".tmp")
-        tmp.write_text(json.dumps(candidate, sort_keys=True, indent=2) + "\\n")
+        tmp.write_text(json.dumps(candidate, sort_keys=True, indent=2) + "\n")
         os.chmod(tmp, 0o600)
         os.replace(tmp, args.output)
         selected = args.output
