@@ -486,10 +486,17 @@ async function main() {
         assert.deepEqual(applied, {
           status: 'reconciled', decisionId: appliedDecision, settlement: 'acked',
         });
-        assert.equal((await store.getDelivery(guid)).executionStatus, 'succeeded');
-        assert.equal((await store.getDelivery(guid)).outcomeStatus, 'acked');
+        const recordedApplied = await store.getDelivery(guid);
+        assert.equal(recordedApplied.executionStatus, 'succeeded');
+        assert.equal(recordedApplied.outcomeStatus, 'acked');
+        assert.equal(recordedApplied.reconciliationId, appliedDecision);
+        assert.equal(recordedApplied.reconciliationEvidenceRef, 'local:effect:' + guid);
         assert.equal((await status()).Pending.Count, 0);
         assert.equal((await reconcileDelivery(appliedArgs)).status, 'reconciled');
+        const conflict = await reconcileDelivery({
+          ...appliedArgs, decisionId: 'conflict-' + guid,
+        });
+        assert.equal(conflict.status, 'blocked');
         assert.equal((await status()).Pending.Count, 0);
         console.log('AGNI_RECONCILE_SERVICE_APPLIED=passed cas=atomic acked=true replay=noop');
 
