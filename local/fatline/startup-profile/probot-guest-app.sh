@@ -445,12 +445,12 @@ case "$action" in
     [[ $# == 3 || $# == 4 ]]
     worker_gate="$3"
     reconcile_source="${4:-}"
-    [[ "$worker_gate" == bootstrap || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == memory || "$worker_gate" == fence || "$worker_gate" == effect || "$worker_gate" == reconcile || "$worker_gate" == reconcile-service || "$worker_gate" == processor-subscriber || "$worker_gate" == full ]] || exit 2
+    [[ "$worker_gate" == bootstrap || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == memory || "$worker_gate" == fence || "$worker_gate" == effect || "$worker_gate" == reconcile || "$worker_gate" == reconcile-service || "$worker_gate" == processor-subscriber || "$worker_gate" == processor-independent || "$worker_gate" == full ]] || exit 2
     if [[ "$worker_gate" == reconcile-service ]]; then
       [[ "$reconcile_source" =~ ^/nix/store/[a-z0-9]{32}-probot-runtime20261114$ ]] || exit 2
       source_guest="/var/mnt/nixstore/${reconcile_source#/nix/store/}"
       [[ -r "$source_guest/src/delivery-reconciliation.js" && -r "$source_guest/src/store.js" ]] || exit 1
-    elif [[ "$worker_gate" == processor-subscriber ]]; then
+    elif [[ "$worker_gate" == processor-subscriber || "$worker_gate" == processor-independent ]]; then
       [[ "$reconcile_source" =~ ^/nix/store/[a-z0-9]{32}-probot-processor20261114$ ]] || exit 2
       source_guest="/var/mnt/nixstore/${reconcile_source#/nix/store/}"
       [[ -r "$source_guest/src/processor.js" && -r "$source_guest/src/logma-subscriber.js" ]] || exit 1
