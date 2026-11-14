@@ -522,7 +522,7 @@
             type = "app";
             program = "${pkgs.writeShellScript "agni-declarative-processors-contract" ''
               set -euo pipefail
-              ${pkgs.python3}/bin/python3 ${./qualification/test-render-subscription-units.py}
+              ${pkgs.python3}/bin/python3 ${./qualification}/test-render-subscription-units.py
               echo "AGNI_DECLARATIVE_PROCESSORS_CONTRACT=passed roles=4 subscriptions=2 unit_format=quadlet activation=blocked worker=disabled"
             ''}";
           };
