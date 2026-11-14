@@ -1,0 +1,303 @@
+# Shoal: one Farcaster, one World 1
+
+Agni owns the logical plan in `plan.json`. The physical Farcaster remains
+the already-qualified Starwisp VM. This stage adds **one** independently
+bootable World 1 with its own QCOW2 overlay, Ignition, boot ID, hostname
+and SSH host identity. Both use the same host-owned Nix store through
+read-only VirtIO 9P; they do **not** share a writable guest disk.
+
+The generic `nix.xd` Makefile only stages committed sources and invokes
+Agni host actions. World 1 runs in the existing `coreos-arm64` Podman
+Machine, without restarting or rewriting Starwisp.
+
+## Prepare
+
+From `~/workspace/nix.xd20261113.0`, fast-forward the Agni checkout
+and stage its new exact revision:
+
+```sh
+git -C ../agni20261113.0 pull --ff-only
+AGNI_REV="$(git -C ../agni20261113.0 rev-parse HEAD)"
+make stage PROVIDER=podman MACHINE=coreos-arm64 CHECKOUT=agni20261113.0
+```
+
+The existing Starwisp artifact state must contain the qualified
+`build.txt` and `base.qcow2` at
+`~/.local/state/nix-xd/coreos/starwisp/`. No image rebuild or disk copy
+is needed: World 1 uses its **own** QCOW2 overlay referencing that base.
+
+## First-boot lifecycle
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=world1-ignition
+
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=world1-preflight
+
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=world1-start
+```
+
+`world1-ignition` selects the dedicated
+`#ignitionShoalWorld1_9p` Nix output. The user `wisp` is authorized
+with `~/.ssh/starwisp-test.pub` by default, or the explicit
+`SHOAL_SSH_PUBLIC_KEY=/absolute/path/to/key.pub` override.
+This is only an SSH *client authorization* key. The guest generates its
+own SSH **server host key** on first boot.
+
+`world1-start` is a managed, idempotent start: a subsequent run
+checks the recorded identity and existing overlay instead of creating
+a new VM. It does not restart Farcaster. It does not activate Logmash.
+
+## SSH host-key trust and binding
+
+Once the VM's SSH server is reachable:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=hostkey-plan
+```
+
+This shows the World 1 ED25519 host-key SHA256 fingerprint, but does **not**
+automatically trust it. Compare it against independent guest-console
+or other trusted out-of-band evidence where available. SSH keyscan by
+itself is **TOFU**, not cryptographic VM attestation.
+
+Then explicitly approve the displayed fingerprint (replace the
+placeholder, which is not a real fingerprint):
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=hostkey-enroll \
+  SHOAL_WORLD1_HOSTKEY_CONFIRM=SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT
+```
+
+Enrollment requires a matching managed World container ID, disallows
+reuse of Farcaster's host key, and writes
+`~/.local/state/nix-xd/coreos/shoal-world1/known_hosts`
+without overwriting a conflicting entry.
+
+With that pin established, the existing Agni actions check **both**
+physical guests and their independent boot IDs:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=bind SHOAL_STAGE=world1
+
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=storage SHOAL_STAGE=world1
+```
+
+A passing World storage gate proves two bound guests, read-only 9P
+and two disposable rootless readers **per guest**. It does not prove
+network connectivity, guest-local writable store independence, service
+placement, Probot or Logmash. Those require subsequent qualifications.
+
+## Local regression tests
+
+```sh
+python3 ../agni20261113.0/local/shoal/test_binding.py
+python3 ../agni20261113.0/local/shoal/test_storage.py
+python3 ../agni20261113.0/local/shoal/test_world1.py
+```
+
+For a damaged or failed *World 1 only*, use Agni's explicit VM
+`reset-failed` action with `COREOS_PROFILE=shoal-world1` and
+`COREOS_CONTAINER_NAME=coreos-shoal-world1`; do not reset Starwisp.
+The guest overlay and artifacts must be reconciled before recreation.
+
+
+## Inter-VM network candidate (preflight only)
+
+The declared `networkCandidate` is a **proposal**, not a deployed
+network. The running VMs each use a separate QEMU user-mode NAT backend.
+Neither existing 127.0.0.1 SSH forwarding port provides VM-to-VM routing.
+
+The proposed transport is a QEMU socket pair over a dedicated internal
+Podman network with static guest transit addresses. Guest default
+routes must not use the transit NIC, and the existing QEMU user backend
+must be hardened with `restrict=on` while preserving its explicit
+host-to-guest SSH forwarding. IPv4 and IPv6 guest egress, management
+reachability, inter-VM service ACLs, and Squid policy require separate
+runtime tests. No connectivity or egress guarantee is made by the plan.
+
+First, run the **read-only** Agni network prerequisite check after staging
+the updated source:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-preflight
+```
+
+This validates the exact Agni revision, current two-VM physical binding,
+original QEMU user-mode network arguments, rootless management tools and
+guest network tools, and records (but does not require) noninteractive sudo.
+Guest network mutation must be provisioned declaratively in CoreOS rather\nthan granting the login account unrestricted administrative access.
+Its receipt explicitly leaves
+`network`, `egress` and `services` as **not assessed**.
+
+A future explicit migration must safely stop/recreate QEMU containers
+against the **existing** guest overlays, and requalify new boot IDs and
+storage. Do not delete existing identity/storage receipts: they describe
+the previously qualified physical configuration. Do not reuse them as
+evidence for the new QEMU network topology.
+
+
+## Network migration preparation (unapplied)
+
+After network preflight passes, run:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-migration-prepare
+```
+
+The read-only action validates exact running container/manifest IDs,
+boot identities, original QEMU user-mode networks and existing QCOW2 overlay
+paths. It inspects guest IPv4 addresses/routes through pinned SSH and creates
+candidate MAC-matched NetworkManager keyfiles and QEMU socket arguments
+under `~/.local/state/agni/shoal/network-migration/`.
+
+It does **not** install the keyfiles, copy live QCOW2 disks, restart a VM,
+or activate networking. Every result explicitly reports
+`AGNI_SHOAL_MIGRATION_ACTIVATE=blocked` and leaves all network/egress
+gates as not assessed.
+
+The outstanding cutover requirements are a narrowly scoped, qualified
+root-owned network configuration installer for already-initialized CoreOS,
+consistent stopped-guest backups of both existing overlays, management SSH
+survivability testing, and fail-closed IPv4/IPv6/ Squid policy qualification.
+Historical binding and storage receipts are retained but cannot attest
+the post-restart physical topology.
+
+## Graceful shutdown and offline backup capability gate
+
+Before adding disruptive network cutover, inspect both guests using:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-backup-preflight
+```
+
+This action reads both managed overlay files, recorded QEMU image digests
+and live physical bindings; uses non-mutating logind `CanPowerOff` to
+discover whether `wisp` may shut each guest down cleanly; and checks
+conservative local disk capacity for later stopped-guest copies. It never
+shuts down a VM or copies a live QCOW2. Results include
+`shutdown_authorization=yes|challenge|no|na|unknown`.
+Only `yes` is sufficient to plan an unattended clean shutdown.
+A successful preflight is not an offline backup and does not qualify
+the eventual QEMU link, guest network config or egress. Backing base
+images must remain available alongside any saved overlay.
+
+## Offline backup capture (requires already stopped guests)
+
+`ACTION=network-backup-capture` is implemented as a separately gated
+copy-and-verify operation. It refuses to copy either guest's QCOW2 while
+its QEMU container is running. It requires the managed container IDs
+and guest serial shutdown tail markers; it verifies base image digests
+and creates immutable, SHA256-checked copies of both overlays, manifests,\nknown-host files, Ignition records, and their common base image.\nThe copied overlays retain their original QEMU backing-file reference;\nthese archives are **not** bootable or self-contained until a separate\nrestore action validates and rebases their backing chain.
+
+**Do not invoke capture while Farcaster or World 1 is running.**
+This action does not shut down guests, and `podman stop` is not a
+substitute for clean systemd shutdown. The current VMs have
+`CanPowerOff=challenge` and QEMU `-monitor none`, so there is no
+qualified unattended clean-shutdown request path yet. A serial marker
+alone is a conservative indicator, not a full attestation of guest
+filesystem consistency. Backups remain qualified only as checked
+offline copies, with that limitation recorded in the receipt.
+
+Once a genuinely graceful, independently observed shutdown is
+available, execute from the staged Agni revision:
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-backup-capture
+```
+
+Never erase the original overlays or receipt directory as part of this
+operation. Restore and network activation are separate gates.
+
+## Future opt-in QMP shutdown control
+
+The generic Agni QEMU runner now supports `COREOS_QMP_HOST_PORT` at **new
+launch time only**. It adds a loopback-only host publication of QEMU's
+control channel, and records the selected QMP port in the managed VM manifest.
+An existing launch must never silently acquire a new control endpoint;
+managed start compares the explicit selection with the manifest.
+
+For future Agni-managed Shoal launches the reserved host ports are
+`42222` (Farcaster) and `42223` (World 1). Agni's
+`ACTION=network-powerdown-qmp` requires `SHOAL_POWERDOWN_STAGE` and a
+matching `SHOAL_CONFIRM_POWERDOWN` before inspecting the running managed
+container, its manifest and the loopback-published QMP port. It sends a
+QMP `system_powerdown` ACPI request and waits for normal QEMU exit.
+It never sends `quit`, calls `podman stop`, or forces shutdown.
+
+**The existing two qualified VMs were launched without QMP.** They cannot
+use this action. Do not execute it against those guests. Their clean-shutdown
+transition still requires an explicit guest-authorized shutdown channel or
+a separately approved one-time non-graceful sandbox migration. Unrestricted
+`sudo` and crash-consistent copying must not be misrepresented as graceful.
+The QMP endpoint must remain exposed only on the host loopback; production
+deployments should prefer an authenticated or Unix-domain control channel.
+
+## Offline archive verification
+
+`ACTION=network-backup-verify` takes an explicit `SHOAL_BACKUP_PATH`
+under the managed Shoal backup directory. It verifies the original
+content-addressed receipt, both overlay SHA256 values and sizes, the
+shared base SHA256, and runner/container provenance. It does not boot,
+rewrite, stop, or restore either VM. A successful archive check is
+**not** a successful rollback: the QCOW2 backing path must still be
+reconciled and the recovered guests booted in an isolated test.
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=network-backup-verify \
+  SHOAL_BACKUP_PATH=/absolute/path/to/existing/archive
+```
+
+No archive exists yet from the current live guests. Do not invoke this
+action without a real backup path and do not interrupt those guests.
+
+## Minimal World-to-Farcaster service relay (existing live guests)
+
+`ACTION=service-relay-probe` uses **temporary pinned SSH forwarding**
+through the local operator, so **neither CoreOS guest is restarted or
+reconfigured**. It binds one host loopback relay to the selected
+Farcaster guest-local TCP port, forwards World guest loopback port 18080
+back to that relay, and runs a real HTTP request *from World*. All
+tunnels are terminated afterward. No application is installed.
+
+The selected Farcaster service **must already be listening**; port 80
+and `/healthz` are defaults only, not proof those services exist.
+Override `SHOAL_FARCASTER_SERVICE_PORT` and `SHOAL_SERVICE_PATH` as
+needed. A passing result proves only application reachability via
+SSH transport. It does **not** prove direct VM networking, Squid policy,
+fail-closed egress, Fatline startup, or tenant isolation.
+
+```sh
+make project-host-run PROVIDER=podman MACHINE=coreos-arm64 \
+  PROJECT=agni20261113.0 PROJECT_REV="$AGNI_REV" \
+  APPLICATION=shoal ACTION=service-relay-probe
+```
+
+Because the current VMs were launched with independent QEMU user-mode
+NAT, this temporary relay is intentionally used instead of changing
+their NIC configuration. Once the actual Fatline HTTP endpoint is
+qualified, replace the relay with a real provider-independent guest link
+only if the integration test requires that.

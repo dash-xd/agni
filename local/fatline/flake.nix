@@ -191,6 +191,12 @@
             cp ${./startup-profile/probot-activation-plan.py} "$out/probot-activation-plan.py"
             cp ${./startup-profile/probot-activation-check.py} "$out/probot-activation-check.py"
             cp ${./startup-profile/probot-recovery-qualify.py} "$out/probot-recovery-qualify.py"
+            cp ${./startup-profile/probot-sandbox-http-recover.py} "$out/probot-sandbox-http-recover.py"
+            cp ${./startup-profile/probot-runtime-qualify.py} "$out/probot-runtime-qualify.py"
+            cp ${./startup-profile/probot-integration-qualify.py} "$out/probot-integration-qualify.py"
+            cp ${./startup-profile/probot-worker-candidate.js} "$out/probot-worker-candidate.js"
+            cp ${./startup-profile/probot-worker-live.js} "$out/probot-worker-live.js"
+            cp ${./startup-profile/probot-network-diagnose.py} "$out/probot-network-diagnose.py"
             cp ${self.packages.${system}.coreos-startup-profile}/metadata.json "$out/metadata.json"
             cat > "$out/migration-paths.json" <<'JSON'
             ${builtins.toJSON { bundle = "${self.packages.${system}.coreos-startup-profile}"; archive = "${self.packages.${system}.probot-rootfs-archive}"; }}

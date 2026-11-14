@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "name": "gcp-shoal",
+  "qualification": {
+    "mode": "existing-infrastructure-static-preflight",
+    "apply": false,
+    "roles": [
+      {
+        "role": "farcaster",
+        "terraformRoot": "terraform/leader",
+        "instanceCount": 1,
+        "publicIngress": true,
+        "egressProxy": "squid"
+      },
+      {
+        "role": "world",
+        "terraformRoot": "terraform",
+        "instanceCount": 1,
+        "memberSlots": [
+          0
+        ],
+        "publicIngress": false,
+        "egressVia": "farcaster-squid"
+      }
+    ]
+  },
+  "productionTarget": {
+    "farcasterCount": 1,
+    "worldCount": 7
+  },
+  "sourcePolicy": "exact-git-revision",
+  "executionPolicy": "runner-independent",
+  "requirements": {
+    "spotScheduling": "verify-selected-instance-template",
+    "subnetOwnership": "reconcile-existing-leader-and-member-subnets",
+    "ipv4Egress": "runtime-qualification-required",
+    "ipv6Egress": "runtime-qualification-required",
+    "privateConnectivity": "runtime-qualification-required",
+    "fatline": "runtime-qualification-required",
+    "tenantIsolation": "runtime-qualification-required"
+  }
+}

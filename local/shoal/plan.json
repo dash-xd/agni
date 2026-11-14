@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "name": "shoal-one-world",
+  "sourceRevisionPolicy": "exact-git-commit",
+  "placements": {
+    "farcaster": {
+      "instance": "starwisp",
+      "container": "coreos-starwisp",
+      "sshHost": "127.0.0.1",
+      "sshPort": 2222,
+      "sshUser": "wisp"
+    },
+    "world1": {
+      "instance": "shoal-world1",
+      "container": "coreos-shoal-world1",
+      "sshHost": "127.0.0.1",
+      "sshPort": 2223,
+      "sshUser": "wisp"
+    }
+  },
+  "sharedStore": {
+    "owner": "nix-xd-arm",
+    "mode": "read-only",
+    "guestProtocol": "9p"
+  },
+  "networkCandidate": {
+    "transport": "qemu-socket-over-private-podman-network",
+    "podmanNetwork": "shoal-transport",
+    "podmanInternal": true,
+    "egress": "deny-by-default",
+    "transitCIDR": "172.30.255.0/30",
+    "farcasterIPv4": "172.30.255.1",
+    "world1IPv4": "172.30.255.2",
+    "qemuSocketPort": 25001,
+    "requiresControlledRecreation": true,
+    "applied": false
+  },
+  "application": {
+    "farcaster": ["redis", "nginx", "logma", "skymill", "squid"],
+    "world1": ["logmash"]
+  },
+  "gates": {
+    "binding": "required",
+    "storage": "unqualified",
+    "network": "unqualified",
+    "services": "unqualified",
+    "endToEnd": "unqualified"
+  }
+}

@@ -262,3 +262,306 @@ Farcaster may later acquire the owner-side store retention receipt
 and invoke these same guest checks via a GCP machine/guest adapter;
 nothing here assumes a Mac host or claims to control nested CoreOS
 instances through the GCE API.
+
+## Local disposable VM1 activation (explicitly not production)
+
+The five-role candidate can be installed using the existing Agni startup-profile
+installer after the immutable migration, activation-plan, and baseline gates have
+passed. The sandbox action invokes the existing isolated recovery qualification
+before the cutover; it does **not** duplicate the installer, reset the CoreOS VM,
+or touch World 1. Only VM1's application services are stopped/restarted.
+
+The operator must explicitly acknowledge that Redis is RAM-only and loses its
+current data on restart:
+
+```sh
+make -C local/fatline deployment-migrate-activation-plan DEPLOYMENT=vm1
+make -C local/fatline deployment-migrate-activate-sandbox DEPLOYMENT=vm1 \\
+  REDIS_DATA_LOSS_ACK=DISCARD-VM1-REDIS-MEMORY
+```
+
+The sandbox path verifies the plan's source/boot/invocation fingerprints,
+private snapshot and original store visibility, performs the isolated legacy
+recovery gate, then calls the already-existing `runtime.sh install-probot`
+with the selected rendered generation. It checks user-systemd/Podman status,
+read-only store/credential mounts, Redis bootstrap revocation and records the
+active generation. If installation fails, the target is **not** reported as
+qualified; automatic rollback is not implemented and must not be assumed.
+
+This is a rootless guest application operation. Neither Redis's bootstrap ACL
+principal nor a Linux root user is an ongoing application identity. The Nix
+store owner builds and retains closures; the CoreOS `wisp` systemd user manages
+rootless Podman containers; each service authenticates to Redis with its own
+ACL principal. Redis is configured with one logical database (DB 0); separation
+comes from ACL commands, key prefixes, channel patterns and private credentials,
+not Redis DB numbers. Prajapati's tenant registry is a caller authorization
+contract, not a substitute for Redis ACL isolation.
+
+The Probot worker remains disabled in the selected manifest and no GitHub App
+installation/ingress authority is installed by this action. A passing sandbox
+activation establishes local startup and bootstrap revocation only; webhook
+settlement, cross-tenant adversarial ACL denial, and World 1 integration remain
+separate gates. Production `deployment-migrate-activate` remains blocked.
+
+## Recover a partially activated disposable Skymill HTTP credential
+
+If a sandbox cutover installed the five-role profile but timed out because
+Skymill rejected a newline-terminated bearer credential, use
+`make -C local/fatline deployment-recover-sandbox-http DEPLOYMENT=vm1`.
+This is not a migration restage or a Redis restart. The operation requires
+exactly one staged generation and an installed manifest matching it, checks
+that Skymill and Probot share the same private 64-hex token, atomically removes
+only its trailing LF in the two installed credential files, restarts Skymill
+and Probot, checks stabilized five-role status and Redis bootstrap revocation.
+It does not alter the staged private generation, redis credentials, ACLs,
+VM topology, or activate GitHub ingress. A failure remains unqualified and
+is reported without claiming recovery or rollback. New candidate generations
+write these bearer token files without a trailing newline.
+
+The repair helper runs through rootless Podman with the guest 9P store
+mounted at `/nix/store` inside its isolated container. Running the
+Nix-pinned interpreter directly on CoreOS is incorrect: the host's store
+mount is `/var/mnt/nixstore`. This update does not change the selected
+application generation or restart Redis.
+
+## Live, non-restarting VM1 runtime gate
+
+Run `make -C local/fatline deployment-qualify-runtime DEPLOYMENT=vm1`
+from the version-pinned Nix-Alpine owner workflow. This target checks the
+already activated generation and all five user-systemd service invocations,
+validates legacy Logma/Skymill ACL denials against live Redis with the pinned
+Go probe, tests Logma's strict HTTP readiness and Probot's local HTTP/router
+authentication, and exercises the **current** Skymill HTTP bearer API using
+an isolated synthetic message. It checks publish-once idempotency, opaque
+provider delivery IDs, NACK acceptance and ACK state cleanup. It does not
+assert a completed NACK retry/redelivery (the current Redis provider reclaims
+idle pending entries separately), a genuine GitHub App webhook, the disabled
+Probot worker, or every adversarial tenant boundary. It never restarts Redis,
+installs Quadlets or modifies credentials; the synthetic stream fixture and
+idempotency key are the intended ephemeral Redis changes. The Skymill gate
+fails closed if consumer group pending deliveries exist rather than ACKing
+unknown application messages.
+
+## Interactive macOS shell safety
+
+For interactive zsh, never paste `set -e`, `set -o errexit`,
+`exec <command>`, `source operations/guest-migration.sh`, or
+`source bin/nix-xd-log` as part of a copy/paste qualification recipe.
+Shell option changes made at the prompt persist into later commands;
+particularly, `set -e` may terminate the interactive shell when a
+subsequent command fails. Scripts may use strict mode **inside their own
+child Bash processes**, because those options cannot propagate to the
+parent zsh session.
+
+The intended operator invocation is one ordinary command, without a
+preceding shell-mode change:
+
+```sh
+cd ~/workspace/nix.xd20261113.0
+NIX_XD_LOG_DIR="$HOME/.local/nix.xd/logs" NIX_XD_MACHINE=coreos-arm64 \
+  bash bin/nix-xd-log nix-xd-arm fatline-qualify-runtime \
+  make -C ../agni20261113.0/local/fatline deployment-qualify-runtime \
+    DEPLOYMENT=vm1 NIX_XD_DIR="$PWD" PROVIDER=podman MACHINE=coreos-arm64
+```
+
+The command returns its exit code and a log path and **must not**
+replace the user's interactive shell. On a zsh session where an earlier
+pasted recipe enabled `errexit`, first run `unsetopt ERR_EXIT`
+(or `set +e`). This shell setting is unrelated to whether an
+Agni qualification succeeds. The message `[Process completed]`
+comes from the terminal session after its foreground process exits;
+if it also appears after a successful ordinary shell command, check
+the Terminal profile's shell startup command and any one-shot launcher.
+
+## Read-only runtime network diagnosis
+
+`deployment-diagnose-runtime-network` runs against the *already deployed*
+VM1 generation and reports systemd active states, container status and
+TCP/DNS results from an isolated rootless container on the actual Fatline
+network. It checks the pinned service endpoints: logma:8080,
+skymill:8081, probot:3000, and redis-proxy:6379. It does not authenticate,
+read secrets, restart units, or write Redis data. The target returns
+`AGNI_RUNTIME_NETWORK=observed changes=none` even if an endpoint is
+unreachable; inspect `AGNI_NETWORK_ENDPOINT` lines for the actual failure.
+
+Network diagnosis now also captures Logma's process and TCP listening
+sockets, plus a bounded allowlist of diagnostic startup messages. It never
+reads service environment values or credential files and does not change
+systemd or Podman state.
+
+The diagnostic probes both `logma:8080` (declared contract) and
+`logma:18081` (the unexpected observed listener) and fetches
+`/lifecycle/readyz` on each without authentication or mutation. A
+successful TCP connection alone does not establish Logma HTTP readiness.
+
+Network diagnosis now reports the current Logma process executable alongside the installed Quadlet Exec line. It
+uses only bounded, read-only Podman/process inspection and does not interpret
+an unrelated HTTP 401 response as lifecycle readiness.
+
+## Pinned Logma lifecycle HTTP contract
+
+The native Probot artifact build compiles Logma `cmd/api-lifecycle` (not
+`cmd/api`). Its default port is **18081** and the versioned lifecycle API
+lives under `/lifecycle/api/v0.0.1`. This revision has no strict readiness
+route. The runtime qualification tests the read-only authenticated
+`GET /lifecycle/api/v0.0.1/policies` endpoint using the existing private
+Logma API key, including unauthenticated denial. This establishes basic HTTP
+availability, **not** strict Redis/Functions readiness; a future dedicated
+readiness qualification must be sourced from Logma and version-pinned.
+
+## Probot VM1 integration gate
+
+`deployment-qualify-integration` qualifies the selected, already running
+five-role generation without installing or restarting units. A rootless
+store-backed Python tool authenticates to Redis as `probot_state` and
+`lifecycle_publish` using their mounted credentials, checks allowed scoped
+operations and NOPERM for foreign keys/channels/admin commands. It then
+publishes one synthetic Skymill delivery, NACKs it, verifies it stays pending
+and waits up to 100 seconds for the **pinned Redis provider's 60-second idle
+claim** to redeliver the same message with an increased attempt count. It
+ACKs only its own provider delivery ID, verifies no pending deliveries remain,
+and attempts cleanup on failure. It refuses to run if the shared consumer
+group already has pending deliveries. It confirms service invocation IDs did
+not change and Redis bootstrap credentials remain revoked.
+
+**This does not enable the Probot worker or qualify signed GitHub webhook
+ingress.** Those require separate selected generations and GHXD authority.
+The test intentionally appends an isolated synthetic message/idempotency record
+and publishes one scoped lifecycle notification in disposable VM1 Redis.
+
+## Isolated Probot worker candidate
+
+`deployment-qualify-worker-candidate` executes the pinned Probot source and
+Node executable from the installed immutable guest bundle. The candidate runs
+in a transient rootless Podman container with no external network, credentials,
+Redis mounts, or service unit changes. It runs the actual source's HTTP routing,
+webhook signature verification, delivery service, execution fencing, and worker
+loop against disposable in-memory Redis/Skymill adapters and a fixture handler.
+
+It rejects an invalid signed delivery; accepts a signed fixture; verifies
+duplicate webhook ingress and replay, one handler execution, the execution
+fence and ACK settlement, and clears fixture state. The transient container
+is removed after the run; all five VM1 service invocation IDs must match.
+
+This gate is **worker-code fixture qualification only**. It does not exercise
+a worker-enabled Quadlet, actual Redis/Skymill delivery through a worker,
+real Probot event handler behavior, or GitHub App credentials/ingress. Promotion
+is deliberately blocked pending a fully isolated, live backing-store candidate.
+
+## Live-backed isolated worker candidate
+
+`deployment-qualify-worker-live` starts three real pinned processes inside
+one transient rootless Podman container with `--network none`, a read-only Nix
+store and a private tmpfs. Its Redis instance uses a separate ACL file and
+independent credentials for the worker state and Skymill; its stream, consumer
+group, execution prefix, fixture App binding, and webhook secret are private.
+The instance does not share Redis, credentials, state, network, or systemd
+units with the running five-role VM1 composition.
+
+The gate exercises real signed HTTP ingestion, invalid-signature rejection,
+Skymill outage/restart before successful publication, unique delivery
+acceptance and duplicate detection, a worker-enabled process draining the
+real Skymill Redis stream, persisted success/ACK, worker restart and replay
+deduplication. The process supervisor stops all children and removes its
+tmpfs fixture; the guest command verifies original service invocation IDs
+and bootstrap revocation after the candidate exits.
+
+**This is still a synthetic, offline GitHub fixture**. It does not use
+live GitHub App credentials, change real webhook ingress, or activate the
+worker for the existing VM1 generation. Rollback proof is scoped to the
+transient candidate, not a production traffic switch.
+
+The isolated live candidate's `/tmp` tmpfs uses mode `1777` so its UID 1000
+process can create temporary state while the root filesystem remains read-only.
+
+The candidate supervisor now records unexpected child exit codes and safely
+observes node-redis socket errors; it does not print credential values.
+Such failures still fail the qualification and always trigger cleanup.
+
+The live worker candidate checks duplicate ingress after the first delivery
+has completed and been ACKed. This qualifies settled-delivery replay, not
+concurrent duplicate HTTP submissions while Probot loads its handler.
+
+The live worker gate starts the worker-enabled Probot candidate directly.
+The worker-disabled baseline was established by an earlier qualification and
+is not restarted solely as a prerequisite to this worker gate. Child shutdown
+now waits for process exit after SIGTERM/SIGKILL; a failure to exit blocks the
+qualification rather than racing the next HTTP instance.
+
+### Staged live worker qualification (source-contract revision)
+
+Agni owns four progressively stronger gates, each launching a fresh disposable
+container: `deployment-qualify-worker-bootstrap` (pinned Redis, Skymill, worker-enabled
+Probot HTTP), `deployment-qualify-worker-delivery` (adds signed ingress and durable
+ACK), `deployment-qualify-worker-recovery` (adds intentional subprocess interruption
+and replay), and `deployment-qualify-worker-live` (the aggregate qualification).
+Every stage repeats its prerequisite gates rather than trusting a stale prior
+result; no state from one run is reused. Each phase emits elapsed time and
+process readiness evidence. The active five-service VM1 generation must retain
+identical systemd invocation IDs. This makes failures stage-specific; a bootstrap
+failure cannot be reported as a duplicate or recovery failure.
+
+The VM1 baseline status, invocation-ID comparison, and bootstrap verification
+also run after candidate failure, not just after candidate success. Cleanup
+tries every remaining child and the fixture directory even if one stop fails.
+The candidate's node-redis client is destroyed locally rather than relying on
+an unbounded QUIT round-trip during teardown. Agni's Makefile now requires an
+explicit `NIX_XD_DIR` to avoid silently selecting a stale dated workspace.
+
+The guest bootstrap gate sources and verifies its activated `profile.env` before
+any candidate launch, so the rollback/invocation checks use initialized paths.
+Probot's pinned router module closure is loaded in a bounded child before HTTP
+startup, distinguishing module-store stalls from service initialization stalls.
+On HTTP readiness timeout, the candidate emits the Node process state and
+wait channel without publishing environment variables or application secrets.
+
+### VM-local Probot module mirror
+
+The live qualification copies the pinned Nix-store Probot package (including its
+locked npm closure) once into
+`~/.local/state/nix-xd/fatline/fatline-arm-vm1/qualification-cache/probot/<store-name>/`
+**inside CoreOS VM1**, under its existing application state tree. A source-path
+marker and presence checks prevent accidental reuse under a different pin.
+The candidate mounts this directory read-only at `/run/probot`; the host-shared
+`/nix/store` remains read-only and unchanged. The mirror is disposable and
+can be removed as part of the VM1 qualification-state cleanup. No mutable
+credential data is copied. This avoids repeated Node dependency metadata walks
+through the 9P mount, without changing the deployed five-role generation.
+
+## Tenant state and loss policy
+
+The base/free tier is **volatile**: Redis runs with RDB and AOF disabled, no
+mandatory SQLite, and Skymill's Redis Streams plus Pub/Sub disappear with Redis
+memory loss. HTTP 202 means acceptance into volatile infrastructure, *not*
+durable storage. Bounded tenant quotas, noeviction policy, explicit capacity
+errors and backpressure limit avoidable loss; they do not promise persistence.
+Publisher reconciliation (including GitHub) is provider-specific and cannot
+be assumed to recover every missing event.
+
+Tenant-selectable upgrades, independent of the base tier:
+
+- **Redis persistence:** Opt-in RDB/AOF with an explicit recovery and loss-window
+  contract, subsequently qualified against real Redis restarts.
+- **Projection/processor:** A Watermill consumer from a selected Skymill stream
+  (or best-effort Pub/Sub source) commits idempotent event-ID-keyed projections
+  to a tenant SQLite file or another sink. ACK *after* commit. Events lost in
+  volatile Redis before a processor commits cannot be recovered by this tier.
+- **Committed ingress:** An optional atomic durable inbox/outbox before an
+  accepted receipt, only for tenants requiring stronger ingestion guarantees.
+  This does not become the default path.
+
+Prefer one SQLite database and one logical writer per tenant, explicit migration
+and backup policy, tenant isolation, and quotas. DuckDB is optional for analytics,
+not a concurrent transactional inbox. Cross-tenant ATTACH queries are
+administrative, access-controlled and not assumed atomic across database files.
+
+### Execution-fence state qualification
+
+`deployment-qualify-worker-fence-state` starts a fresh isolated Redis,
+Skymill and Probot candidate, records a synthetic delivery in the pinned
+Probot RedisStore and exercises `acquired -> running -> ambiguous` across a
+Probot process restart. Reacquisition must be rejected as ambiguous. This
+qualifies the **state transition only**, not a physical crash during handler
+execution, an external side effect, exactly-once processing, or preservation
+across Redis data loss. Stronger crash-injection and business-effect gates
+remain separate, and the qualified VM1 generation is not activated or changed.

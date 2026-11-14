@@ -82,7 +82,7 @@ def generate(policy_path, prior_acl, prior_credentials, output, renderer):
             if len(value) < 32 or any(c.isspace() for c in value):
                 raise ValueError("Invalid credential material: " + role)
             file = directory / filename
-            file.write_text(value + "\n")
+            file.write_text(value if (role, filename) in (("skymill", "http-token"), ("probot", "skymill-token")) else value + "\n")
             file.chmod(0o600)
     policy_bytes = policy_path.read_bytes()
     (output / "policy.json").write_bytes(policy_bytes)

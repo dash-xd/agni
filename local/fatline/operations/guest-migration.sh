@@ -3,7 +3,7 @@ set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/output.sh"
 
 # Host-side application workflow. nix.xd remains a generic Nix/SSH transport.
-operation=${1:?Choose assess, verify, review, migrate-stage, migrate-verify, migrate-activation-plan, migrate-activation-check or migrate-recovery-qualify}
+operation=${1:?Choose assess, verify, review, migrate-stage, migrate-verify, migrate-activation-plan, migrate-activation-check or migrate-recovery-qualify or migrate-activate-sandbox}
 deployment=${DEPLOYMENT:-vm1}
 nix_xd=${NIX_XD_DIR:-}
 provider=${PROVIDER:-podman}
@@ -62,10 +62,67 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-fence-state ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
+
+if [[ "$operation" == diagnose-runtime-network ]]; then
+  guest diagnose-runtime-network
+  echo 'AGNI_DEPLOYMENT=observed deployment=vm1 operation=diagnose-runtime-network changes=none'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-fence-state ]]; then
+  worker_gate=full
+  [[ "$operation" != qualify-worker-bootstrap ]] || worker_gate=bootstrap
+  [[ "$operation" != qualify-worker-delivery ]] || worker_gate=delivery
+  [[ "$operation" != qualify-worker-recovery ]] || worker_gate=recovery
+  [[ "$operation" != qualify-worker-fence-state ]] || worker_gate=fence-state
+  run_step "$log_dir/worker-$worker_gate.log" guest qualify-worker-live "$worker_gate"
+  grep -Fxq "AGNI_WORKER_LIVE_GATE=passed gate=$worker_gate" "$log_dir/worker-$worker_gate.log" || fail worker-gate-not-qualified
+  grep -Fxq "AGNI_WORKER_LIVE_QUALIFICATION=passed gate=$worker_gate backing=real service_invocations=unchanged worker=isolated promotion=blocked" "$log_dir/worker-$worker_gate.log" || fail worker-live-not-qualified
+  echo "AGNI_DEPLOYMENT=passed deployment=vm1 operation=$operation gate=$worker_gate worker=isolated-real promotion=blocked"
+  exit 0
+fi
+
+if [[ "$operation" == qualify-worker-candidate ]]; then
+  run_step "$log_dir/worker-candidate.log" guest qualify-worker-candidate
+  grep -Fxq 'AGNI_WORKER_CANDIDATE_QUALIFICATION=passed services=unchanged worker=fixture-only promotion=blocked' "$log_dir/worker-candidate.log" || fail worker-candidate-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-worker-candidate worker=isolated-fixture promotion=blocked'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-integration ]]; then
+  run_step "$log_dir/integration.log" guest qualify-integration
+  grep -Fq 'AGNI_PROBOT_INTEGRATION=passed ' "$log_dir/integration.log" || fail probot-integration-not-passed
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-integration worker=disabled webhook=not-qualified'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-runtime ]]; then
+  run_step "$log_dir/runtime.log" guest qualify-runtime
+  grep -Fq 'AGNI_RUNTIME_QUALIFICATION=passed ' "$log_dir/runtime.log" || fail runtime-qualification-not-passed
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-runtime webhook=not-qualified'
+  exit 0
+fi
+
+if [[ "$operation" == recover-sandbox-http ]]; then
+  run_step "$log_dir/sandbox-http-recover.log" guest recover-sandbox-http
+  grep -Fq 'AGNI_SANDBOX_HTTP_RECOVERY=passed ' "$log_dir/sandbox-http-recover.log" || fail sandbox-http-recovery-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=recover-sandbox-http webhook=not-qualified'
+  exit 0
+fi
+
+if [[ "$operation" == migrate-activate-sandbox ]]; then
+  [[ "${REDIS_DATA_LOSS_ACK:-}" == DISCARD-VM1-REDIS-MEMORY ]] || fail explicit-ephemeral-redis-ack-required
+  run_step "$log_dir/recovery-qualify.log" guest recovery-qualify
+  grep -Fq 'AGNI_RECOVERY_QUALIFICATION=passed ' "$log_dir/recovery-qualify.log" || fail recovery-qualification-not-passed
+  run_step "$log_dir/activate-sandbox.log" guest migrate-activate-sandbox "$REDIS_DATA_LOSS_ACK"
+  grep -Fq 'AGNI_SANDBOX_ACTIVATION=passed ' "$log_dir/activate-sandbox.log" || fail sandbox-activation-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=migrate-activate-sandbox webhook=not-qualified'
+  exit 0
+fi
 
 if [[ "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify ]]; then
   guest_action=migrate-verify

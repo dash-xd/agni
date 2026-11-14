@@ -15,9 +15,21 @@ jobs:
           go-version-file: go.mod
       - name: Check new Go surface formatting
         run: gofmt -l main.go nativeexec | tee /dev/stderr | test -z "$(cat)"
+      - name: Shoal binding contract (offline)
+        run: |
+          python3 local/shoal/test_binding.py
+          python3 local/shoal/test_storage.py
+          python3 local/shoal/test_world1.py
+          bash -n local/vm/coreos-podman.sh local/shoal/host-actions/*.sh
+      - name: Shoal Python syntax and offline regression tests
+        run: |
+          python3 -m compileall -q local/shoal
+          python3 -m unittest discover -s local/shoal -p 'test_*.py'
+      - name: GCP Shoal selection contract (offline)
+        run: python3 -m unittest discover -s gcp/shoal -p 'test_*.py'
       - name: Vet
-        run: go vet ./...
+        run: go vet . ./nativeexec/... ./cmd/...
       - name: Build
-        run: go build ./...
+        run: go build . ./nativeexec/... ./cmd/...
       - name: Test
-        run: go test ./...
+        run: go test . ./nativeexec/... ./cmd/...

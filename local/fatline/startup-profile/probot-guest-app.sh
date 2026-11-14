@@ -389,6 +389,375 @@ case "$action" in
     }
     echo 'AGNI_RECOVERY_QUALIFICATION=passed restore=isolated roles=4 activation=blocked redis_restart=none root_retention=unverified'
     ;;
+  diagnose-runtime-network)
+    [[ $# == 2 ]]
+    [[ -s "$apps/profile/profile.env" && -s "$apps/activated-probot-generation" ]] || {
+      echo 'AGNI_RUNTIME_NETWORK=blocked reason=not-activated' >&2
+      exit 1
+    }
+    source "$apps/profile/profile.env"
+    [[ "$profile_roles" == 'redis nginx logma skymill probot' ]] || exit 1
+    for role in redis nginx logma skymill probot; do
+      unit="$scope-$role.service"
+      state="$(systemctl --user show "$unit" -p ActiveState --value)"
+      invocation="$(systemctl --user show "$unit" -p InvocationID --value)"
+      if [[ "$state" == active && -n "$invocation" ]]; then
+        echo "AGNI_RUNTIME_UNIT role=$role active=passed invocation=present"
+      else
+        echo "AGNI_RUNTIME_UNIT role=$role active=failed invocation=unknown"
+      fi
+      if podman container exists "$scope-$role"; then
+        state="$(podman inspect "$scope-$role" --format '{{.State.Status}}')"
+        echo "AGNI_RUNTIME_CONTAINER role=$role status=$state"
+      else
+        echo "AGNI_RUNTIME_CONTAINER role=$role status=absent"
+      fi
+    done
+    echo "AGNI_RUNTIME_LOGMA_UNIT=$(grep '^Environment=LOGMA_BIND_ADDR=' "$HOME/.config/containers/systemd/$scope-logma.container" | cut -d= -f3-)"
+    # Check sockets/processes without reading environment values or credentials.
+    if podman container exists "$scope-logma"; then
+      echo 'AGNI_RUNTIME_LOGMA_PROCESS=begin'
+      podman top "$scope-logma" pid comm || true
+      echo 'AGNI_RUNTIME_LOGMA_LISTEN=begin'
+      podman exec "$scope-logma" /bin/busybox netstat -lnt || true
+      echo 'AGNI_RUNTIME_LOGMA_EXECUTABLE=begin'
+      podman exec "$scope-logma" /bin/busybox readlink /proc/1/exe || true
+      echo 'AGNI_RUNTIME_LOGMA_QUADLET_EXEC=begin'
+      grep '^Exec=' "$HOME/.config/containers/systemd/$scope-logma.container" | head -n 1 || true
+    fi
+    echo 'AGNI_RUNTIME_LOGMA_STARTUP=begin'
+    journalctl --user -u "$scope-logma.service" --no-pager -n 150 -o cat 2>/dev/null |
+      grep -Ei 'Go Server is listening|initialize lifecycle API|panic:|fatal|restore lifecycle registrations|cannot assign requested address|bind: address already in use|permission denied|function.*(not found|no permission)|connect: connection refused|dial tcp|context deadline exceeded' |
+      tail -n 24 || true
+    echo 'AGNI_RUNTIME_LOGMA_STARTUP=end'
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    podman run --rm --pull=never --network "nix-xd-$scope" \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-network-diagnose.py"
+    echo "AGNI_RUNTIME_NETWORK=observed changes=none"
+    ;;
+  qualify-worker-live)
+    [[ $# == 3 ]]
+    worker_gate="$3"
+    [[ "$worker_gate" == bootstrap || "$worker_gate" == fence-state || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == full ]] || exit 2
+    [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" &&
+       -s "$apps/profile/profile.env" ]] || exit 1
+    source "$apps/profile/profile.env"
+    [[ "$profile_scope" == "$scope" &&
+       "$profile_roles" == 'redis nginx logma skymill probot' &&
+       "$profile_bundle" == /var/mnt/nixstore/* &&
+       "$profile_probe" == /nix/store/*/bin/* ]] || {
+      echo 'AGNI_WORKER_LIVE=blocked reason=invalid-profile-contract' >&2
+      exit 1
+    }
+    [[ -f "$profile_bundle/bootstrap.sh" ]] || {
+      echo 'AGNI_WORKER_LIVE=blocked reason=bootstrap-script-not-found' >&2
+      exit 1
+    }
+    generation="$(cat "$apps/activated-probot-generation")"
+    [[ "$generation" =~ ^[a-f0-9]{64}-([a-z0-9]{32}-candidate)$ ]] || exit 1
+    bundle_store="/nix/store/${BASH_REMATCH[1]}"
+    check_bundle
+    cmp -s "$apps/profile/manifest.json" "$apps/probot-migrations/$generation/rendered/manifest.json" || exit 1
+    grep -Fxq 'Environment=PROBOT_RUNTIME_WORKER_ENABLED=false' "$HOME/.config/containers/systemd/$scope-probot.container" || exit 1
+    node="$(awk -F '\t' '$1=="node" {print $2}' "$candidate_store/artifacts.tsv")"
+    probot="$(awk -F '\t' '$1=="probot-runtime" {print $2}' "$candidate_store/artifacts.tsv")"
+    skymill="$(awk -F '\t' '$1=="skymill" {print $2}' "$candidate_store/artifacts.tsv")"
+    redis="$(sed -nE 's/^[[:space:]]*"redis": "([^"]+)",?$/\1/p' "$apps/profile/manifest.json")"
+    [[ "$node" =~ ^/nix/store/[a-z0-9]{32}-[^/]+/bin/node$ &&
+       "$probot" =~ ^/nix/store/[a-z0-9]{32}-probot$ &&
+       "$skymill" =~ ^/nix/store/[a-z0-9]{32}-skymill-http$ &&
+       "$redis" =~ ^/nix/store/[a-z0-9]{32}-[^/]+/bin/redis-server$ ]] || exit 1
+    for executable in "$node" "$skymill" "$redis"; do
+      [[ -x "/var/mnt/nixstore/${executable#/nix/store/}" ]] || exit 1
+    done
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    # Materialize the pinned npm closure once onto VM-local storage. Node's
+    # directory-by-directory resolution over 9P is not a reliable startup gate.
+    module_source="/var/mnt/nixstore/${probot#/nix/store/}"
+    module_cache_parent="$base/qualification-cache/probot"
+    module_cache="$module_cache_parent/${probot##*/}"
+    [[ -f "$module_source/router/serve.js" && -d "$module_source/node_modules" ]] || exit 1
+    mkdir -p -m 0700 "$module_cache_parent"
+    [[ ! -L "$module_cache_parent" && ! -L "$module_cache" ]] || exit 1
+    if [[ ! -f "$module_cache/.agni-module-source" ]]; then
+      [[ ! -e "$module_cache" ]] || {
+        echo 'AGNI_WORKER_LIVE_MODULE_CACHE=blocked reason=incomplete-or-untrusted-cache' >&2
+        exit 1
+      }
+      module_tmp="$(mktemp -d "$module_cache_parent/.probot-copy.XXXXXXXX")"
+      if ! cp -R "$module_source/." "$module_tmp/"; then
+        rm -rf -- "$module_tmp"
+        echo 'AGNI_WORKER_LIVE_MODULE_CACHE=blocked reason=copy-failed' >&2
+        exit 1
+      fi
+      printf '%s\n' "$probot" > "$module_tmp/.agni-module-source"
+      chmod -R u+rwX,go-rwx "$module_tmp"
+      mv -T -- "$module_tmp" "$module_cache"
+      echo 'AGNI_WORKER_LIVE_MODULE_CACHE=materialized backing=vm-local'
+    fi
+    [[ "$(cat "$module_cache/.agni-module-source")" == "$probot" &&
+       -f "$module_cache/router/serve.js" &&
+       -d "$module_cache/node_modules" &&
+       ! -L "$module_cache" ]] || {
+      echo 'AGNI_WORKER_LIVE_MODULE_CACHE=blocked reason=cache-contract' >&2
+      exit 1
+    }
+    echo 'AGNI_WORKER_LIVE_MODULE_CACHE=passed source=pinned backing=vm-local mode=read-only-in-candidate'
+    bash "$tools/runtime.sh" status "$scope"
+    before=()
+    for role in redis nginx logma skymill probot; do
+      before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    candidate_rc=0
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$module_cache,dst=/run/probot,ro" \
+      --tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m \
+      --rootfs "$apps/rootfs" "$node" "$tool_store/probot-worker-live.js" \
+      "$redis" "$skymill" "$node" /run/probot "$worker_gate" || candidate_rc=$?
+    # Always inspect the five original services even when a candidate gate
+    # fails: fail-closed isolation evidence is not optional on the error path.
+    bash "$tools/runtime.sh" status "$scope"
+    after=()
+    for role in redis nginx logma skymill probot; do
+      after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    [[ "${before[*]}" == "${after[*]}" ]] || {
+      echo 'AGNI_WORKER_LIVE=blocked reason=service-invocation-changed' >&2
+      exit 1
+    }
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    echo "AGNI_WORKER_LIVE_BASELINE=passed gate=$worker_gate invocations=unchanged bootstrap=verified"
+    if [[ "$candidate_rc" != 0 ]]; then
+      echo "AGNI_WORKER_LIVE_QUALIFICATION=failed gate=$worker_gate candidate_exit=$candidate_rc" >&2
+      exit "$candidate_rc"
+    fi
+    echo "AGNI_WORKER_LIVE_QUALIFICATION=passed gate=$worker_gate backing=real service_invocations=unchanged worker=isolated promotion=blocked"
+    ;;
+  qualify-worker-candidate)
+    [[ $# == 2 ]]
+    [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" ]] || exit 1
+    generation="$(cat "$apps/activated-probot-generation")"
+    [[ "$generation" =~ ^[a-f0-9]{64}-([a-z0-9]{32}-candidate)$ ]] || exit 1
+    bundle_store="/nix/store/${BASH_REMATCH[1]}"
+    check_bundle
+    cmp -s "$apps/profile/manifest.json" "$apps/probot-migrations/$generation/rendered/manifest.json" || exit 1
+    grep -Fxq 'Environment=PROBOT_RUNTIME_WORKER_ENABLED=false' "$HOME/.config/containers/systemd/$scope-probot.container" || exit 1
+    node="$(awk -F '\t' '$1=="node" {print $2}' "$candidate_store/artifacts.tsv")"
+    probot="$(awk -F '\t' '$1=="probot-runtime" {print $2}' "$candidate_store/artifacts.tsv")"
+    [[ "$node" =~ ^/nix/store/[a-z0-9]{32}-[^/]+/bin/node$ &&
+       "$probot" =~ ^/nix/store/[a-z0-9]{32}-probot$ ]] || exit 1
+    [[ -f "/var/mnt/nixstore/${probot#/nix/store/}/src/worker.js" ]] || exit 1
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    bash "$tools/runtime.sh" status "$scope"
+    before=()
+    for role in redis nginx logma skymill probot; do
+      before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+      --rootfs "$apps/rootfs" "$node" "$tool_store/probot-worker-candidate.js" "$probot"
+    bash "$tools/runtime.sh" status "$scope"
+    after=()
+    for role in redis nginx logma skymill probot; do
+      after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    [[ "${before[*]}" == "${after[*]}" ]] || {
+      echo 'AGNI_WORKER_CANDIDATE=blocked reason=service-invocation-changed' >&2
+      exit 1
+    }
+    echo 'AGNI_WORKER_CANDIDATE_QUALIFICATION=passed services=unchanged worker=fixture-only promotion=blocked'
+    ;;
+  qualify-integration)
+    [[ $# == 2 ]]
+    [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" && -s "$apps/profile/profile.env" ]] || exit 1
+    source "$apps/profile/profile.env"
+    [[ "$profile_roles" == 'redis nginx logma skymill probot' ]] || exit 1
+    generation="$(cat "$apps/activated-probot-generation")"
+    [[ "$generation" =~ ^[a-f0-9]{64}-[a-z0-9]{32}-candidate$ ]] || exit 1
+    cmp -s "$apps/profile/manifest.json" "$apps/probot-migrations/$generation/rendered/manifest.json" || exit 1
+    grep -Fxq 'Environment=PROBOT_RUNTIME_WORKER_ENABLED=false' "$HOME/.config/containers/systemd/$scope-probot.container" || exit 1
+    for credential in "$apps/credentials/probot/state" "$apps/credentials/probot/publish" "$apps/credentials/skymill/http-token"; do
+      [[ -s "$credential" && ! -L "$credential" ]] || exit 1
+    done
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    bash "$tools/runtime.sh" status "$scope"
+    before=()
+    for role in redis nginx logma skymill probot; do
+      before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    podman run --rm --pull=never --network "nix-xd-$scope" \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$apps/credentials/probot/state,dst=/run/probot-state,ro" \
+      --mount "type=bind,src=$apps/credentials/probot/publish,dst=/run/probot-publish,ro" \
+      --mount "type=bind,src=$apps/credentials/skymill/http-token,dst=/run/skymill-token,ro" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-integration-qualify.py" \
+      --state-file /run/probot-state --publish-file /run/probot-publish --skymill-token-file /run/skymill-token
+    bash "$tools/runtime.sh" status "$scope"
+    after=()
+    for role in redis nginx logma skymill probot; do
+      after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    [[ "${before[*]}" == "${after[*]}" ]] || {
+      echo 'AGNI_PROBOT_INTEGRATION=blocked reason=service-invocation-changed' >&2
+      exit 1
+    }
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    echo 'AGNI_PROBOT_INTEGRATION=passed acl=probot_state,lifecycle_publish redelivery=claimed worker=disabled webhook=not-qualified'
+    ;;
+  qualify-runtime)
+    [[ $# == 2 ]]
+    [[ -s "$apps/activated-probot-generation" && ! -L "$apps/activated-probot-generation" ]] || {
+      echo 'AGNI_RUNTIME_QUALIFICATION=blocked reason=no-activated-generation' >&2
+      exit 1
+    }
+    [[ -s "$apps/profile/profile.env" && -s "$apps/profile/manifest.json" ]] || exit 1
+    source "$apps/profile/profile.env"
+    [[ "$profile_roles" == 'redis nginx logma skymill probot' ]] || exit 1
+    [[ -s "$apps/credentials/skymill/http-token" && -s "$apps/credentials/logma/redis" ]] || exit 1
+    [[ -x "$apps/rootfs/bin/busybox" ]] || exit 1
+    generation="$(cat "$apps/activated-probot-generation")"
+    [[ "$generation" =~ ^[a-f0-9]{64}-[a-z0-9]{32}-candidate$ ]] || exit 1
+    cmp -s "$apps/profile/manifest.json" "$apps/probot-migrations/$generation/rendered/manifest.json" || exit 1
+    grep -Fxq 'Environment=PROBOT_RUNTIME_WORKER_ENABLED=false' "$HOME/.config/containers/systemd/$scope-probot.container" || exit 1
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    bash "$tools/runtime.sh" status "$scope"
+    before=()
+    for role in redis nginx logma skymill probot; do
+      before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+      [[ -n "${before[${#before[@]}-1]}" ]] || exit 1
+    done
+    for role in logma skymill; do
+      podman run --rm --pull=never --network none \
+        --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+        --read-only --read-only-tmpfs=false --security-opt label=disable \
+        --cap-drop all --security-opt no-new-privileges \
+        --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+        --mount "type=bind,src=$base/socket,dst=/run/redis,ro" \
+        --mount "type=bind,src=$apps/credentials/$role,dst=/run/credentials,ro" \
+        --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+        --rootfs "$apps/rootfs" "$profile_probe" "security-$role" "$scope"
+    done
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    podman run --rm --pull=never --network "nix-xd-$scope" \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$apps/credentials/skymill/http-token,dst=/run/skymill-token,ro" \
+      --mount "type=bind,src=$apps/credentials/logma/api-key,dst=/run/logma-api-key,ro" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-runtime-qualify.py" \
+      --token-file /run/skymill-token --logma-api-key-file /run/logma-api-key
+    bash "$tools/runtime.sh" status "$scope"
+    after=()
+    for role in redis nginx logma skymill probot; do
+      after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    [[ "${before[*]}" == "${after[*]}" ]] || {
+      echo 'AGNI_RUNTIME_QUALIFICATION=blocked reason=service-invocation-changed' >&2
+      exit 1
+    }
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    echo "AGNI_RUNTIME_QUALIFICATION=passed deployment=vm1 roles=5 acl=logma,skymill http=passed bootstrap=revoked restarts=none webhook=not-qualified"
+    ;;
+  recover-sandbox-http)
+    [[ $# == 2 ]]
+    [[ ! -e "$apps/activated-probot-generation" ]] || {
+      echo 'AGNI_SANDBOX_HTTP_RECOVERY=blocked reason=already-activated' >&2
+      exit 1
+    }
+    shopt -s nullglob
+    candidates=("$apps/probot-migrations/"*)
+    shopt -u nullglob
+    [[ "${#candidates[@]}" == 1 && -d "${candidates[0]}" && ! -L "${candidates[0]}" ]] || {
+      echo 'AGNI_SANDBOX_HTTP_RECOVERY=blocked reason=ambiguous-generation' >&2
+      exit 1
+    }
+    target="${candidates[0]}"
+    basename="${target##*/}"
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    [[ -d "$apps/rootfs" && -x "$apps/rootfs/bin/busybox" ]] || {
+      echo 'AGNI_SANDBOX_HTTP_RECOVERY=blocked reason=guest-rootfs-missing' >&2
+      exit 1
+    }
+    # The CoreOS host mounts the owner store at /var/mnt/nixstore, not /nix/store.
+    # Execute the pinned Python within the existing rootless Nix-store-mapped container.
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$base,dst=/run/fatline-base,rw" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-sandbox-http-recover.py" \
+      --base /run/fatline-base --generation "$basename"
+    systemctl --user reset-failed "$scope-skymill.service" "$scope-probot.service"
+    systemctl --user restart "$scope-skymill.service"
+    systemctl --user start "$scope-probot.service"
+    # A systemd 'active' observation alone can precede a quick application crash.
+    for attempt in 1 2 3; do
+      sleep 4
+      bash "$tools/runtime.sh" status "$scope" || {
+        echo 'AGNI_SANDBOX_HTTP_RECOVERY=blocked reason=runtime-not-ready' >&2
+        exit 1
+      }
+    done
+    source "$apps/profile/profile.env"
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    printf '%s\n' "$basename" > "$apps/activated-probot-generation"
+    chmod 600 "$apps/activated-probot-generation"
+    echo "AGNI_SANDBOX_HTTP_RECOVERY=passed generation=$basename roles=5 bootstrap=revoked webhook=not-qualified"
+    ;;
+  migrate-activate-sandbox)
+    [[ $# == 3 && "$3" == "DISCARD-VM1-REDIS-MEMORY" ]] || {
+      echo 'AGNI_SANDBOX_ACTIVATION=blocked reason=explicit-ephemeral-redis-ack-required' >&2
+      exit 2
+    }
+    # The existing snapshot/boot/invocation gate must pass immediately before mutation.
+    activation_check
+    [[ ! -e "$apps/activated-probot-generation" ]] || {
+      echo 'AGNI_SANDBOX_ACTIVATION=blocked reason=generation-already-activated' >&2
+      exit 1
+    }
+    # This path intentionally qualifies only a disposable local application runtime.
+    # It does not authorize GitHub App ingress, enable the worker, or claim delivery.
+    bash "$tools/runtime.sh" install-probot "$scope" "$target/rendered"
+    bash "$tools/runtime.sh" status "$scope"
+    # Verify the runtime Redis bootstrap principal is disabled after service startup.
+    source "$target/rendered/profile.env"
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    printf '%s\n' "$basename" > "$apps/activated-probot-generation"
+    chmod 600 "$apps/activated-probot-generation"
+    echo "AGNI_SANDBOX_ACTIVATION=passed generation=$basename roles=5 bootstrap=revoked webhook=not-qualified redis_data=discarded"
+    ;;
   migrate-activate)
     echo 'AGNI_ACTIVATION=blocked reason=readiness-rollback-and-data-loss-authorization-not-yet-qualified' >&2
     exit 1
