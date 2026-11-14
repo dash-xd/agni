@@ -183,7 +183,7 @@ if [[ "$operation" == seed-subscription-source ]]; then
       MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
       PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
   grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$log_dir/subscription-source-seed.log" || fail subscription-ghxd-sync-not-qualified
-  grep -Fq 'checkout=probot-subscription20261114 sha=1788ee94235b83f2b6229b95acbc98469f3eaf85' \
+  grep -Fq 'checkout=probot-runtime20261115 sha=1788ee94235b83f2b6229b95acbc98469f3eaf85' \
     "$log_dir/subscription-source-seed.log" || fail subscription-source-identity-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-subscription-source source=smoke-ghxd production=unchanged'
   exit 0
