@@ -38,8 +38,8 @@ nor that systemd has started or independently restarted them.
 
 ## CoreOS generator dry-run
 
-The next `deployment-qualify-declarative-generator` gate builds the four inert Quadlet
-files into an immutable Nix store artifact and runs CoreOS's real
+The next `deployment-qualify-declarative-generator` gate builds the four inert container Quadlets
+and their shared `fatline-arm-vm1.network` dependency into an immutable Nix store artifact and runs CoreOS's real
 `podman-system-generator --user --dryrun` against a temporary copy.
 
 The Nix build checks the parsed manifest, exact unit set, consumer-group bindings, activation guards, and isolated credential mounts before exposing the immutable artifact. CoreOS only verifies guest-visible safety constraints and runs its native generator; it does not repeat JSON serialization checks.
@@ -74,3 +74,7 @@ make -C local/fatline deployment-qualify-declarative-processors \
 
 Expected marker:
 `AGNI_DECLARATIVE_PROCESSORS_CONTRACT=passed roles=4 subscriptions=2 unit_format=quadlet activation=blocked worker=disabled`
+
+The network file is included in the **temporary dry-run input only**. It uses the
+same `NetworkName=nix-xd-fatline-arm-vm1` contract as the existing Agni
+startup-profile renderer, without installing or recreating that network.
