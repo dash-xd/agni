@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full'] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -200,8 +200,9 @@ async function main() {
       SKYMILL_HTTP_TOKEN_FILE: skymillFile,
     });
   }
-  function startProbot(workerEnabled = true) {
+  function startProbot(workerEnabled = true, fenceHook = false) {
     return launch('probot', nodeBin, [path.join(probotRoot, 'router/serve.js')], {
+      ...(fenceHook ? { NODE_OPTIONS: '--require=' + fenceHookFile } : {}),
       HOST: '127.0.0.1', PORT: '3000', REDIS_URL: redisUrl, REDIS_DB: '0',
       REDIS_USERNAME: 'probot_state', REDIS_PASSWORD_FILE: stateFile,
       REDIS_PREFIX: statePrefix, PROBOT_RUNTIME_ORG_ID: 'xd-dash',
@@ -241,6 +242,23 @@ async function main() {
     console.log('AGNI_WORKER_LIVE_INGRESS_PHASE=completed phase=' + phase + ' status=' + response.status);
     return result;
   }
+  // A candidate-only preload holds after the real Redis execution fence is
+  // acquired, before Probot.receive. It never runs in the deployed worker.
+  const fenceHookFile = path.join(workspace, 'worker-fence-hook.js');
+  if (gate === 'fence') {
+    fs.writeFileSync(fenceHookFile, [
+      "'use strict';",
+      "const { RedisStore } = require('/run/probot/src/store');",
+      "const original = RedisStore.prototype.acquireDeliveryExecution;",
+      "RedisStore.prototype.acquireDeliveryExecution = async function(...args) {",
+      "  const state = await original.apply(this, args);",
+      "  if (state === 'acquired') await new Promise(() => {});",
+      "  return state;",
+      "};",
+    ].join('\\n') + '\\n', { mode: 0o600, flag: 'wx' });
+    console.log('AGNI_WORKER_FENCE_HOOK=armed phase=post-acquire pre-handler');
+  }
+
   const body = Buffer.from(JSON.stringify({
     ref: 'refs/heads/fixture', installation: { id: installationId },
     repository: { full_name: 'xd-dash/worker-qualification' },
@@ -326,7 +344,7 @@ async function main() {
       throw new Error('pinned Probot module closure unavailable category=' + reason);
     }
     checkpoint('pinned-probot-module-closure');
-    startProbot(true);
+    startProbot(true, gate === 'fence');
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
     checkpoint('bootstrap-complete');
@@ -348,6 +366,43 @@ async function main() {
     await until('Skymill recovery', status);
     const accepted = await post(signature, 'accepted');
     assert.equal(accepted.status, 202);
+
+    if (gate === 'fence') {
+      await until('fence acquired before handler', async () => {
+        const observed = await store.getDelivery(guid);
+        if (!observed || observed.executionStatus !== 'running') return false;
+        return (await status()).Pending.Count > 0;
+      }, 90000);
+      console.log('AGNI_WORKER_FENCE_ACQUIRED=passed execution=running pending=positive');
+      await stop('probot', 'SIGKILL');
+      const interrupted = await store.getDelivery(guid);
+      assert.equal(interrupted.executionStatus, 'running');
+      assert.ok((await status()).Pending.Count > 0);
+      console.log('AGNI_WORKER_FENCE_INTERRUPTED=passed worker=killed redis=retained pending=positive');
+
+      startProbot(true);
+      await waitProbot('fenced worker restart');
+      // A new consumer must reclaim the pending Redis Stream entry. Its
+      // first acquisition sees running -> ambiguous and must not call the handler.
+      await until('fenced redelivery refused', async () => {
+        const observed = await store.getDelivery(guid);
+        return observed && observed.executionStatus === 'ambiguous' &&
+          observed.outcomeStatus === 'nacked';
+      }, 120000);
+      assert.ok((await status()).Pending.Count > 0,
+        'ambiguous delivery must remain pending, not ACKed');
+      const repeat = await post(signature, 'fence-duplicate');
+      assert.equal(repeat.status, 200);
+      const finalState = await store.getDelivery(guid);
+      assert.equal(finalState.executionStatus, 'ambiguous');
+      console.log('AGNI_WORKER_FENCE=passed interrupted=post-acquire replay=blocked pending=retained automatic_reexecution=false');
+      assertChildrenHealthy();
+      store.client.destroy();
+      activeStore = undefined;
+      console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=fence');
+      return;
+    }
     // Complete the first execution before duplicate ingress. Cold Probot handler
     // initialization through the guest's 9P-backed Nix store may block the
     // Node.js event loop; immediate replay would conflate startup with dedupe.
