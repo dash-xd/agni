@@ -450,6 +450,10 @@ case "$action" in
     source_units="/var/mnt/nixstore/${bundle_store#/nix/store/}"
     [[ -d "$source_units" && ! -L "$source_units" && -s "$source_units/manifest.json" ]] || exit 1
     [[ "$(find "$source_units" -maxdepth 1 -type f -name '*.container' | wc -l)" -eq 4 ]] || exit 1
+    [[ -s "$source_units/$scope.network" ]] || {
+      echo 'AGNI_DECLARATIVE_GENERATOR=blocked reason=network-quadlet-missing' >&2
+      exit 1
+    }
     generator=/usr/lib/systemd/system-generators/podman-system-generator
     [[ -x "$generator" ]] || {
       echo 'AGNI_DECLARATIVE_GENERATOR=blocked reason=quadlet-generator-unavailable' >&2
