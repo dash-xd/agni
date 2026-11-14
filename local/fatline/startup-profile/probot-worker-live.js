@@ -457,10 +457,10 @@ async function main() {
       const groupB = consumerGroup + '-subscription-b';
       const scopeIdentity = { orgId: 'xd-dash', tenantId: scope, applicationId: 'github-webhooks' };
       const executionA = new SubscriptionExecutionStore({
-        store, ...scopeIdentity, subscriptionId: 'subscription-a',
+        store, ...scopeIdentity, subscriptionId: consumerGroup,
       });
       const executionB = new SubscriptionExecutionStore({
-        store, ...scopeIdentity, subscriptionId: 'subscription-b',
+        store, ...scopeIdentity, subscriptionId: groupB,
       });
       const counts = { a: new Map(), b: new Map() };
       const makeRuntime = (state, label, url, group) => new ProbotRuntime({
@@ -482,6 +482,17 @@ async function main() {
         baseUrl: 'http://127.0.0.1:8082', token: skymillToken,
         consumerGroup: groupB, stream: 'worker-candidate.webhooks',
       });
+      let recoveryAttempt = 0;
+      const receiveRecovered = b.skymill.receive.bind(b.skymill);
+      b.skymill.receive = async options => {
+        const batch = await receiveRecovered(options);
+        for (const delivery of batch.deliveries || []) {
+          if (delivery.message?.metadata?.github_delivery_id === source) {
+            recoveryAttempt = Math.max(recoveryAttempt, Number(delivery.attempt || 0));
+          }
+        }
+        return batch;
+      };
       const groupStatus = async url => {
         const response = await fetch(url + '/v1/status', {
           headers: { authorization: 'Bearer ' + skymillToken },
@@ -496,6 +507,7 @@ async function main() {
       const pendingB = await clientB.receive({ limit: 1 });
       assert.equal(pendingB.deliveries?.length, 1);
       assert.equal(pendingB.deliveries[0].message.metadata.github_delivery_id, source);
+      assert.equal(pendingB.deliveries[0].attempt, 1);
       assert.equal((await groupStatus('http://127.0.0.1:8082')).Pending.Count, 1);
       await stop('skymill-peer', 'SIGKILL');
       const successA = await a.drain({ limit: 1 });
@@ -529,6 +541,7 @@ async function main() {
       }, 105000);
       assert.equal(counts.b.get(source), 1);
       assert.equal(counts.a.get(source), 1);
+      assert.ok(recoveryAttempt >= 2, 'group B must reclaim its pending entry after consumer death');
       assert.equal((await executionB.getDelivery(source)).outcomeStatus, 'acked');
       assert.equal((await executionA.getDelivery(source)).outcomeStatus, 'acked');
       console.log('AGNI_PROBOT_SUBSCRIPTION_RECOVERY=passed group_b=reclaimed group_a=unchanged effects=one-per-group');
