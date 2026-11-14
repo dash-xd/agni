@@ -441,6 +441,63 @@ case "$action" in
       --rootfs "$apps/rootfs" "$python" "$tool_store/probot-network-diagnose.py"
     echo "AGNI_RUNTIME_NETWORK=observed changes=none"
     ;;
+  qualify-declarative-generator)
+    [[ $# == 3 ]] || exit 2
+    [[ "$bundle_store" =~ ^/nix/store/[a-z0-9]{32}-agni-inert-subscription-quadlets$ ]] || {
+      echo 'AGNI_DECLARATIVE_GENERATOR=blocked reason=unqualified-input' >&2
+      exit 1
+    }
+    source_units="/var/mnt/nixstore/${bundle_store#/nix/store/}"
+    [[ -d "$source_units" && ! -L "$source_units" && -s "$source_units/manifest.json" ]] || exit 1
+    [[ "$(find "$source_units" -maxdepth 1 -type f -name '*.container' | wc -l)" -eq 4 ]] || exit 1
+    grep -Fqx '"activation": "blocked", "execution_factory": "not-yet-integrated", "groups": ["a", "b"], "schema": 1, "scope": "fatline-arm-vm1", "subscription_revision": "1788ee94235b83f2b6229b95acbc98469f3eaf85", "units": 4, "worker": "disabled"}' "$source_units/manifest.json" || exit 1
+    generator=/usr/lib/systemd/system-generators/podman-system-generator
+    [[ -x "$generator" ]] || {
+      echo 'AGNI_DECLARATIVE_GENERATOR=blocked reason=quadlet-generator-unavailable' >&2
+      exit 1
+    }
+    before=()
+    for role in redis nginx logma skymill probot; do
+      unit="$scope-$role.service"
+      systemctl --user is-active --quiet "$unit" || exit 1
+      before+=("$(systemctl --user show "$unit" -p InvocationID --value)")
+      [[ -n "${before[${#before[@]}-1]}" ]] || exit 1
+    done
+    candidate_dir="$(mktemp -d)"
+    trap 'rm -rf -- "$candidate_dir"' EXIT
+    cp -R "$source_units/." "$candidate_dir/"
+    for group in a b; do
+      for role in skymill processor; do
+        name="$scope-subscription-$group-$role"
+        [[ -s "$candidate_dir/$name.container" ]] || exit 1
+        grep -Fxq 'ConditionPathExists=/run/agni/unqualified-subscription-activation' "$candidate_dir/$name.container" || exit 1
+        grep -Fxq 'ReadOnly=true' "$candidate_dir/$name.container" || exit 1
+        ! grep -Fxq '[Install]' "$candidate_dir/$name.container" || exit 1
+      done
+    done
+    generated="$(mktemp)"
+    trap 'rm -rf -- "$candidate_dir"; rm -f -- "$generated"' EXIT
+    QUADLET_UNIT_DIRS="$candidate_dir" "$generator" --user --dryrun > "$generated"
+    for group in a b; do
+      for role in skymill processor; do
+        grep -Fq "$scope-subscription-$group-$role.service" "$generated" || {
+          echo "AGNI_DECLARATIVE_GENERATOR=blocked reason=unit-not-generated group=$group role=$role" >&2
+          exit 1
+        }
+      done
+    done
+    after=()
+    for role in redis nginx logma skymill probot; do
+      unit="$scope-$role.service"
+      systemctl --user is-active --quiet "$unit" || exit 1
+      after+=("$(systemctl --user show "$unit" -p InvocationID --value)")
+    done
+    [[ "${before[*]}" == "${after[*]}" ]] || {
+      echo 'AGNI_DECLARATIVE_GENERATOR=blocked reason=baseline-invocation-changed' >&2
+      exit 1
+    }
+    echo 'AGNI_DECLARATIVE_GENERATOR=passed units=4 mode=coreos-quadlet-dryrun installed=unchanged baseline=unchanged activation=blocked'
+    ;;
   qualify-worker-live)
     [[ $# == 3 || $# == 4 ]]
     worker_gate="$3"
