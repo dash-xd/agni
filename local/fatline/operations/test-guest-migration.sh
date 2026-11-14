@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -209,6 +209,13 @@ grep -Fq "TARGET='#processor-subscriber-contract'" "$here/operations/guest-migra
 grep -Fq 'AGNI_PROBOT_PROCESSOR_CONTRACT=passed' "$here/flake.nix"
 grep -Fq '"revision": "96fc8561096dd9002cbba2ba2e6fbff37d67b5a2"' "$here/qualification/probot-processor-ghxd-sources.json"
 grep -Fq 'probotProcessorCheckout = "/workspaces/probot-runtime20261114";' "$here/flake.nix"
+
+grep -Fq "TARGET='#processor-source-artifact'" "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_PROBOT_PROCESSOR_ARTIFACT_QUALIFIED=passed' "$here/flake.nix"
+grep -Fq 'AGNI_PROBOT_PROCESSOR_SHARED_GROUP=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_PROBOT_PROCESSOR_NO_HINT=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_PROBOT_PROCESSOR_PUBSUB=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq '"$worker_gate" == processor-subscriber' "$here/startup-profile/probot-guest-app.sh"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
