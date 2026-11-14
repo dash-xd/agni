@@ -62,7 +62,7 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
@@ -100,6 +100,20 @@ if [[ "$operation" == qualify-reconcile-service-contract ]]; then
   grep -Fq 'AGNI_RECONCILE_SERVICE_CONTRACT=passed source=1a0ce1f3684c120a8a800e7e63c45f0780bdda09 scope=isolated production_route=absent' \
     "$log_dir/reconcile-service-contract.log" || fail reconciliation-service-contract-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-reconcile-service-contract source=pinned production=unchanged'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-reconcile-live ]]; then
+  run_step "$log_dir/reconcile-artifact.log" xd_make run FLAKE="$flake" TARGET='#reconcile-source-artifact'
+  source_artifact="$(agni_capture_value AGNI_RECONCILE_SOURCE_ARTIFACT "$log_dir/reconcile-artifact.log")"
+  [[ "$source_artifact" =~ ^/nix/store/[0-9a-z]{32}-probot-runtime20261114$ ]] || fail source-artifact-not-pinned
+  grep -Fxq 'AGNI_RECONCILE_SOURCE_ARTIFACT_QUALIFIED=passed revision=1a0ce1f3684c120a8a800e7e63c45f0780bdda09 rooted=true' \
+    "$log_dir/reconcile-artifact.log" || fail source-artifact-not-qualified
+  run_step "$log_dir/reconcile-live.log" guest qualify-worker-live reconcile-service "$source_artifact"
+  grep -Fxq 'AGNI_WORKER_LIVE_GATE=passed gate=reconcile-service' "$log_dir/reconcile-live.log" || fail reconcile-service-live-not-qualified
+  grep -Fxq 'AGNI_WORKER_LIVE_QUALIFICATION=passed gate=reconcile-service backing=real service_invocations=unchanged worker=isolated promotion=blocked' \
+    "$log_dir/reconcile-live.log" || fail reconcile-service-baseline-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-reconcile-live source=pinned backing=real promotion=blocked'
   exit 0
 fi
 
