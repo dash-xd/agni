@@ -422,9 +422,9 @@ case "$action" in
       podman exec "$scope-logma" /bin/busybox netstat -lnt || true
       echo 'AGNI_RUNTIME_LOGMA_EXECUTABLE=begin'
       podman exec "$scope-logma" /bin/busybox readlink /proc/1/exe || true
-      echo 'AGNI_RUNTIME_LOGMA_CMDLINE=begin'
-      podman exec "$scope-logma" /bin/busybox tr '\\000' '\\n' /proc/1/cmdline |
-        grep -E '^/nix/store/[a-z0-9]{32}-[^[:space:]]+$|^[0-9]{2,5}    fi
+      echo 'AGNI_RUNTIME_LOGMA_QUADLET_EXEC=begin'
+      grep '^Exec=' "$HOME/.config/containers/systemd/$scope-logma.container" | head -n 1 || true
+    fi
     echo 'AGNI_RUNTIME_LOGMA_STARTUP=begin'
     journalctl --user -u "$scope-logma.service" --no-pager -n 150 -o cat 2>/dev/null |
       grep -Ei 'Go Server is listening|initialize lifecycle API|panic:|fatal|restore lifecycle registrations|cannot assign requested address|bind: address already in use|permission denied|function.*(not found|no permission)|connect: connection refused|dial tcp|context deadline exceeded' |
