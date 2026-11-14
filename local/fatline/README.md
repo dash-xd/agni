@@ -383,3 +383,8 @@ skymill:8081, probot:3000, and redis-proxy:6379. It does not authenticate,
 read secrets, restart units, or write Redis data. The target returns
 `AGNI_RUNTIME_NETWORK=observed changes=none` even if an endpoint is
 unreachable; inspect `AGNI_NETWORK_ENDPOINT` lines for the actual failure.
+
+Network diagnosis now also captures Logma's process and TCP listening
+sockets, plus a bounded allowlist of diagnostic startup messages. It never
+reads service environment values or credential files and does not change
+systemd or Podman state.

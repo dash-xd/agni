@@ -414,6 +414,18 @@ case "$action" in
       fi
     done
     echo "AGNI_RUNTIME_LOGMA_UNIT=$(grep '^Environment=LOGMA_BIND_ADDR=' "$HOME/.config/containers/systemd/$scope-logma.container" | cut -d= -f3-)"
+    # Check sockets/processes without reading environment values or credentials.
+    if podman container exists "$scope-logma"; then
+      echo 'AGNI_RUNTIME_LOGMA_PROCESS=begin'
+      podman top "$scope-logma" pid comm || true
+      echo 'AGNI_RUNTIME_LOGMA_LISTEN=begin'
+      podman exec "$scope-logma" /bin/busybox netstat -lnt || true
+    fi
+    echo 'AGNI_RUNTIME_LOGMA_STARTUP=begin'
+    journalctl --user -u "$scope-logma.service" --no-pager -n 150 -o cat 2>/dev/null |
+      grep -Ei 'Go Server is listening|initialize lifecycle API|panic:|fatal|restore lifecycle registrations|cannot assign requested address|bind: address already in use|permission denied|function.*(not found|no permission)|connect: connection refused|dial tcp|context deadline exceeded' |
+      tail -n 24 || true
+    echo 'AGNI_RUNTIME_LOGMA_STARTUP=end'
     python="$(sed -n '1p' "$tools/python-path")"
     [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
     podman run --rm --pull=never --network "nix-xd-$scope" \
