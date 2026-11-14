@@ -18,7 +18,7 @@ export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export NIX_XD_LOG_DIR NIX_XD_LOG_COMPOSITION
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
-.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-memory deployment-qualify-worker-fence deployment-qualify-worker-effect deployment-qualify-worker-reconcile deployment-refresh-reconcile-auth deployment-seed-reconcile-source deployment-qualify-reconcile-service-contract deployment-qualify-reconcile-live deployment-seed-processor-source deployment-qualify-processor-contract deployment-qualify-processor-live deployment-qualify-independent-consumers deployment-seed-subscription-source deployment-qualify-subscription-contract deployment-qualify-subscription-groups deployment-qualify-declarative-processors deployment-qualify-declarative-generator deployment-diagnose-runtime-network check-deployment
+.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-memory deployment-qualify-worker-fence deployment-qualify-worker-effect deployment-qualify-worker-reconcile deployment-refresh-reconcile-auth deployment-seed-reconcile-source deployment-qualify-reconcile-service-contract deployment-qualify-reconcile-live deployment-seed-processor-source deployment-qualify-processor-contract deployment-qualify-processor-live deployment-qualify-independent-consumers deployment-seed-subscription-source deployment-qualify-subscription-contract deployment-qualify-subscription-groups deployment-qualify-declarative-processors deployment-qualify-declarative-generator deployment-seed-factory-source deployment-qualify-factory-contract deployment-diagnose-runtime-network check-deployment
 
 help:
 	@printf '%s\n' \
@@ -56,6 +56,8 @@ help:
 	  'make deployment-qualify-subscription-groups DEPLOYMENT=vm1  Independent groups failure and replay isolation' \
 	  'make deployment-qualify-declarative-processors DEPLOYMENT=vm1  Render-only four-unit Quadlet contract; no activation' \
 	  'make deployment-qualify-declarative-generator DEPLOYMENT=vm1  CoreOS Podman generator dryrun; no install' \
+	  'make deployment-seed-factory-source DEPLOYMENT=vm1  GHXD exact-SHA Probot factory source sync' \
+	  'make deployment-qualify-factory-contract DEPLOYMENT=vm1  Source-pinned Node factory isolation contract' \
 	  'make deployment-qualify-worker-live DEPLOYMENT=vm1       Complete gated live candidate; no activation' \
 	  'make deployment-diagnose-runtime-network DEPLOYMENT=vm1  Read-only Logma/Skymill/Probot network diagnosis' \
 	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety'
@@ -145,6 +147,12 @@ deployment-qualify-declarative-processors:
 
 deployment-qualify-declarative-generator:
 	@bash operations/guest-migration.sh qualify-declarative-generator
+
+deployment-seed-factory-source:
+	@bash operations/guest-migration.sh seed-factory-source
+
+deployment-qualify-factory-contract:
+	@bash operations/guest-migration.sh qualify-factory-contract
 
 deployment-qualify-worker-live:
 	@bash operations/guest-migration.sh qualify-worker-live
