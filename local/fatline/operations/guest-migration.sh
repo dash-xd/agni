@@ -230,7 +230,7 @@ fi
 if [[ "$operation" == qualify-declarative-generator ]]; then
   run_step "$log_dir/declarative-generator-artifact.log" \
     xd_make run FLAKE="$flake" TARGET='#declarative-processors-quadlets'
-  artifact="$(agni_capture_value AGNI_DECLARATIVE_PROCESSORS_QUADLETS "$log_dir/declarative-generator-artifact.log")"
+  artifact="$(agni_capture_value AGNI_DECLARATIVE_PROCESSORS_QUADLET_ARTIFACT "$log_dir/declarative-generator-artifact.log")"
   [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-agni-inert-subscription-quadlets$ ]] || fail invalid-declarative-quadlet-artifact
   grep -Fxq 'AGNI_DECLARATIVE_PROCESSORS_QUADLETS=passed activation=blocked source=agni-rendered' \
     "$log_dir/declarative-generator-artifact.log" || fail quadlet-artifact-not-qualified
