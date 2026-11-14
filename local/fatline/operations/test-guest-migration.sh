@@ -131,11 +131,20 @@ grep -Fq 'assertChildrenHealthy()' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_WORKER_LIVE_CHILD_SIGNAL role=' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'child_categories=' "$here/startup-profile/probot-worker-live.js"
 
-# The candidate starts only the worker-enabled instance; stop waits for exit.
+# Normal qualification starts worker-enabled. The reconciliation-service
+# gate alone may start worker-disabled *after* stopping its own disposable
+# worker, to establish a verified-absent effect before allowing retry.
 grep -Fq 'startProbot(true)' "$here/startup-profile/probot-worker-live.js"
 if grep -Fq 'startProbot(false)' "$here/startup-profile/probot-worker-live.js"; then
-  echo 'AGNI_WORKER_LIVE_STATIC=blocked reason=redundant-worker-disabled-startup' >&2
-  exit 1
+  worker_source="$here/startup-profile/probot-worker-live.js"
+  [[ "$(grep -Fc 'startProbot(false)' "$worker_source")" == 1 ]] || {
+    echo 'AGNI_WORKER_LIVE_STATIC=blocked reason=unexpected-worker-disabled-startup-count' >&2
+    exit 1
+  }
+  grep -Fq "if (gate === 'reconcile-service') {" "$worker_source"
+  grep -Fq "await stop('probot', 'SIGKILL');" "$worker_source"
+  grep -Fq "await waitProbot('retry preparation HTTP without worker');" "$worker_source"
+  grep -Fq "AGNI_RECONCILE_SERVICE_ABSENT=passed" "$worker_source"
 fi
 grep -Fq "ended.then(() => true)" "$here/startup-profile/probot-worker-live.js"
 
