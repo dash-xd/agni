@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers seed-subscription-source qualify-subscription-contract qualify-subscription-groups refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -226,6 +226,19 @@ grep -Fq 'AGNI_PROBOT_INDEPENDENT_LIVE=passed' "$here/startup-profile/probot-wor
 grep -Fq '"$worker_gate" == processor-independent' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'SKYMILL_CONSUMER: '\''processor-a'\''' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'SKYMILL_CONSUMER: '\''processor-b'\''' "$here/startup-profile/probot-worker-live.js"
+
+grep -Fq '"revision": "a189e3d8337add66f656055296e7315041a763bf"' "$here/qualification/probot-subscription-ghxd-sources.json"
+grep -Fq 'probotSubscriptionCheckout = "/workspaces/probot-subscription20261114";' "$here/flake.nix"
+grep -Fq "TARGET='#subscription-groups-contract'" "$here/operations/guest-migration.sh"
+grep -Fq "TARGET='#subscription-groups-source-artifact'" "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_GROUPS_LIVE=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_ISOLATION=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_RECOVERY=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_REPLAY=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq '"$worker_gate" == subscription-groups' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq "groupB = consumerGroup + '-subscription-b'" "$here/startup-profile/probot-worker-live.js"
+grep -Fq "subscriptionId: 'subscription-a'" "$here/startup-profile/probot-worker-live.js"
+grep -Fq "subscriptionId: 'subscription-b'" "$here/startup-profile/probot-worker-live.js"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
