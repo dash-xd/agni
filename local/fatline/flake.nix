@@ -16,7 +16,7 @@
       probotProcessorRevision = "2fd46a6a8730ea153346cbc113d7677ef5ad18cf";
       probotProcessorCheckout = "/workspaces/probot-runtime20261114";
       probotSubscriptionRevision = "1788ee94235b83f2b6229b95acbc98469f3eaf85";
-      probotSubscriptionCheckout = "/workspaces/probot-subscription20261114";
+      probotSubscriptionCheckout = "/workspaces/probot-runtime20261115";
       # Smoke ghxd seeds the exact private-source commit into Nix-Alpine.
       # The Nix app validates it at execution time; no private fetch during evaluation.
       probotReconcileCheckout = "/workspaces/probot-runtime20261114";
