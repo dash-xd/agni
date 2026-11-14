@@ -514,3 +514,16 @@ Probot's pinned router module closure is loaded in a bounded child before HTTP
 startup, distinguishing module-store stalls from service initialization stalls.
 On HTTP readiness timeout, the candidate emits the Node process state and
 wait channel without publishing environment variables or application secrets.
+
+### VM-local Probot module mirror
+
+The live qualification copies the pinned Nix-store Probot package (including its
+locked npm closure) once into
+`~/.local/state/nix-xd/fatline/fatline-arm-vm1/qualification-cache/probot/<store-name>/`
+**inside CoreOS VM1**, under its existing application state tree. A source-path
+marker and presence checks prevent accidental reuse under a different pin.
+The candidate mounts this directory read-only at `/run/probot`; the host-shared
+`/nix/store` remains read-only and unchanged. The mirror is disposable and
+can be removed as part of the VM1 qualification-state cleanup. No mutable
+credential data is copied. This avoids repeated Node dependency metadata walks
+through the 9P mount, without changing the deployed five-role generation.

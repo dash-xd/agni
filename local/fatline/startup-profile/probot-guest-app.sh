@@ -476,6 +476,38 @@ case "$action" in
     for executable in "$node" "$skymill" "$redis"; do
       [[ -x "/var/mnt/nixstore/${executable#/nix/store/}" ]] || exit 1
     done
+    # Materialize the pinned npm closure once onto VM-local storage. Node's
+    # directory-by-directory resolution over 9P is not a reliable startup gate.
+    module_source="/var/mnt/nixstore/${probot#/nix/store/}"
+    module_cache_parent="$base/qualification-cache/probot"
+    module_cache="$module_cache_parent/${probot##*/}"
+    [[ -f "$module_source/router/serve.js" && -d "$module_source/node_modules" ]] || exit 1
+    mkdir -p -m 0700 "$module_cache_parent"
+    [[ ! -L "$module_cache_parent" && ! -L "$module_cache" ]] || exit 1
+    if [[ ! -f "$module_cache/.agni-module-source" ]]; then
+      [[ ! -e "$module_cache" ]] || {
+        echo 'AGNI_WORKER_LIVE_MODULE_CACHE=blocked reason=incomplete-or-untrusted-cache' >&2
+        exit 1
+      }
+      module_tmp="$(mktemp -d "$module_cache_parent/.probot-copy.XXXXXXXX")"
+      if ! cp -R "$module_source/." "$module_tmp/"; then
+        rm -rf -- "$module_tmp"
+        echo 'AGNI_WORKER_LIVE_MODULE_CACHE=blocked reason=copy-failed' >&2
+        exit 1
+      fi
+      printf '%s\n' "$probot" > "$module_tmp/.agni-module-source"
+      chmod -R u+rwX,go-rwx "$module_tmp"
+      mv -T -- "$module_tmp" "$module_cache"
+      echo 'AGNI_WORKER_LIVE_MODULE_CACHE=materialized backing=vm-local'
+    fi
+    [[ "$(cat "$module_cache/.agni-module-source")" == "$probot" &&
+       -f "$module_cache/router/serve.js" &&
+       -d "$module_cache/node_modules" &&
+       ! -L "$module_cache" ]] || {
+      echo 'AGNI_WORKER_LIVE_MODULE_CACHE=blocked reason=cache-contract' >&2
+      exit 1
+    }
+    echo 'AGNI_WORKER_LIVE_MODULE_CACHE=passed source=pinned backing=vm-local mode=read-only-in-candidate'
     exec 9>"$base/lifecycle.lock"
     flock -x 9
     bash "$tools/runtime.sh" status "$scope"
@@ -489,9 +521,10 @@ case "$action" in
       --read-only --read-only-tmpfs=false --security-opt label=disable \
       --cap-drop all --security-opt no-new-privileges \
       --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$module_cache,dst=/run/probot,ro" \
       --tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m \
       --rootfs "$apps/rootfs" "$node" "$tool_store/probot-worker-live.js" \
-      "$redis" "$skymill" "$node" "$probot" "$worker_gate" || candidate_rc=$?
+      "$redis" "$skymill" "$node" /run/probot "$worker_gate" || candidate_rc=$?
     # Always inspect the five original services even when a candidate gate
     # fails: fail-closed isolation evidence is not optional on the error path.
     bash "$tools/runtime.sh" status "$scope"

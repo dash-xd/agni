@@ -15,7 +15,7 @@ async function main() {
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
-  assert.match(probotRoot || '', /^\/nix\/store\/[a-z0-9]{32}-probot$/);
+  assert.equal(probotRoot, '/run/probot', 'pinned Probot module cache must be mounted read-only');
   const { RedisStore } = require(path.join(probotRoot, 'src/store'));
   const { normalizeBinding, bindingDigest, bindingArtifactKey } = require(path.join(probotRoot, 'src/authority'));
   const workspace = fs.mkdtempSync('/tmp/agni-worker-live-');

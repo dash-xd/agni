@@ -166,3 +166,9 @@ grep -Fq 'source "$apps/profile/profile.env"' "$here/startup-profile/probot-gues
 grep -Fq 'reason=invalid-profile-contract' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq "checkpoint('pinned-probot-module-closure'" "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'proc_state=' "$here/startup-profile/probot-worker-live.js"
+
+# Application node_modules are mirrored into VM-local qualification state and mounted read-only.
+grep -Fq 'AGNI_WORKER_LIVE_MODULE_CACHE=passed' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'dst=/run/probot,ro' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'module_cache_parent="$base/qualification-cache/probot"' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq "assert.equal(probotRoot, '/run/probot'" "$here/startup-profile/probot-worker-live.js"
