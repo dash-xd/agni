@@ -500,7 +500,12 @@ async function main() {
             } },
             signal: controller.signal, hints, batchLimit: 2,
             fallbackIntervalMs: 1000,
-            onError: error => failures.push(String(error?.message || error).slice(0, 200)),
+            onError: error => {
+              // The HTTP receive is intentionally long-polled. Its client
+              // deadline while idle is not a failed Skymill delivery.
+              if (error?.name === 'TimeoutError') return;
+              failures.push(String(error?.message || error).slice(0, 200));
+            },
           }));
         }
         await until('processor subscriptions ready', async () => subscriptionsReady === 2);
