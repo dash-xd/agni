@@ -15,6 +15,8 @@
       probotReconcileRevision = "1a0ce1f3684c120a8a800e7e63c45f0780bdda09";
       probotProcessorRevision = "2fd46a6a8730ea153346cbc113d7677ef5ad18cf";
       probotProcessorCheckout = "/workspaces/probot-runtime20261114";
+      probotSubscriptionRevision = "a189e3d8337add66f656055296e7315041a763bf";
+      probotSubscriptionCheckout = "/workspaces/probot-subscription20261114";
       # Smoke ghxd seeds the exact private-source commit into Nix-Alpine.
       # The Nix app validates it at execution time; no private fetch during evaluation.
       probotReconcileCheckout = "/workspaces/probot-runtime20261114";
@@ -515,6 +517,50 @@
               ${pkgs.nodejs_22}/bin/node --test "$src/test/processor-subscriber.test.js"
               echo "AGNI_PROBOT_PROCESSOR_CONTRACT=passed source=$rev hints=optional fallback=bounded stream=authoritative"
             ''}";
+          };
+          subscription-groups-contract = {
+            type = "app";
+            program = "${pkgs.writeShellScript "agni-subscription-groups-contract" ''
+              set -euo pipefail
+              src=${probotSubscriptionCheckout}
+              rev=${probotSubscriptionRevision}
+              test -f "$src/.nix-xd-source-revision"
+              test "$(cat "$src/.nix-xd-source-revision")" = "$rev"
+              ${pkgs.nodejs_22}/bin/node --check "$src/src/subscription-execution.js"
+              ${pkgs.nodejs_22}/bin/node --test "$src/test/subscription-execution.test.js"
+              echo "AGNI_PROBOT_SUBSCRIPTION_CONTRACT=passed source=$rev scope=org-tenant-application-subscription"
+            ''}";
+          };
+          subscription-groups-source-artifact = {
+            type = "app";
+            program = "${pkgs.writeShellApplication {
+              name = "agni-subscription-groups-source-artifact";
+              runtimeInputs = [ pkgs.bash pkgs.coreutils pkgs.nix ];
+              text = ''
+                set -Eeuo pipefail
+                rev=${probotSubscriptionRevision}
+                source=${probotSubscriptionCheckout}
+                test -f "$source/.nix-xd-source-revision"
+                test "$(cat "$source/.nix-xd-source-revision")" = "$rev"
+                test -f "$source/src/subscription-execution.js"
+                root="$HOME/.local/state/agni/fatline/subscription/$rev"
+                mkdir -p "$root"
+                candidate="$(mktemp -d)"
+                trap 'rm -rf -- "$candidate"' EXIT
+                mkdir -p "$candidate/probot-subscription20261114"
+                cp -R "$source/src" "$candidate/probot-subscription20261114/"
+                printf '%s\n' "$rev" > "$candidate/probot-subscription20261114/.source-revision"
+                artifact="$(nix-store --add "$candidate/probot-subscription20261114")"
+                [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-subscription20261114$ ]] || exit 1
+                if [[ ! -e "$root/source" ]]; then
+                  nix-store --realise --add-root "$root/source" "$artifact" >/dev/null
+                else
+                  test "$(readlink -f "$root/source")" = "$artifact"
+                fi
+                echo "AGNI_PROBOT_SUBSCRIPTION_ARTIFACT=$artifact"
+                echo "AGNI_PROBOT_SUBSCRIPTION_ARTIFACT_QUALIFIED=passed revision=$rev rooted=true"
+              '';
+            }}/bin/agni-subscription-groups-source-artifact";
           };
           reconcile-source-artifact = {
             type = "app";
