@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -153,6 +153,12 @@ grep -Fq 'worker_gate=memory' "$here/operations/guest-migration.sh"
 grep -Fq '"$worker_gate" == memory' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'AGNI_WORKER_MEMORY_RECOVERY=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_WORKER_MEMORY_OUTAGE=passed' "$here/startup-profile/probot-worker-live.js"
+
+# A fence gate must use the isolated live runner and verify worker restart results.
+grep -Fq 'worker_gate=fence' "$here/operations/guest-migration.sh"
+grep -Fq '"$worker_gate" == fence' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_WORKER_FENCE=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_WORKER_FENCE_HOOK=armed' "$here/startup-profile/probot-worker-live.js"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
