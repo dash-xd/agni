@@ -55,10 +55,23 @@ class Qualification(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validator.verify(out)
 
+    def test_missing_or_invalid_network_fails_before_generator(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "units"
+            module.render(GOOD, out)
+            network = out / "fatline-arm-vm1.network"
+            network.unlink()
+            with self.assertRaises(ValueError):
+                validator.verify(out)
+            network.write_text("[Network]\\nNetworkName=wrong-network\\nInternal=true\\n")
+            with self.assertRaises(ValueError):
+                validator.verify(out)
+
     def test_two_isolated_service_pairs(self):
         entries = self.render()
-        self.assertEqual(len(entries), 5)
+        self.assertEqual(len(entries), 6)
         self.assertEqual(json.loads(entries["manifest.json"])["activation"], "blocked")
+        self.assertEqual(entries["fatline-arm-vm1.network"], "[Network]\\nNetworkName=nix-xd-fatline-arm-vm1\\nInternal=true\\n")
         for group in ("a", "b"):
             prefix = "fatline-arm-vm1-subscription-" + group
             transport = entries[prefix + "-skymill.container"]
