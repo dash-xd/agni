@@ -507,3 +507,10 @@ tries every remaining child and the fixture directory even if one stop fails.
 The candidate's node-redis client is destroyed locally rather than relying on
 an unbounded QUIT round-trip during teardown. Agni's Makefile now requires an
 explicit `NIX_XD_DIR` to avoid silently selecting a stale dated workspace.
+
+The guest bootstrap gate sources and verifies its activated `profile.env` before
+any candidate launch, so the rollback/invocation checks use initialized paths.
+Probot's pinned router module closure is loaded in a bounded child before HTTP
+startup, distinguishing module-store stalls from service initialization stalls.
+On HTTP readiness timeout, the candidate emits the Node process state and
+wait channel without publishing environment variables or application secrets.

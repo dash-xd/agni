@@ -445,7 +445,20 @@ case "$action" in
     [[ $# == 3 ]]
     worker_gate="$3"
     [[ "$worker_gate" == bootstrap || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == full ]] || exit 2
-    [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" ]] || exit 1
+    [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" &&
+       -s "$apps/profile/profile.env" ]] || exit 1
+    source "$apps/profile/profile.env"
+    [[ "$profile_scope" == "$scope" &&
+       "$profile_roles" == 'redis nginx logma skymill probot' &&
+       "$profile_bundle" == /var/mnt/nixstore/* &&
+       "$profile_probe" == /nix/store/*/bin/* ]] || {
+      echo 'AGNI_WORKER_LIVE=blocked reason=invalid-profile-contract' >&2
+      exit 1
+    }
+    [[ -f "$profile_bundle/bootstrap.sh" ]] || {
+      echo 'AGNI_WORKER_LIVE=blocked reason=bootstrap-script-not-found' >&2
+      exit 1
+    }
     generation="$(cat "$apps/activated-probot-generation")"
     [[ "$generation" =~ ^[a-f0-9]{64}-([a-z0-9]{32}-candidate)$ ]] || exit 1
     bundle_store="/nix/store/${BASH_REMATCH[1]}"

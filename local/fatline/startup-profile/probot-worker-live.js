@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
@@ -161,10 +161,22 @@ async function main() {
     const signs = [...childSignals.entries()]
       .map(([role, entries]) => role + ':' + [...entries].join(','))
       .join(';') || 'none';
+    const subprocess = children.get('probot');
+    let procState = 'unavailable';
+    let waitChannel = 'unavailable';
+    if (subprocess?.pid) {
+      try {
+        const stat = fs.readFileSync('/proc/' + subprocess.pid + '/status', 'utf8');
+        procState = /^State:\s*(\S+)/m.exec(stat)?.[1] || 'unknown';
+        waitChannel = fs.readFileSync('/proc/' + subprocess.pid + '/wchan', 'utf8').trim()
+          .replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 48) || 'none';
+      } catch {}
+    }
     throw new Error(label + ' unavailable' +
       (last ? ': ' + String(last.message) : '') +
       ' attempts=' + attempts + ' listener_ready=' + readySignals.has('probot') +
-      ' child_categories=' + signs);
+      ' child_categories=' + signs + ' proc_state=' + procState +
+      ' wait_channel=' + waitChannel);
   }
   function redisStore() {
     const store = new RedisStore({ url: redisUrl, username: 'probot_state', password: redisState,
@@ -294,6 +306,19 @@ async function main() {
         return response.ok;
       }, 60000);
     }
+    // Qualify the pinned module closure separately from HTTP startup.
+    checkpoint('pinned-probot-module-closure', 'begin');
+    try {
+      execFileSync(nodeBin, [
+        '-e', "require(process.argv[1]); process.stdout.write('ready')",
+        path.join(probotRoot, 'router/service.js'),
+      ], { env: baseEnv, timeout: 60000, stdio: 'pipe', maxBuffer: 4096 });
+    } catch (error) {
+      const reason = error.code === 'ETIMEDOUT' ? 'timeout' :
+        error.signal ? 'signal' : 'module-resolution';
+      throw new Error('pinned Probot module closure unavailable category=' + reason);
+    }
+    checkpoint('pinned-probot-module-closure');
     startProbot(true);
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');

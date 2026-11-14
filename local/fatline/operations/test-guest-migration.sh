@@ -160,3 +160,9 @@ grep -Fq 'AGNI_WORKER_LIVE_BASELINE=passed' "$here/startup-profile/probot-guest-
 grep -Fq 'candidate_exit=$candidate_rc' "$here/startup-profile/probot-guest-app.sh"
 ! grep -Fq 'nix.xd20261112' "$here/Makefile"
 grep -Fq 'store.client.destroy()' "$here/startup-profile/probot-worker-live.js"
+
+# Failure-path bootstrap checks need a validated profile contract; cold module loading has its own gate.
+grep -Fq 'source "$apps/profile/profile.env"' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'reason=invalid-profile-contract' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq "checkpoint('pinned-probot-module-closure'" "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'proc_state=' "$here/startup-profile/probot-worker-live.js"
