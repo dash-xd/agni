@@ -473,3 +473,7 @@ transient candidate, not a production traffic switch.
 
 The isolated live candidate's `/tmp` tmpfs uses mode `1777` so its UID 1000
 process can create temporary state while the root filesystem remains read-only.
+
+The candidate supervisor now records unexpected child exit codes and safely
+observes node-redis socket errors; it does not print credential values.
+Such failures still fail the qualification and always trigger cleanup.

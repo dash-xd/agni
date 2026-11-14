@@ -121,3 +121,8 @@ echo 'AGNI_WORKER_LIVE_STATIC=passed isolated=true credential_source=ephemeral'
 
 # The non-root candidate must be able to create its own temporary state.
 grep -Fq -- '--tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m' "$here/startup-profile/probot-guest-app.sh"
+
+# Persistent node-redis client errors and unexpected child exits must be bounded.
+grep -Fq "store.client.on('error'" "$here/startup-profile/probot-worker-live.js"
+grep -Fq "child.on('exit'" "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'assertChildrenHealthy()' "$here/startup-profile/probot-worker-live.js"

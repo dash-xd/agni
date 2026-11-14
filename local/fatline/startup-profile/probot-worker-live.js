@@ -32,6 +32,8 @@ async function main() {
   const installationId = 900000078;
   const guid = crypto.randomUUID();
   const children = new Map();
+  const processFailures = new Map();
+  const redisConnectionFailures = [];
   const baseEnv = { HOME: workspace, TMPDIR: workspace, PATH: '/bin:/usr/bin',
     NODE_ENV: 'test', NO_COLOR: '1' };
   const acl = [
@@ -59,6 +61,18 @@ async function main() {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     children.set(name, child);
+    child.on('error', error => {
+      processFailures.set(name, error.code || 'spawn-error');
+      console.error('AGNI_WORKER_LIVE_CHILD=failed role=' + name + ' reason=' + (error.code || 'spawn-error'));
+    });
+    child.on('exit', (code, signal) => {
+      // Track unexpected child exits; fault-injection stops are removed first.
+      if (children.get(name) === child) {
+        processFailures.set(name, code === null ? signal : String(code));
+        console.error('AGNI_WORKER_LIVE_CHILD=exited role=' + name +
+          ' exit=' + (code === null ? 'signal' : code));
+      }
+    });
     for (const stream of [child.stdout, child.stderr]) {
       stream.on('data', chunk => {
         const output = String(chunk).trim();
@@ -80,10 +94,17 @@ async function main() {
       if (child.exitCode === null && !child.signalCode) child.kill('SIGKILL');
     })]);
   }
+  function assertChildrenHealthy() {
+    if (processFailures.size) {
+      const [role, reason] = processFailures.entries().next().value;
+      throw new Error('candidate child process exited role=' + role + ' reason=' + reason);
+    }
+  }
   async function until(label, check, maxMs = 20000) {
     const deadline = Date.now() + maxMs;
     let last;
     while (Date.now() < deadline) {
+      assertChildrenHealthy();
       try {
         if (await check()) return;
       } catch (error) { last = error; }
@@ -92,8 +113,16 @@ async function main() {
     throw new Error(label + ' unavailable' + (last ? ': ' + String(last.message) : ''));
   }
   function redisStore() {
-    return new RedisStore({ url: redisUrl, username: 'probot_state', password: redisState,
+    const store = new RedisStore({ url: redisUrl, username: 'probot_state', password: redisState,
       db: 0, prefix: statePrefix });
+    // node-redis uses EventEmitter. An emitted socket error without a listener
+    // aborts the supervisor before cleanup or process-state reporting.
+    store.client.on('error', error => {
+      redisConnectionFailures.push(error.code || error.name || 'socket-error');
+      console.error('AGNI_WORKER_LIVE_REDIS_CLIENT=error category=' +
+        (error.code || error.name || 'socket-error'));
+    });
+    return store;
   }
   function startSkymill() {
     return launch('skymill', skymillBin, [], {
@@ -223,6 +252,7 @@ async function main() {
       return delivery && delivery.executionStatus === 'succeeded' &&
         delivery.outcomeStatus === 'acked' ? true : false;
     }, 30000);
+    assertChildrenHealthy();
     const delivery = await store.getDelivery(guid);
     assert.equal(delivery.executionStatus, 'succeeded');
     assert.equal(delivery.outcomeStatus, 'acked');
@@ -242,6 +272,7 @@ async function main() {
     assert.equal((await status()).Pending.Count, 0);
     console.log('AGNI_WORKER_LIVE_RECOVERY=passed skymill_restarted=true worker_restarted=true replay_deduplicated=true');
 
+    assertChildrenHealthy();
     await store.close();
     console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
   } finally {
