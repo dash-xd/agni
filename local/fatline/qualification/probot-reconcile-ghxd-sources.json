@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "scope": "probot-reconcile-provider-source",
+  "sources": {
+    "probot-runtime": {
+      "repository": "xd-dash/probot-runtime",
+      "revision": "1a0ce1f3684c120a8a800e7e63c45f0780bdda09",
+      "checkout": "probot-runtime20261114"
+    }
+  }
+}
