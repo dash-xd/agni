@@ -393,3 +393,8 @@ The diagnostic probes both `logma:8080` (declared contract) and
 `logma:18081` (the unexpected observed listener) and fetches
 `/lifecycle/readyz` on each without authentication or mutation. A
 successful TCP connection alone does not establish Logma HTTP readiness.
+
+Network diagnosis now reports the current Logma process executable and
+non-secret command arguments alongside the installed Quadlet Exec line. It
+uses only bounded, read-only Podman/process inspection and does not interpret
+an unrelated HTTP 401 response as lifecycle readiness.

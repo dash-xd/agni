@@ -77,3 +77,5 @@ fi
 echo 'AGNI_OPERATOR_SHELL=passed invocation=child-shell parent_options=unchanged'
 grep -Fq 'AGNI_RUNTIME_LOGMA_LISTEN=begin' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'AGNI_RUNTIME_LOGMA_STARTUP=begin' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_RUNTIME_LOGMA_EXECUTABLE=begin' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_RUNTIME_LOGMA_CMDLINE=begin' "$here/startup-profile/probot-guest-app.sh"
