@@ -172,3 +172,14 @@ grep -Fq 'AGNI_WORKER_LIVE_MODULE_CACHE=passed' "$here/startup-profile/probot-gu
 grep -Fq 'dst=/run/probot,ro' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'module_cache_parent="$base/qualification-cache/probot"' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq "assert.equal(probotRoot, '/run/probot'" "$here/startup-profile/probot-worker-live.js"
+
+# VM-local mirror creation and the candidate lifecycle share one guest lock.
+python3 - "$here/startup-profile/probot-guest-app.sh" <<'PY'
+import pathlib,sys
+s=pathlib.Path(sys.argv[1]).read_text()
+p=s.index('  qualify-worker-live)')
+q=s.index('  qualify-worker-candidate)',p)
+section=s[p:q]
+assert section.index('flock -x 9') < section.index('module_tmp=')
+assert section.count('flock -x 9') == 1
+PY

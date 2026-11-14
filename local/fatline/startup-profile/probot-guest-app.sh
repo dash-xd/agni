@@ -476,6 +476,8 @@ case "$action" in
     for executable in "$node" "$skymill" "$redis"; do
       [[ -x "/var/mnt/nixstore/${executable#/nix/store/}" ]] || exit 1
     done
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
     # Materialize the pinned npm closure once onto VM-local storage. Node's
     # directory-by-directory resolution over 9P is not a reliable startup gate.
     module_source="/var/mnt/nixstore/${probot#/nix/store/}"
@@ -508,8 +510,6 @@ case "$action" in
       exit 1
     }
     echo 'AGNI_WORKER_LIVE_MODULE_CACHE=passed source=pinned backing=vm-local mode=read-only-in-candidate'
-    exec 9>"$base/lifecycle.lock"
-    flock -x 9
     bash "$tools/runtime.sh" status "$scope"
     before=()
     for role in redis nginx logma skymill probot; do
