@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "scope": "probot-processor-subscriber-qualification",
+  "sources": {
+    "probot-runtime": {
+      "repository": "xd-dash/probot-runtime",
+      "revision": "96fc8561096dd9002cbba2ba2e6fbff37d67b5a2",
+      "checkout": "probot-runtime20261114"
+    }
+  }
+}
