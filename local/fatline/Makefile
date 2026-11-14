@@ -2,7 +2,8 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # Agni owns deployment names and lifecycle operations; nix.xd owns transport.
-NIX_XD_DIR ?= $(abspath $(CURDIR)/../../../nix.xd20261112)
+# Explicitly select the sibling nix.xd checkout. Never default to an old dated workspace.
+NIX_XD_DIR ?=
 DEPLOYMENT ?= vm1
 PROVIDER ?= podman
 OWNER_SCOPE ?= nix-xd-arm

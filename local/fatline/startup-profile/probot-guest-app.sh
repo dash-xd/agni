@@ -470,6 +470,7 @@ case "$action" in
     for role in redis nginx logma skymill probot; do
       before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
     done
+    candidate_rc=0
     podman run --rm --pull=never --network none \
       --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
       --read-only --read-only-tmpfs=false --security-opt label=disable \
@@ -477,7 +478,9 @@ case "$action" in
       --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
       --tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m \
       --rootfs "$apps/rootfs" "$node" "$tool_store/probot-worker-live.js" \
-      "$redis" "$skymill" "$node" "$probot" "$worker_gate"
+      "$redis" "$skymill" "$node" "$probot" "$worker_gate" || candidate_rc=$?
+    # Always inspect the five original services even when a candidate gate
+    # fails: fail-closed isolation evidence is not optional on the error path.
     bash "$tools/runtime.sh" status "$scope"
     after=()
     for role in redis nginx logma skymill probot; do
@@ -488,6 +491,11 @@ case "$action" in
       exit 1
     }
     bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    echo "AGNI_WORKER_LIVE_BASELINE=passed gate=$worker_gate invocations=unchanged bootstrap=verified"
+    if [[ "$candidate_rc" != 0 ]]; then
+      echo "AGNI_WORKER_LIVE_QUALIFICATION=failed gate=$worker_gate candidate_exit=$candidate_rc" >&2
+      exit "$candidate_rc"
+    fi
     echo "AGNI_WORKER_LIVE_QUALIFICATION=passed gate=$worker_gate backing=real service_invocations=unchanged worker=isolated promotion=blocked"
     ;;
   qualify-worker-candidate)

@@ -500,3 +500,10 @@ result; no state from one run is reused. Each phase emits elapsed time and
 process readiness evidence. The active five-service VM1 generation must retain
 identical systemd invocation IDs. This makes failures stage-specific; a bootstrap
 failure cannot be reported as a duplicate or recovery failure.
+
+The VM1 baseline status, invocation-ID comparison, and bootstrap verification
+also run after candidate failure, not just after candidate success. Cleanup
+tries every remaining child and the fixture directory even if one stop fails.
+The candidate's node-redis client is destroyed locally rather than relying on
+an unbounded QUIT round-trip during teardown. Agni's Makefile now requires an
+explicit `NIX_XD_DIR` to avoid silently selecting a stale dated workspace.

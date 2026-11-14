@@ -153,3 +153,10 @@ for gate in bootstrap delivery recovery full; do
 done
 grep -Fq 'AGNI_WORKER_LIVE_GATE_PHASE=' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'listener_ready=' "$here/startup-profile/probot-worker-live.js"
+
+# A failed candidate must still capture live service invocation and bootstrap invariants.
+grep -Fq 'candidate_rc=0' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_WORKER_LIVE_BASELINE=passed' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'candidate_exit=$candidate_rc' "$here/startup-profile/probot-guest-app.sh"
+! grep -Fq 'nix.xd20261112' "$here/Makefile"
+grep -Fq 'store.client.destroy()' "$here/startup-profile/probot-worker-live.js"

@@ -358,19 +358,28 @@ async function main() {
     }
 
     assertChildrenHealthy();
-    await store.close();
+    // The qualification store is disposable. Force a bounded local disconnect
+    // instead of awaiting QUIT while worker recovery may affect the peer.
+    store.client.destroy();
     activeStore = undefined;
     console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
     console.log('AGNI_WORKER_LIVE_GATE=passed gate=full');
   } finally {
     // Shut down the client before terminating its backing Redis process.
     if (activeStore) {
-      try { await activeStore.close(); }
-      catch (error) { console.error('AGNI_WORKER_LIVE_REDIS_CLIENT=close-failed'); }
+      try { activeStore.client.destroy(); }
+      catch { console.error('AGNI_WORKER_LIVE_REDIS_CLIENT=close-failed'); }
     }
-    for (const name of ['probot', 'skymill', 'redis']) await stop(name, 'SIGKILL');
-    fs.rmSync(workspace, { recursive: true, force: true });
-    assert.equal(children.size, 0);
+    const failures = [];
+    for (const name of ['probot', 'skymill', 'redis']) {
+      try { await stop(name, 'SIGKILL'); }
+      catch { failures.push(name); }
+    }
+    try { fs.rmSync(workspace, { recursive: true, force: true }); }
+    catch { failures.push('workspace'); }
+    if (children.size || failures.length) {
+      throw new Error('candidate cleanup incomplete roles=' + failures.join(','));
+    }
     console.log('AGNI_WORKER_LIVE_CLEANUP=passed processes=stopped secrets=discarded state=removed');
   }
 }
