@@ -58,6 +58,7 @@ async function main() {
   const statePrefix = 'xd-dash:fatline:runtime:probot-runtime:' + scope;
   const consumerGroup = 'agni-worker-candidate';
   const skymillToken = crypto.randomBytes(32).toString('hex');
+  const skymillPeerToken = crypto.randomBytes(32).toString('hex');
   const redisSkymill = crypto.randomBytes(32).toString('hex');
   const redisState = crypto.randomBytes(32).toString('hex');
   const operatorToken = crypto.randomBytes(32).toString('hex');
@@ -99,6 +100,8 @@ async function main() {
   }
   const aclFile = credential('users.acl', acl.trimEnd());
   const skymillFile = credential('skymill-token', skymillToken);
+  const skymillPeerFile = gate === 'subscription-groups' ?
+    credential('skymill-peer-token', skymillPeerToken) : skymillFile;
   const stateFile = credential('state', redisState);
   const operatorFile = credential('operator', operatorToken);
   const logmaPublishFile = (gate === 'processor-subscriber' || gate === 'processor-independent') ? credential('logma-publish', logmaPublishSecret) : '';
@@ -252,7 +255,7 @@ async function main() {
       SKYMILL_APPLICATION: 'github-webhooks', SKYMILL_STREAM: 'worker-candidate.webhooks',
       SKYMILL_CONSUMER_GROUP: gate === 'subscription-groups' ? consumerGroup + '-subscription-b' : consumerGroup,
       SKYMILL_CONSUMER: consumer,
-      SKYMILL_HTTP_TOKEN_FILE: skymillFile,
+      SKYMILL_HTTP_TOKEN_FILE: skymillPeerFile,
     });
   }
   function startProbot(workerEnabled = true, fenceHook = false) {
@@ -463,10 +466,10 @@ async function main() {
         store, ...scopeIdentity, subscriptionId: groupB,
       });
       const counts = { a: new Map(), b: new Map() };
-      const makeRuntime = (state, label, url, group) => new ProbotRuntime({
+      const makeRuntime = (state, label, url, group, token) => new ProbotRuntime({
         store: state,
         skymill: new SkymillClient({
-          baseUrl: url, token: skymillToken,
+          baseUrl: url, token,
           consumerGroup: group, stream: 'worker-candidate.webhooks',
         }),
         makeApp: makeProbotApp({
@@ -476,10 +479,10 @@ async function main() {
           },
         }),
       });
-      const a = makeRuntime(executionA, 'a', 'http://127.0.0.1:8081', consumerGroup);
-      const b = makeRuntime(executionB, 'b', 'http://127.0.0.1:8082', groupB);
+      const a = makeRuntime(executionA, 'a', 'http://127.0.0.1:8081', consumerGroup, skymillToken);
+      const b = makeRuntime(executionB, 'b', 'http://127.0.0.1:8082', groupB, skymillPeerToken);
       const clientB = new SkymillClient({
-        baseUrl: 'http://127.0.0.1:8082', token: skymillToken,
+        baseUrl: 'http://127.0.0.1:8082', token: skymillPeerToken,
         consumerGroup: groupB, stream: 'worker-candidate.webhooks',
       });
       let recoveryAttempt = 0;
@@ -493,14 +496,25 @@ async function main() {
         }
         return batch;
       };
-      const groupStatus = async url => {
+      const groupStatus = async (url, token) => {
         const response = await fetch(url + '/v1/status', {
-          headers: { authorization: 'Bearer ' + skymillToken },
+          headers: { authorization: 'Bearer ' + token },
           signal: AbortSignal.timeout(1000),
         });
         assert.equal(response.status, 200);
         return response.json();
       };
+      const wrongA = await fetch('http://127.0.0.1:8081/v1/status', {
+        headers: { authorization: 'Bearer ' + skymillPeerToken },
+        signal: AbortSignal.timeout(1000),
+      });
+      const wrongB = await fetch('http://127.0.0.1:8082/v1/status', {
+        headers: { authorization: 'Bearer ' + skymillToken },
+        signal: AbortSignal.timeout(1000),
+      });
+      assert.equal(wrongA.status, 401);
+      assert.equal(wrongB.status, 401);
+      console.log('AGNI_PROBOT_SUBSCRIPTION_AUTH=passed group_a_token=isolated group_b_token=isolated');
       const source = crypto.randomUUID();
       const accepted = await post(signature, 'subscription-groups-event', source);
       assert.equal(accepted.status, 202);
@@ -508,7 +522,7 @@ async function main() {
       assert.equal(pendingB.deliveries?.length, 1);
       assert.equal(pendingB.deliveries[0].message.metadata.github_delivery_id, source);
       assert.equal(pendingB.deliveries[0].attempt, 1);
-      assert.equal((await groupStatus('http://127.0.0.1:8082')).Pending.Count, 1);
+      assert.equal((await groupStatus('http://127.0.0.1:8082', skymillPeerToken)).Pending.Count, 1);
       await stop('skymill-peer', 'SIGKILL');
       const successA = await a.drain({ limit: 1 });
       assert.equal(successA.length, 1);
@@ -517,7 +531,7 @@ async function main() {
       assert.equal(counts.b.get(source) || 0, 0);
       assert.equal((await executionA.getDelivery(source)).outcomeStatus, 'acked');
       assert.equal(await executionB.getDelivery(source), null);
-      assert.equal((await groupStatus('http://127.0.0.1:8081')).Pending.Count, 0);
+      assert.equal((await groupStatus('http://127.0.0.1:8081', skymillToken)).Pending.Count, 0);
       console.log('AGNI_PROBOT_SUBSCRIPTION_ISOLATION=passed group_a=acked group_b=failed effect_a=1 effect_b=0');
 
       startSkymillPeer('processor-b-recovery');
@@ -527,7 +541,7 @@ async function main() {
         });
         return response.status === 401;
       });
-      assert.equal((await groupStatus('http://127.0.0.1:8082')).Pending.Count, 1);
+      assert.equal((await groupStatus('http://127.0.0.1:8082', skymillPeerToken)).Pending.Count, 1);
       let reclaimed = false;
       await until('subscription B PEL recovery', async () => {
         const result = await b.drain({ limit: 1 }).catch(error => {
@@ -537,7 +551,7 @@ async function main() {
         if (result.some(entry => entry.deliveryId === source && entry.execution === 'succeeded')) {
           reclaimed = true;
         }
-        return reclaimed && (await groupStatus('http://127.0.0.1:8082')).Pending.Count === 0;
+        return reclaimed && (await groupStatus('http://127.0.0.1:8082', skymillPeerToken)).Pending.Count === 0;
       }, 105000);
       assert.equal(counts.b.get(source), 1);
       assert.equal(counts.a.get(source), 1);
@@ -572,8 +586,8 @@ async function main() {
       assert.equal(repeatB[0].execution, 'already_succeeded');
       assert.equal(counts.a.get(source), 1);
       assert.equal(counts.b.get(source), 1);
-      assert.equal((await groupStatus('http://127.0.0.1:8081')).Pending.Count, 0);
-      assert.equal((await groupStatus('http://127.0.0.1:8082')).Pending.Count, 0);
+      assert.equal((await groupStatus('http://127.0.0.1:8081', skymillToken)).Pending.Count, 0);
+      assert.equal((await groupStatus('http://127.0.0.1:8082', skymillPeerToken)).Pending.Count, 0);
       assertChildrenHealthy();
       console.log('AGNI_PROBOT_SUBSCRIPTION_REPLAY=passed group_a=deduplicated group_b=deduplicated effects=unchanged');
       console.log('AGNI_PROBOT_SUBSCRIPTION_GROUPS_LIVE=passed groups=2 execution_scopes=2 settlement=independent');
