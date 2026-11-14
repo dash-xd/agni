@@ -13,6 +13,8 @@
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
       probotReconcileRevision = "1a0ce1f3684c120a8a800e7e63c45f0780bdda09";
+      probotProcessorRevision = "96fc8561096dd9002cbba2ba2e6fbff37d67b5a2";
+      probotProcessorCheckout = "/workspaces/probot-runtime20261114";
       # Smoke ghxd seeds the exact private-source commit into Nix-Alpine.
       # The Nix app validates it at execution time; no private fetch during evaluation.
       probotReconcileCheckout = "/workspaces/probot-runtime20261114";
@@ -465,6 +467,21 @@
             type = "app";
             program = "${pkgs.writeShellScript "agni-fatline-isolated-runtime-grants" ''
               exec ${pkgs.coreutils}/bin/cat ${self.packages.${system}.isolated-runtime-grants}
+            ''}";
+          };
+          processor-subscriber-contract = {
+            type = "app";
+            program = "${pkgs.writeShellScript "agni-processor-subscriber-contract" ''
+              set -euo pipefail
+              src=${probotProcessorCheckout}
+              rev=${probotProcessorRevision}
+              test -f "$src/.nix-xd-source-revision"
+              test "$(cat "$src/.nix-xd-source-revision")" = "$rev"
+              ${pkgs.nodejs_22}/bin/node --check "$src/src/processor.js"
+              ${pkgs.nodejs_22}/bin/node --check "$src/src/logma-subscriber.js"
+              ${pkgs.nodejs_22}/bin/node --check "$src/router/service.js"
+              ${pkgs.nodejs_22}/bin/node --test "$src/test/processor-subscriber.test.js"
+              echo "AGNI_PROBOT_PROCESSOR_CONTRACT=passed source=$rev hints=optional fallback=bounded stream=authoritative"
             ''}";
           };
           reconcile-source-artifact = {
