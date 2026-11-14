@@ -397,3 +397,14 @@ successful TCP connection alone does not establish Logma HTTP readiness.
 Network diagnosis now reports the current Logma process executable alongside the installed Quadlet Exec line. It
 uses only bounded, read-only Podman/process inspection and does not interpret
 an unrelated HTTP 401 response as lifecycle readiness.
+
+## Pinned Logma lifecycle HTTP contract
+
+The native Probot artifact build compiles Logma `cmd/api-lifecycle` (not
+`cmd/api`). Its default port is **18081** and the versioned lifecycle API
+lives under `/lifecycle/api/v0.0.1`. This revision has no strict readiness
+route. The runtime qualification tests the read-only authenticated
+`GET /lifecycle/api/v0.0.1/policies` endpoint using the existing private
+Logma API key, including unauthenticated denial. This establishes basic HTTP
+availability, **not** strict Redis/Functions readiness; a future dedicated
+readiness qualification must be sourced from Logma and version-pinned.

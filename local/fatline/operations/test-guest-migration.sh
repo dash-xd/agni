@@ -79,3 +79,11 @@ grep -Fq 'AGNI_RUNTIME_LOGMA_LISTEN=begin' "$here/startup-profile/probot-guest-a
 grep -Fq 'AGNI_RUNTIME_LOGMA_STARTUP=begin' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'AGNI_RUNTIME_LOGMA_EXECUTABLE=begin' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'AGNI_RUNTIME_LOGMA_QUADLET_EXEC=begin' "$here/startup-profile/probot-guest-app.sh"
+
+# Both the generated guest entrypoint and host dispatcher must parse.
+bash -n "$here/startup-profile/probot-guest-app.sh"
+[[ "$(grep -c '^esac$' "$here/startup-profile/probot-guest-app.sh")" -ge 1 ]]
+grep -Fq -- '--logma-api-key-file /run/logma-api-key' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'http://logma:18081/lifecycle/api/v0.0.1/policies' "$here/startup-profile/probot-runtime-qualify.py"
+! grep -Fq 'http://logma:8080/lifecycle/readyz' "$here/startup-profile/probot-runtime-qualify.py"
+echo 'AGNI_LOGMA_RUNTIME_CONTRACT=passed entrypoint=cmd/api-lifecycle port=18081 auth=x-api-key strict_ready=unqualified'

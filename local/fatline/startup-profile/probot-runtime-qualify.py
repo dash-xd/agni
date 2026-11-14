@@ -7,11 +7,13 @@ import secrets
 import urllib.error
 import urllib.request
 
-def request(url, method="GET", body=None, token=None, expected=200):
+def request(url, method="GET", body=None, token=None, api_key=None, expected=200):
     payload = None if body is None else json.dumps(body, separators=(",", ":")).encode()
     headers = {"Content-Type": "application/json"}
     if token is not None:
         headers["Authorization"] = "Bearer " + token
+    if api_key is not None:
+        headers["X-API-Key"] = api_key
     req = urllib.request.Request(url, data=payload, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
@@ -26,25 +28,30 @@ def request(url, method="GET", body=None, token=None, expected=200):
         raise RuntimeError(f"unexpected HTTP status for {method} {url}: {code} (expected {expected})")
     if expected != 200:
         return None
-    if url.endswith("/lifecycle/readyz"):
-        if content_type.split(";")[0].strip() != "text/plain" or raw.strip() != b"ready":
-            raise RuntimeError("Logma strict readiness body mismatch")
-        return None
     if url == "http://probot:3000/":
         return None
     return json.loads(raw)
 
-def qualify(token):
+def qualify(token, logma_key):
     if not (len(token) == 64 and all(c in "0123456789abcdef" for c in token)):
         raise RuntimeError("Skymill bearer credential must be a raw 64-character hex token")
     base = "http://skymill:8081"
     request(base + "/v1/status", expected=401)
     # The consumer group may not exist until the first receive request.
     # A delivery for another source ID is rejected rather than ACKed.
-    request("http://logma:8080/lifecycle/readyz")
+    # Pinned cmd/api-lifecycle listens on 18081 with a versioned lifecycle API.
+    # It has no strict dependency readyz; do not report such readiness as qualified.
+    logma_url = "http://logma:18081/lifecycle/api/v0.0.1/policies"
+    request(logma_url, expected=401)
+    policies = request(logma_url, api_key=logma_key)
+    if not isinstance(policies, list) or not policies or not all(
+        isinstance(p, dict) and {"name", "policy_code", "duration"} <= p.keys()
+        for p in policies
+    ):
+        raise RuntimeError("Logma lifecycle policies contract mismatch")
     request("http://probot:3000/")
     request("http://probot:3000/probot/deliveries/missing", expected=401)
-    print("AGNI_RUNTIME_HTTP=passed logma_ready=true probot_http=true operator_auth=denied skymill_auth=denied", flush=True)
+    print("AGNI_RUNTIME_HTTP=passed logma_api=true logma_strict_ready=unqualified probot_http=true operator_auth=denied skymill_auth=denied", flush=True)
     nonce = secrets.token_hex(24)
     message = {"idempotency_key": nonce, "message_id": nonce,
                "payload_base64": base64.b64encode(("agni-qualification:" + nonce).encode()).decode()}
@@ -78,7 +85,12 @@ def qualify(token):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--token-file", required=True)
+    parser.add_argument("--logma-api-key-file", required=True)
     args = parser.parse_args()
     with open(args.token_file, "rb") as credential:
         token = credential.read().decode()
-    qualify(token)
+    with open(args.logma_api_key_file, "rb") as credential:
+        logma_key = credential.read().decode().removesuffix("\\n")
+    if not logma_key or any(c.isspace() for c in logma_key):
+        raise RuntimeError("Logma API key credential invalid")
+    qualify(token, logma_key)
