@@ -533,7 +533,7 @@
                 nativeBuildInputs = [ pkgs.python3 pkgs.findutils pkgs.coreutils ];
               } ''
                 python3 ${./qualification}/render-subscription-units.py ${specification} "$out"
-                test "$(find "$out" -name '*.container' | wc -l)" -eq 4
+                python3 ${./qualification}/verify-subscription-quadlets.py "$out"
               '';
             in {
               type = "app";
