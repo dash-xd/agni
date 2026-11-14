@@ -101,7 +101,7 @@ def render(spec, output):
         (output / (skymill_name + ".container")).write_text("\n".join(skymill) + "\n")
         (output / (processor_name + ".container")).write_text("\n".join(processor) + "\n")
     (output / (SCOPE + ".network")).write_text(
-        "[Network]\\nNetworkName=nix-xd-" + SCOPE + "\\nInternal=true\\n"
+        "[Network]\nNetworkName=nix-xd-" + SCOPE + "\nInternal=true\n"
     )
     (output / "manifest.json").write_text(json.dumps({
         "schema": 1, "scope": SCOPE, "subscription_revision": REVISION,
