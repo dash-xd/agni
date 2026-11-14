@@ -284,7 +284,9 @@ async function main() {
       "  return app;",
       "};",
     ].join('\n') + '\n', { mode: 0o600, flag: 'wx' });
-    console.log('AGNI_WORKER_EFFECT_HOOK=armed phase=post-handler pre-completion');
+    console.log(gate === 'reconcile'
+      ? 'AGNI_WORKER_RECONCILE_HOOK=armed phase=post-handler pre-completion'
+      : 'AGNI_WORKER_EFFECT_HOOK=armed phase=post-handler pre-completion');
   }
 
   const body = Buffer.from(JSON.stringify({
@@ -449,6 +451,10 @@ async function main() {
       });
       assert.equal(Number(changed), 1, 'ambiguous fence CAS must succeed exactly once');
       assert.equal((await store.getDelivery(guid)).executionStatus, 'succeeded');
+      const replayedDecision = await store.client.eval(
+        "if redis.call('HGET', KEYS[1], 'execution_status') ~= 'ambiguous' then return 0 end; return 1",
+        { keys: [store.key('delivery', guid)], arguments: [] });
+      assert.equal(Number(replayedDecision), 0, 'reconciliation decision cannot be replayed');
       console.log('AGNI_WORKER_RECONCILE_DECISION=passed evidence=verified transition=conditional');
 
       const providerDeliveryId = (await store.getDelivery(guid)).providerDeliveryId;
