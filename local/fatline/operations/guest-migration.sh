@@ -62,10 +62,16 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
+
+if [[ "$operation" == diagnose-runtime-network ]]; then
+  guest diagnose-runtime-network
+  echo 'AGNI_DEPLOYMENT=observed deployment=vm1 operation=diagnose-runtime-network changes=none'
+  exit 0
+fi
 
 if [[ "$operation" == qualify-runtime ]]; then
   run_step "$log_dir/runtime.log" guest qualify-runtime

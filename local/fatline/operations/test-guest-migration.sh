@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -50,6 +50,8 @@ set -e
 grep -Fq '    activation_check' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'install-probot "$scope" "$target/rendered"' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'bootstrap.sh" verify "$scope" "$profile_probe"' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq '  diagnose-runtime-network)' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_RUNTIME_NETWORK=observed changes=none' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq '  qualify-runtime)' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'AGNI_RUNTIME_QUALIFICATION=passed ' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'provider_delivery_id' "$here/startup-profile/probot-runtime-qualify.py"

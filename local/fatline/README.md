@@ -372,3 +372,14 @@ Agni qualification succeeds. The message `[Process completed]`
 comes from the terminal session after its foreground process exits;
 if it also appears after a successful ordinary shell command, check
 the Terminal profile's shell startup command and any one-shot launcher.
+
+## Read-only runtime network diagnosis
+
+`deployment-diagnose-runtime-network` runs against the *already deployed*
+VM1 generation and reports systemd active states, container status and
+TCP/DNS results from an isolated rootless container on the actual Fatline
+network. It checks the pinned service endpoints: logma:8080,
+skymill:8081, probot:3000, and redis-proxy:6379. It does not authenticate,
+read secrets, restart units, or write Redis data. The target returns
+`AGNI_RUNTIME_NETWORK=observed changes=none` even if an endpoint is
+unreachable; inspect `AGNI_NETWORK_ENDPOINT` lines for the actual failure.

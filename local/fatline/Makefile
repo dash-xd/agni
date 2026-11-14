@@ -11,7 +11,7 @@ MACHINE ?= coreos-arm64
 export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
-.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime check-deployment
+.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-diagnose-runtime-network check-deployment
 
 help:
 	@printf '%s\n' \
@@ -27,6 +27,7 @@ help:
 	  'make deployment-migrate-activate-sandbox DEPLOYMENT=vm1 REDIS_DATA_LOSS_ACK=DISCARD-VM1-REDIS-MEMORY  Local disposable five-role cutover' \
 	  'make deployment-recover-sandbox-http DEPLOYMENT=vm1  Repair installed Skymill token after interrupted cutover' \
 	  'make deployment-qualify-runtime DEPLOYMENT=vm1  Live five-role ACL, HTTP, Skymill synthetic delivery checks' \
+	  'make deployment-diagnose-runtime-network DEPLOYMENT=vm1  Read-only Logma/Skymill/Probot network diagnosis' \
 	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety'
 
 deployment-assess:
@@ -51,6 +52,9 @@ deployment-migrate-activation-check:
 
 deployment-migrate-recovery-qualify:
 	@bash operations/guest-migration.sh migrate-recovery-qualify
+
+deployment-diagnose-runtime-network:
+	@bash operations/guest-migration.sh diagnose-runtime-network
 
 deployment-qualify-runtime:
 	@bash operations/guest-migration.sh qualify-runtime

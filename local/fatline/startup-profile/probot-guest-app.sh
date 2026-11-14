@@ -389,6 +389,42 @@ case "$action" in
     }
     echo 'AGNI_RECOVERY_QUALIFICATION=passed restore=isolated roles=4 activation=blocked redis_restart=none root_retention=unverified'
     ;;
+  diagnose-runtime-network)
+    [[ $# == 2 ]]
+    [[ -s "$apps/profile/profile.env" && -s "$apps/activated-probot-generation" ]] || {
+      echo 'AGNI_RUNTIME_NETWORK=blocked reason=not-activated' >&2
+      exit 1
+    }
+    source "$apps/profile/profile.env"
+    [[ "$profile_roles" == 'redis nginx logma skymill probot' ]] || exit 1
+    for role in redis nginx logma skymill probot; do
+      unit="$scope-$role.service"
+      state="$(systemctl --user show "$unit" -p ActiveState --value)"
+      invocation="$(systemctl --user show "$unit" -p InvocationID --value)"
+      if [[ "$state" == active && -n "$invocation" ]]; then
+        echo "AGNI_RUNTIME_UNIT role=$role active=passed invocation=present"
+      else
+        echo "AGNI_RUNTIME_UNIT role=$role active=failed invocation=unknown"
+      fi
+      if podman container exists "$scope-$role"; then
+        state="$(podman inspect "$scope-$role" --format '{{.State.Status}}')"
+        echo "AGNI_RUNTIME_CONTAINER role=$role status=$state"
+      else
+        echo "AGNI_RUNTIME_CONTAINER role=$role status=absent"
+      fi
+    done
+    echo "AGNI_RUNTIME_LOGMA_UNIT=$(grep '^Environment=LOGMA_BIND_ADDR=' "$HOME/.config/containers/systemd/$scope-logma.container" | cut -d= -f3-)"
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    podman run --rm --pull=never --network "nix-xd-$scope" \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-network-diagnose.py"
+    echo "AGNI_RUNTIME_NETWORK=observed changes=none"
+    ;;
   qualify-runtime)
     [[ $# == 2 ]]
     [[ -s "$apps/activated-probot-generation" && ! -L "$apps/activated-probot-generation" ]] || {
