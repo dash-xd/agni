@@ -14,17 +14,17 @@ STATE = "xd-dash:fatline:runtime:probot-runtime:probot-test"
 STREAM = "http://skymill:8081"
 
 def resp(sock, *args):
-    data = b"*" + str(len(args)).encode() + b"\\r\\n"
+    data = b"*" + str(len(args)).encode() + b"\r\n"
     for item in args:
         encoded = str(item).encode()
-        data += b"$" + str(len(encoded)).encode() + b"\\r\\n" + encoded + b"\\r\\n"
+        data += b"$" + str(len(encoded)).encode() + b"\r\n" + encoded + b"\r\n"
     sock.sendall(data)
     with sock.makefile("rb") as stream:
         return read_resp(stream)
 
 def read_resp(stream):
     line = stream.readline()
-    if not line or not line.endswith(b"\\r\\n"):
+    if not line or not line.endswith(b"\r\n"):
         raise RuntimeError("Redis response incomplete")
     prefix, value = line[:1], line[1:-2]
     if prefix == b"-":
@@ -40,7 +40,7 @@ def read_resp(stream):
         if size < 0 or size > 4096:
             raise RuntimeError("Redis response size invalid")
         raw = stream.read(size + 2)
-        if len(raw) != size + 2 or raw[-2:] != b"\\r\\n":
+        if len(raw) != size + 2 or raw[-2:] != b"\r\n":
             raise RuntimeError("Redis bulk response invalid")
         return ("bulk", raw[:-2])
     if prefix == b"*":
@@ -127,7 +127,7 @@ def redelivery(token):
         while time.monotonic() < deadline:
             try:
                 received = http("POST", "/v1/deliveries/receive", token, {"limit": 1}, timeout=14)
-            except urllib.error.URLError:
+            except (urllib.error.URLError, TimeoutError):
                 continue
             entries = received.get("deliveries", [])
             if not entries:
