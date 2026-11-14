@@ -302,3 +302,18 @@ installation/ingress authority is installed by this action. A passing sandbox
 activation establishes local startup and bootstrap revocation only; webhook
 settlement, cross-tenant adversarial ACL denial, and World 1 integration remain
 separate gates. Production `deployment-migrate-activate` remains blocked.
+
+## Recover a partially activated disposable Skymill HTTP credential
+
+If a sandbox cutover installed the five-role profile but timed out because
+Skymill rejected a newline-terminated bearer credential, use
+`make -C local/fatline deployment-recover-sandbox-http DEPLOYMENT=vm1`.
+This is not a migration restage or a Redis restart. The operation requires
+exactly one staged generation and an installed manifest matching it, checks
+that Skymill and Probot share the same private 64-hex token, atomically removes
+only its trailing LF in the two installed credential files, restarts Skymill
+and Probot, checks stabilized five-role status and Redis bootstrap revocation.
+It does not alter the staged private generation, redis credentials, ACLs,
+VM topology, or activate GitHub ingress. A failure remains unqualified and
+is reported without claiming recovery or rollback. New candidate generations
+write these bearer token files without a trailing newline.

@@ -389,6 +389,43 @@ case "$action" in
     }
     echo 'AGNI_RECOVERY_QUALIFICATION=passed restore=isolated roles=4 activation=blocked redis_restart=none root_retention=unverified'
     ;;
+  recover-sandbox-http)
+    [[ $# == 2 ]]
+    [[ ! -e "$apps/activated-probot-generation" ]] || {
+      echo 'AGNI_SANDBOX_HTTP_RECOVERY=blocked reason=already-activated' >&2
+      exit 1
+    }
+    shopt -s nullglob
+    candidates=("$apps/probot-migrations/"*)
+    shopt -u nullglob
+    [[ "${#candidates[@]}" == 1 && -d "${candidates[0]}" && ! -L "${candidates[0]}" ]] || {
+      echo 'AGNI_SANDBOX_HTTP_RECOVERY=blocked reason=ambiguous-generation' >&2
+      exit 1
+    }
+    target="${candidates[0]}"
+    basename="${target##*/}"
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    "$python" "$tools/probot-sandbox-http-recover.py" --base "$base" --generation "$basename"
+    systemctl --user reset-failed "$scope-skymill.service" "$scope-probot.service"
+    systemctl --user restart "$scope-skymill.service"
+    systemctl --user start "$scope-probot.service"
+    # A systemd 'active' observation alone can precede a quick application crash.
+    for attempt in 1 2 3; do
+      sleep 4
+      bash "$tools/runtime.sh" status "$scope" || {
+        echo 'AGNI_SANDBOX_HTTP_RECOVERY=blocked reason=runtime-not-ready' >&2
+        exit 1
+      }
+    done
+    source "$apps/profile/profile.env"
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    printf '%s\n' "$basename" > "$apps/activated-probot-generation"
+    chmod 600 "$apps/activated-probot-generation"
+    echo "AGNI_SANDBOX_HTTP_RECOVERY=passed generation=$basename roles=5 bootstrap=revoked webhook=not-qualified"
+    ;;
   migrate-activate-sandbox)
     [[ $# == 3 && "$3" == "DISCARD-VM1-REDIS-MEMORY" ]] || {
       echo 'AGNI_SANDBOX_ACTIVATION=blocked reason=explicit-ephemeral-redis-ack-required' >&2
