@@ -110,9 +110,18 @@ async function main() {
     if (child.exitCode !== null || child.signalCode) return;
     const ended = new Promise(resolve => child.once('exit', resolve));
     child.kill(signal);
-    await Promise.race([ended, delay(3000).then(() => {
-      if (child.exitCode === null && !child.signalCode) child.kill('SIGKILL');
-    })]);
+    const graceful = await Promise.race([
+      ended.then(() => true),
+      delay(3000).then(() => false),
+    ]);
+    if (!graceful) {
+      child.kill('SIGKILL');
+      const reaped = await Promise.race([
+        ended.then(() => true),
+        delay(3000).then(() => false),
+      ]);
+      if (!reaped) throw new Error('candidate subprocess did not exit: ' + name);
+    }
   }
   function assertChildrenHealthy() {
     if (processFailures.size) {
@@ -253,8 +262,9 @@ async function main() {
       });
       return response.status === 401;
     });
-    // First establish that the pinned HTTP process can initialize and bind
-    // without its delivery worker. Same credentials, Redis, and Skymill.
+    // A prior qualification already established worker-disabled startup.
+    // Starting and stopping an unneeded extra Node process adds contention
+    // and hides whether the actual worker-enabled candidate is ready.
     async function waitProbot(label) {
       await until(label, async () => {
         const response = await fetch('http://127.0.0.1:3000/', {
@@ -263,10 +273,6 @@ async function main() {
         return response.ok;
       }, 60000);
     }
-    startProbot(false);
-    await waitProbot('worker-disabled Probot HTTP');
-    console.log('AGNI_WORKER_LIVE_HTTP_BASELINE=passed worker=disabled redis=real');
-    await stop('probot');
     startProbot(true);
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');

@@ -481,3 +481,9 @@ Such failures still fail the qualification and always trigger cleanup.
 The live worker candidate checks duplicate ingress after the first delivery
 has completed and been ACKed. This qualifies settled-delivery replay, not
 concurrent duplicate HTTP submissions while Probot loads its handler.
+
+The live worker gate starts the worker-enabled Probot candidate directly.
+The worker-disabled baseline was established by an earlier qualification and
+is not restarted solely as a prerequisite to this worker gate. Child shutdown
+now waits for process exit after SIGTERM/SIGKILL; a failure to exit blocks the
+qualification rather than racing the next HTTP instance.

@@ -131,10 +131,13 @@ grep -Fq 'assertChildrenHealthy()' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_WORKER_LIVE_CHILD_SIGNAL role=' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'child_categories=' "$here/startup-profile/probot-worker-live.js"
 
-# The real worker must qualify the same pinned HTTP startup with worker disabled first.
-grep -Fq 'AGNI_WORKER_LIVE_HTTP_BASELINE=passed' "$here/startup-profile/probot-worker-live.js"
-grep -Fq 'startProbot(false)' "$here/startup-profile/probot-worker-live.js"
+# The candidate starts only the worker-enabled instance; stop waits for exit.
 grep -Fq 'startProbot(true)' "$here/startup-profile/probot-worker-live.js"
+if grep -Fq 'startProbot(false)' "$here/startup-profile/probot-worker-live.js"; then
+  echo 'AGNI_WORKER_LIVE_STATIC=blocked reason=redundant-worker-disabled-startup' >&2
+  exit 1
+fi
+grep -Fq "ended.then(() => true)" "$here/startup-profile/probot-worker-live.js"
 
 # The ingress outer deadline exceeds Probot's pinned Skymill client deadline.
 grep -Fq 'AbortSignal.timeout(22000)' "$here/startup-profile/probot-worker-live.js"
