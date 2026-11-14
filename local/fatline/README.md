@@ -341,3 +341,34 @@ installs Quadlets or modifies credentials; the synthetic stream fixture and
 idempotency key are the intended ephemeral Redis changes. The Skymill gate
 fails closed if consumer group pending deliveries exist rather than ACKing
 unknown application messages.
+
+## Interactive macOS shell safety
+
+For interactive zsh, never paste `set -e`, `set -o errexit`,
+`exec <command>`, `source operations/guest-migration.sh`, or
+`source bin/nix-xd-log` as part of a copy/paste qualification recipe.
+Shell option changes made at the prompt persist into later commands;
+particularly, `set -e` may terminate the interactive shell when a
+subsequent command fails. Scripts may use strict mode **inside their own
+child Bash processes**, because those options cannot propagate to the
+parent zsh session.
+
+The intended operator invocation is one ordinary command, without a
+preceding shell-mode change:
+
+```sh
+cd ~/workspace/nix.xd20261113.0
+NIX_XD_LOG_DIR="$HOME/.local/nix.xd/logs" NIX_XD_MACHINE=coreos-arm64 \
+  bash bin/nix-xd-log nix-xd-arm fatline-qualify-runtime \
+  make -C ../agni20261113.0/local/fatline deployment-qualify-runtime \
+    DEPLOYMENT=vm1 NIX_XD_DIR="$PWD" PROVIDER=podman MACHINE=coreos-arm64
+```
+
+The command returns its exit code and a log path and **must not**
+replace the user's interactive shell. On a zsh session where an earlier
+pasted recipe enabled `errexit`, first run `unsetopt ERR_EXIT`
+(or `set +e`). This shell setting is unrelated to whether an
+Agni qualification succeeds. The message `[Process completed]`
+comes from the terminal session after its foreground process exits;
+if it also appears after a successful ordinary shell command, check
+the Terminal profile's shell startup command and any one-shot launcher.

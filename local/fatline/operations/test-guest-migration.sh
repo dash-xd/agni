@@ -64,3 +64,12 @@ grep -Fq 'activation_check() {' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq '    activation_check' "$here/startup-profile/probot-guest-app.sh"
 ! grep -Fq 'bash "$0" activation-check' "$here/startup-profile/probot-guest-app.sh"
 echo 'AGNI_DEPLOYMENT_INTERFACE_TEST=passed named-operations=true json=transport-only bash32-compatible=true'
+
+# A failing child script must not terminate the invoking interactive shell.
+# The operator invokes the logger/Makefile as a command, never through source.
+if command -v zsh >/dev/null 2>&1; then
+  survived="$(zsh -fc 'false; print -r -- INTERACTIVE_SHELL_SURVIVED')"
+  [[ "$survived" == INTERACTIVE_SHELL_SURVIVED ]]
+fi
+! grep -Eq '^[[:space:]]*(source|\.)[[:space:]]+.*(guest-migration\.sh|nix-xd-log)' "$here/Makefile"
+echo 'AGNI_OPERATOR_SHELL=passed invocation=child-shell parent_options=unchanged'

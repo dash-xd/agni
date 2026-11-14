@@ -27,7 +27,7 @@ help:
 	  'make deployment-migrate-activate-sandbox DEPLOYMENT=vm1 REDIS_DATA_LOSS_ACK=DISCARD-VM1-REDIS-MEMORY  Local disposable five-role cutover' \
 	  'make deployment-recover-sandbox-http DEPLOYMENT=vm1  Repair installed Skymill token after interrupted cutover' \
 	  'make deployment-qualify-runtime DEPLOYMENT=vm1  Live five-role ACL, HTTP, Skymill synthetic delivery checks' \
-	  'make check-deployment                       Check host workflow syntax and interface'
+	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety'
 
 deployment-assess:
 	@bash operations/guest-migration.sh assess
