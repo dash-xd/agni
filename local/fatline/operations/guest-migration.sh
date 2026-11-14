@@ -62,7 +62,7 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract || "$operation" == qualify-processor-live || "$operation" == qualify-independent-consumers || "$operation" == seed-subscription-source || "$operation" == qualify-subscription-contract || "$operation" == qualify-subscription-groups || "$operation" == qualify-declarative-processors ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract || "$operation" == qualify-processor-live || "$operation" == qualify-independent-consumers || "$operation" == seed-subscription-source || "$operation" == qualify-subscription-contract || "$operation" == qualify-subscription-groups || "$operation" == qualify-declarative-processors || "$operation" == qualify-declarative-generator ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
@@ -224,6 +224,21 @@ if [[ "$operation" == qualify-declarative-processors ]]; then
   grep -Fxq 'AGNI_DECLARATIVE_PROCESSORS_CONTRACT=passed roles=4 subscriptions=2 unit_format=quadlet activation=blocked worker=disabled' \
     "$log_dir/declarative-processors-contract.log" || fail declarative-processors-contract-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-declarative-processors lifecycle=render-only production=unchanged'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-declarative-generator ]]; then
+  run_step "$log_dir/declarative-generator-artifact.log" \
+    xd_make run FLAKE="$flake" TARGET='#declarative-processors-quadlets'
+  artifact="$(agni_capture_value AGNI_DECLARATIVE_PROCESSORS_QUADLETS "$log_dir/declarative-generator-artifact.log")"
+  [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-agni-inert-subscription-quadlets$ ]] || fail invalid-declarative-quadlet-artifact
+  grep -Fxq 'AGNI_DECLARATIVE_PROCESSORS_QUADLETS=passed activation=blocked source=agni-rendered' \
+    "$log_dir/declarative-generator-artifact.log" || fail quadlet-artifact-not-qualified
+  run_step "$log_dir/declarative-generator-live.log" \
+    guest qualify-declarative-generator "$artifact"
+  grep -Fxq 'AGNI_DECLARATIVE_GENERATOR=passed units=4 mode=coreos-quadlet-dryrun installed=unchanged baseline=unchanged activation=blocked' \
+    "$log_dir/declarative-generator-live.log" || fail declarative-generator-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-declarative-generator systemd=dryrun installed=unchanged production=unchanged'
   exit 0
 fi
 
