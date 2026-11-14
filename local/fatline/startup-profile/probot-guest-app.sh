@@ -442,9 +442,17 @@ case "$action" in
     echo "AGNI_RUNTIME_NETWORK=observed changes=none"
     ;;
   qualify-worker-live)
-    [[ $# == 3 ]]
+    [[ $# == 3 || $# == 4 ]]
     worker_gate="$3"
-    [[ "$worker_gate" == bootstrap || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == memory || "$worker_gate" == fence || "$worker_gate" == effect || "$worker_gate" == reconcile || "$worker_gate" == full ]] || exit 2
+    reconcile_source="${4:-}"
+    [[ "$worker_gate" == bootstrap || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == memory || "$worker_gate" == fence || "$worker_gate" == effect || "$worker_gate" == reconcile || "$worker_gate" == reconcile-service || "$worker_gate" == full ]] || exit 2
+    if [[ "$worker_gate" == reconcile-service ]]; then
+      [[ "$reconcile_source" =~ ^/nix/store/[a-z0-9]{32}-probot-runtime20261114$ ]] || exit 2
+      source_guest="/var/mnt/nixstore/${reconcile_source#/nix/store/}"
+      [[ -r "$source_guest/src/delivery-reconciliation.js" && -r "$source_guest/src/store.js" ]] || exit 1
+    else
+      [[ -z "$reconcile_source" ]] || exit 2
+    fi
     [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" &&
        -s "$apps/profile/profile.env" ]] || exit 1
     source "$apps/profile/profile.env"
@@ -524,7 +532,7 @@ case "$action" in
       --mount "type=bind,src=$module_cache,dst=/run/probot,ro" \
       --tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m \
       --rootfs "$apps/rootfs" "$node" "$tool_store/probot-worker-live.js" \
-      "$redis" "$skymill" "$node" /run/probot "$worker_gate" || candidate_rc=$?
+      "$redis" "$skymill" "$node" /run/probot "$worker_gate" "$reconcile_source" || candidate_rc=$?
     # Always inspect the five original services even when a candidate gate
     # fails: fail-closed isolation evidence is not optional on the error path.
     bash "$tools/runtime.sh" status "$scope"
