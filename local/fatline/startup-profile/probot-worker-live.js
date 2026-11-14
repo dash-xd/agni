@@ -53,7 +53,8 @@ async function main() {
   const redisSkymill = crypto.randomBytes(32).toString('hex');
   const redisState = crypto.randomBytes(32).toString('hex');
   const operatorToken = crypto.randomBytes(32).toString('hex');
-  const logmaSecret = crypto.randomBytes(32).toString('hex');
+  const logmaPublishSecret = crypto.randomBytes(32).toString('hex');
+  const logmaSubscribeSecret = crypto.randomBytes(32).toString('hex');
   const logmaHintChannel = 'worker-candidate:logma:lifecycle:probot-runtime:delivery.received';
   const secret = crypto.randomBytes(32).toString('hex');
   const routingKey = 'agni-worker-live';
@@ -79,7 +80,8 @@ async function main() {
     'user skymill on >' + redisSkymill + ' ~skymill:* +@all -@admin -@dangerous +eval',
     'user probot_state on >' + redisState + ' ~' + statePrefix + ':* ~xd-dash:fatline:auth:binding-artifact:* +@all -@admin -@dangerous +eval',
     ...(gate === 'processor-subscriber' ? [
-      'user logma_hint on >' + logmaSecret + ' resetchannels &' + logmaHintChannel + ' +@connection +@pubsub',
+      'user logma_publish on >' + logmaPublishSecret + ' resetchannels &' + logmaHintChannel + ' +@connection +publish',
+      'user logma_subscribe on >' + logmaSubscribeSecret + ' resetchannels &' + logmaHintChannel + ' +@connection +subscribe +unsubscribe',
     ] : []),
   ].join('\n') + '\n';
   function credential(name, value) {
@@ -91,7 +93,7 @@ async function main() {
   const skymillFile = credential('skymill-token', skymillToken);
   const stateFile = credential('state', redisState);
   const operatorFile = credential('operator', operatorToken);
-  const logmaFile = gate === 'processor-subscriber' ? credential('logma-hint', logmaSecret) : '';
+  const logmaPublishFile = gate === 'processor-subscriber' ? credential('logma-publish', logmaPublishSecret) : '';
   const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   const privateKey = keyPair.privateKey.export({ format: 'pem', type: 'pkcs8' });
   const redisUrl = 'redis://127.0.0.1:6379/0';
@@ -247,7 +249,7 @@ async function main() {
       SKYMILL_STREAM: 'worker-candidate.webhooks', SKYMILL_CONSUMER_GROUP: consumerGroup,
       LOGMA_ENABLED: gate === 'processor-subscriber' ? 'true' : 'false',
       ...(gate === 'processor-subscriber' ? {
-        LOGMA_REDIS_USERNAME: 'logma_hint', LOGMA_REDIS_PASSWORD_FILE: logmaFile,
+        LOGMA_REDIS_USERNAME: 'logma_publish', LOGMA_REDIS_PASSWORD_FILE: logmaPublishFile,
         FATLINE_SCOPE: scope,
       } : {}),
     });
@@ -433,7 +435,7 @@ async function main() {
       let subscriptionsReady = 0;
       const newSignalClient = async () => {
         const client = createClient({
-          url: redisUrl, username: 'logma_hint', password: logmaSecret,
+          url: redisUrl, username: 'logma_subscribe', password: logmaSubscribeSecret,
           database: 0, disableOfflineQueue: true,
         });
         client.on('error', () => failures.push('logma-connection'));
@@ -449,6 +451,22 @@ async function main() {
                 event.delivery_id) seenHints.add(event.delivery_id);
           } catch { failures.push('hint-envelope'); }
         });
+        await assert.rejects(
+          observer.publish(logmaHintChannel, '{}'), /NOPERM|permission|not allowed/i);
+        const invalidPublisherSubscriber = createClient({
+          url: redisUrl, username: 'logma_publish', password: logmaPublishSecret,
+          database: 0, disableOfflineQueue: true,
+        });
+        invalidPublisherSubscriber.on('error', () => {});
+        await invalidPublisherSubscriber.connect();
+        try {
+          await assert.rejects(
+            invalidPublisherSubscriber.subscribe(logmaHintChannel, () => {}),
+            /NOPERM|permission|not allowed/i);
+        } finally {
+          invalidPublisherSubscriber.destroy();
+        }
+        console.log('AGNI_PROBOT_PROCESSOR_LOGMA_ACL=passed publish_only=true subscribe_only=true');
         for (let worker = 0; worker < 2; worker++) {
           const client = await newSignalClient();
           subscribers.push(client);
