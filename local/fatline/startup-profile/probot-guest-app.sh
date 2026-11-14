@@ -444,7 +444,7 @@ case "$action" in
   qualify-worker-live)
     [[ $# == 3 ]]
     worker_gate="$3"
-    [[ "$worker_gate" == bootstrap || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == memory || "$worker_gate" == fence || "$worker_gate" == full ]] || exit 2
+    [[ "$worker_gate" == bootstrap || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == memory || "$worker_gate" == fence || "$worker_gate" == effect || "$worker_gate" == full ]] || exit 2
     [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" &&
        -s "$apps/profile/profile.env" ]] || exit 1
     source "$apps/profile/profile.env"
