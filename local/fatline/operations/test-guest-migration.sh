@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-# Report the failing static assertion rather than exiting without a diagnostic.
-trap 'status=$?; if [[ $- == *e* ]]; then printf "AGNI_DEPLOYMENT_STATIC=failed line=%s command=%s exit=%s\\n" "$LINENO" "$BASH_COMMAND" "$status" >&2; fi' ERR
 bash -n "$here/operations/guest-migration.sh"
 bash -n "$here/operations/output.sh"
 source "$here/operations/output.sh"
