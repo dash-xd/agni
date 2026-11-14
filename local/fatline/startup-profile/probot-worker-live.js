@@ -256,7 +256,7 @@ async function main() {
           signal: AbortSignal.timeout(1000),
         });
         return response.ok;
-      });
+      }, 60000);
     }
     startProbot(false);
     await waitProbot('worker-disabled Probot HTTP');
