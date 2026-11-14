@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full', reconcileSource = ''] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'processor-subscriber', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -29,6 +29,16 @@ async function main() {
     ({ reconcileDelivery } = require(path.join(reconcileSource, 'src/delivery-reconciliation')));
     ({ SkymillClient } = require(path.join(probotRoot, 'src/skymill')));
     console.log('AGNI_RECONCILE_SERVICE_SOURCE=passed origin=nix-store revision=pinned');
+  } else if (gate === 'processor-subscriber') {
+    assert.match(reconcileSource, /^\/nix\/store\/[a-z0-9]{32}-probot-processor20261114$/);
+    process.env.NODE_PATH = path.join(probotRoot, 'node_modules');
+    require('node:module').Module._initPaths();
+    const processorRoot = reconcileSource;
+    const { runDeliveryProcessor } = require(path.join(processorRoot, 'src/processor'));
+    const { LogmaSubscriber } = require(path.join(processorRoot, 'src/logma-subscriber'));
+    ({ SkymillClient } = require(path.join(processorRoot, 'src/skymill')));
+    globalThis.__agniProcessorCandidate = { runDeliveryProcessor, LogmaSubscriber };
+    console.log('AGNI_PROBOT_PROCESSOR_SOURCE=passed origin=nix-store source=pinned');
   } else {
     assert.equal(reconcileSource, '', 'unexpected unqualified source argument');
   }
@@ -42,6 +52,8 @@ async function main() {
   const redisSkymill = crypto.randomBytes(32).toString('hex');
   const redisState = crypto.randomBytes(32).toString('hex');
   const operatorToken = crypto.randomBytes(32).toString('hex');
+  const logmaSecret = crypto.randomBytes(32).toString('hex');
+  const logmaHintChannel = 'worker-candidate:logma:lifecycle:probot-runtime:delivery.received';
   const secret = crypto.randomBytes(32).toString('hex');
   const routingKey = 'agni-worker-live';
   const appId = 900000077;
@@ -65,6 +77,9 @@ async function main() {
     'user default off',
     'user skymill on >' + redisSkymill + ' ~skymill:* +@all -@admin -@dangerous +eval',
     'user probot_state on >' + redisState + ' ~' + statePrefix + ':* ~xd-dash:fatline:auth:binding-artifact:* +@all -@admin -@dangerous +eval',
+    ...(gate === 'processor-subscriber' ? [
+      'user logma_hint on >' + logmaSecret + ' resetchannels &' + logmaHintChannel + ' +@connection +@pubsub',
+    ] : []),
   ].join('\n') + '\n';
   function credential(name, value) {
     const file = path.join(workspace, name);
@@ -75,6 +90,7 @@ async function main() {
   const skymillFile = credential('skymill-token', skymillToken);
   const stateFile = credential('state', redisState);
   const operatorFile = credential('operator', operatorToken);
+  const logmaFile = gate === 'processor-subscriber' ? credential('logma-hint', logmaSecret) : '';
   const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   const privateKey = keyPair.privateKey.export({ format: 'pem', type: 'pkcs8' });
   const redisUrl = 'redis://127.0.0.1:6379/0';
@@ -228,7 +244,11 @@ async function main() {
       PROBOT_RUNTIME_WORKER_INTERVAL_MS: '150',
       SKYMILL_URL: 'http://127.0.0.1:8081', SKYMILL_TOKEN: skymillToken,
       SKYMILL_STREAM: 'worker-candidate.webhooks', SKYMILL_CONSUMER_GROUP: consumerGroup,
-      LOGMA_ENABLED: 'false',
+      LOGMA_ENABLED: gate === 'processor-subscriber' ? 'true' : 'false',
+      ...(gate === 'processor-subscriber' ? {
+        LOGMA_REDIS_USERNAME: 'logma_hint', LOGMA_REDIS_PASSWORD_FILE: logmaFile,
+        FATLINE_SCOPE: scope,
+      } : {}),
     });
   }
   async function status() {
@@ -389,7 +409,7 @@ async function main() {
       throw new Error('pinned Probot module closure unavailable category=' + reason);
     }
     checkpoint('pinned-probot-module-closure');
-    startProbot(true, gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
+    startProbot(gate !== 'processor-subscriber', gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
     checkpoint('bootstrap-complete');
@@ -397,6 +417,131 @@ async function main() {
       assertChildrenHealthy();
       console.log('AGNI_WORKER_LIVE_GATE=passed gate=bootstrap');
       return;
+    }
+    if (gate === 'processor-subscriber') {
+      const { runDeliveryProcessor, LogmaSubscriber } = globalThis.__agniProcessorCandidate;
+      const { ProbotRuntime } = require(path.join(probotRoot, 'src/runtime'));
+      const { makeProbotApp } = require(path.join(probotRoot, 'src/huram-app'));
+      const { createClient } = require(path.join(probotRoot, 'node_modules/redis'));
+      const controller = new AbortController();
+      const subscribers = [];
+      const jobs = [];
+      let observer;
+      const failures = [];
+      const handled = new Map();
+      const seenHints = new Set();
+      let subscriptionsReady = 0;
+      const newSignalClient = async () => {
+        const client = createClient({
+          url: redisUrl, username: 'logma_hint', password: logmaSecret,
+          database: 0, disableOfflineQueue: true,
+        });
+        client.on('error', () => failures.push('logma-connection'));
+        await client.connect();
+        return client;
+      };
+      try {
+        observer = await newSignalClient();
+        await observer.subscribe(logmaHintChannel, payload => {
+          try {
+            const event = JSON.parse(payload);
+            if (event.kind === 'delivery.received' && event.scope === scope &&
+                event.delivery_id) seenHints.add(event.delivery_id);
+          } catch { failures.push('hint-envelope'); }
+        });
+        for (let worker = 0; worker < 2; worker++) {
+          const client = await newSignalClient();
+          subscribers.push(client);
+          const skymill = new SkymillClient({
+            baseUrl: 'http://127.0.0.1:8081', token: skymillToken,
+            consumerGroup, stream: 'worker-candidate.webhooks',
+          });
+          const runtime = new ProbotRuntime({
+            store, skymill,
+            makeApp: makeProbotApp({
+              store,
+              onPush: async context => {
+                const id = context.id;
+                assert.equal(typeof id, 'string');
+                handled.set(id, (handled.get(id) || 0) + 1);
+              },
+            }),
+          });
+          const listener = new LogmaSubscriber({ client, channel: logmaHintChannel });
+          const hints = {
+            start: async opts => {
+              await listener.start(opts);
+              subscriptionsReady++;
+            },
+            stop: () => listener.stop(),
+          };
+          jobs.push(runDeliveryProcessor({
+            services: { createDeliveryRun: async ({ limit }) => {
+              const deliveries = await runtime.drain({ limit });
+              return { processed: deliveries.length };
+            } },
+            signal: controller.signal, hints, batchLimit: 2,
+            fallbackIntervalMs: 1000,
+            onError: error => failures.push(String(error?.message || error).slice(0, 200)),
+          }));
+        }
+        await until('processor subscriptions ready', async () => subscriptionsReady === 2);
+        const ids = Array.from({ length: 4 }, () => crypto.randomUUID());
+        for (const id of ids) {
+          const accepted = await post(signature, 'processor-event', id);
+          assert.equal(accepted.status, 202);
+        }
+        await until('processor shared-group complete', async () => {
+          const deliveries = await Promise.all(ids.map(id => store.getDelivery(id)));
+          return deliveries.every(d => d?.executionStatus === 'succeeded' &&
+            d?.outcomeStatus === 'acked') && (await status()).Pending.Count === 0;
+        }, 90000);
+        for (const id of ids) assert.equal(handled.get(id), 1);
+        await until('Probot Logma publication observed', async () =>
+          ids.every(id => seenHints.has(id)), 15000);
+        assert.deepEqual(failures, []);
+        console.log('AGNI_PROBOT_PROCESSOR_PUBSUB=passed subscribers=2 signals=observed provider=redis');
+        console.log('AGNI_PROBOT_PROCESSOR_SHARED_GROUP=passed processors=2 delivery_once=true pending=0');
+
+        const unseenId = crypto.randomUUID();
+        await store.recordDelivery({
+          deliveryId: unseenId, appId, routingKey, installationId,
+          event: 'push', receivedAt: new Date().toISOString(),
+          streamMessageId: unseenId,
+        });
+        const published = await (new SkymillClient({
+          baseUrl: 'http://127.0.0.1:8081', token: skymillToken,
+          consumerGroup, stream: 'worker-candidate.webhooks',
+        })).publish({
+          idempotencyKey: unseenId, messageId: unseenId,
+          metadata: {
+            github_delivery_id: unseenId,
+            github_app_id: String(appId),
+            github_event: 'push',
+          },
+          payload: JSON.parse(body.toString('utf8')),
+        });
+        assert.equal(published.duplicate, false);
+        await until('processor delivery without Logma hint', async () => {
+          const delivery = await store.getDelivery(unseenId);
+          return delivery?.executionStatus === 'succeeded' &&
+            delivery?.outcomeStatus === 'acked' &&
+            (await status()).Pending.Count === 0;
+        }, 90000);
+        assert.equal(handled.get(unseenId), 1);
+        assert.equal(seenHints.has(unseenId), false);
+        assert.deepEqual(failures, []);
+        console.log('AGNI_PROBOT_PROCESSOR_NO_HINT=passed delivery=acked pubsub=absent');
+        assertChildrenHealthy();
+        console.log('AGNI_PROBOT_PROCESSOR_LIVE=passed redis=real skymill=real logma=redis-pubsub processors=2 group=shared');
+        console.log('AGNI_WORKER_LIVE_GATE=passed gate=processor-subscriber');
+        return;
+      } finally {
+        controller.abort();
+        await Promise.allSettled(jobs);
+        for (const client of subscribers) client.destroy();
+        if (observer) observer.destroy();
+      }
     }
     const rejected = await post('sha256=' + '0'.repeat(64), 'invalid-signature');
     assert.equal(rejected.status, 401);
