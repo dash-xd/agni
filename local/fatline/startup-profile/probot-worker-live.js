@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full', reconcileSource = ''] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'processor-subscriber', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'processor-subscriber', 'processor-independent', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -31,7 +31,7 @@ async function main() {
     ({ reconcileDelivery } = require(path.join(reconcileSource, 'src/delivery-reconciliation')));
     ({ SkymillClient } = require(path.join(probotRoot, 'src/skymill')));
     console.log('AGNI_RECONCILE_SERVICE_SOURCE=passed origin=nix-store revision=pinned');
-  } else if (gate === 'processor-subscriber') {
+  } else if ((gate === 'processor-subscriber' || gate === 'processor-independent')) {
     assert.match(reconcileSource, /^\/nix\/store\/[a-z0-9]{32}-probot-processor20261114$/);
     process.env.NODE_PATH = path.join(probotRoot, 'node_modules');
     require('node:module').Module._initPaths();
@@ -79,7 +79,7 @@ async function main() {
     'user default off',
     'user skymill on >' + redisSkymill + ' ~skymill:* +@all -@admin -@dangerous +eval',
     'user probot_state on >' + redisState + ' ~' + statePrefix + ':* ~xd-dash:fatline:auth:binding-artifact:* +@all -@admin -@dangerous +eval',
-    ...(gate === 'processor-subscriber' ? [
+    ...((gate === 'processor-subscriber' || gate === 'processor-independent') ? [
       'user logma_publish on >' + logmaPublishSecret + ' resetchannels &' + logmaHintChannel + ' +@connection +publish',
       'user logma_subscribe on >' + logmaSubscribeSecret + ' resetchannels &' + logmaHintChannel + ' +@connection +subscribe +unsubscribe',
     ] : []),
@@ -93,7 +93,7 @@ async function main() {
   const skymillFile = credential('skymill-token', skymillToken);
   const stateFile = credential('state', redisState);
   const operatorFile = credential('operator', operatorToken);
-  const logmaPublishFile = gate === 'processor-subscriber' ? credential('logma-publish', logmaPublishSecret) : '';
+  const logmaPublishFile = (gate === 'processor-subscriber' || gate === 'processor-independent') ? credential('logma-publish', logmaPublishSecret) : '';
   const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   const privateKey = keyPair.privateKey.export({ format: 'pem', type: 'pkcs8' });
   const redisUrl = 'redis://127.0.0.1:6379/0';
@@ -231,6 +231,18 @@ async function main() {
       SKYMILL_ORG: 'xd-dash', SKYMILL_TENANT: scope,
       SKYMILL_APPLICATION: 'github-webhooks', SKYMILL_STREAM: 'worker-candidate.webhooks',
       SKYMILL_CONSUMER_GROUP: consumerGroup,
+      ...(gate === 'processor-independent' ? { SKYMILL_CONSUMER: 'processor-a' } : {}),
+      SKYMILL_HTTP_TOKEN_FILE: skymillFile,
+    });
+  }
+  function startSkymillPeer() {
+    assert.equal(gate, 'processor-independent');
+    return launch('skymill-peer', skymillBin, [], {
+      REDIS_ADDR: '127.0.0.1:6379', REDIS_USERNAME: 'skymill', REDIS_PASSWORD: redisSkymill,
+      REDIS_DB: '0', SKYMILL_ADDR: '127.0.0.1:8082',
+      SKYMILL_ORG: 'xd-dash', SKYMILL_TENANT: scope,
+      SKYMILL_APPLICATION: 'github-webhooks', SKYMILL_STREAM: 'worker-candidate.webhooks',
+      SKYMILL_CONSUMER_GROUP: consumerGroup, SKYMILL_CONSUMER: 'processor-b',
       SKYMILL_HTTP_TOKEN_FILE: skymillFile,
     });
   }
@@ -247,8 +259,8 @@ async function main() {
       PROBOT_RUNTIME_WORKER_INTERVAL_MS: '150',
       SKYMILL_URL: 'http://127.0.0.1:8081', SKYMILL_TOKEN: skymillToken,
       SKYMILL_STREAM: 'worker-candidate.webhooks', SKYMILL_CONSUMER_GROUP: consumerGroup,
-      LOGMA_ENABLED: gate === 'processor-subscriber' ? 'true' : 'false',
-      ...(gate === 'processor-subscriber' ? {
+      LOGMA_ENABLED: (gate === 'processor-subscriber' || gate === 'processor-independent') ? 'true' : 'false',
+      ...((gate === 'processor-subscriber' || gate === 'processor-independent') ? {
         LOGMA_REDIS_USERNAME: 'logma_publish', LOGMA_REDIS_PASSWORD_FILE: logmaPublishFile,
         FATLINE_SCOPE: scope,
       } : {}),
@@ -381,6 +393,15 @@ async function main() {
     console.log('AGNI_WORKER_LIVE_REDIS=passed instance=isolated acl=separate credentials=ephemeral');
 
     startSkymill();
+    if (gate === 'processor-independent') {
+      startSkymillPeer();
+      await until('Skymill independent peer HTTP', async () => {
+        const response = await fetch('http://127.0.0.1:8082/v1/status', {
+          signal: AbortSignal.timeout(1000),
+        });
+        return response.status === 401;
+      });
+    }
     await until('Skymill HTTP', async () => {
       // The consumer group may not exist before Probot's first receive.
       const response = await fetch('http://127.0.0.1:8081/v1/status', {
@@ -412,7 +433,7 @@ async function main() {
       throw new Error('pinned Probot module closure unavailable category=' + reason);
     }
     checkpoint('pinned-probot-module-closure');
-    startProbot(gate !== 'processor-subscriber', gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
+    startProbot(gate !== 'processor-subscriber' && gate !== 'processor-independent', gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
     checkpoint('bootstrap-complete');
@@ -420,6 +441,102 @@ async function main() {
       assertChildrenHealthy();
       console.log('AGNI_WORKER_LIVE_GATE=passed gate=bootstrap');
       return;
+    }
+    if (gate === 'processor-independent') {
+      const { ProbotRuntime } = require(path.join(probotRoot, 'src/runtime'));
+      const { makeProbotApp } = require(path.join(probotRoot, 'src/huram-app'));
+      const controller = new AbortController();
+      const executed = new Map();
+      const failures = [];
+      const identityA = new SkymillClient({
+        baseUrl: 'http://127.0.0.1:8081', token: skymillToken,
+        consumerGroup, consumer: 'processor-a', stream: 'worker-candidate.webhooks',
+      });
+      const identityB = new SkymillClient({
+        baseUrl: 'http://127.0.0.1:8082', token: skymillToken,
+        consumerGroup, consumer: 'processor-b', stream: 'worker-candidate.webhooks',
+      });
+      let running;
+      try {
+        const firstId = crypto.randomUUID();
+        const receipt = await post(signature, 'independent-consumer-reclaim', firstId);
+        assert.equal(receipt.status, 202);
+        const deliveryA = await identityA.receive({ limit: 1 });
+        assert.equal(deliveryA.deliveries?.length, 1);
+        assert.equal(deliveryA.deliveries[0].message.metadata.github_delivery_id, firstId);
+        assert.equal((await status()).Pending.Count, 1);
+        assert.equal((await store.getDelivery(firstId)).executionStatus || '', '',
+          'A must die before acquiring the application execution fence');
+        console.log('AGNI_PROBOT_INDEPENDENT_PENDING=passed consumer=processor-a pending=1 application_effect=absent');
+
+        await stop('skymill', 'SIGKILL');
+        const runtimeB = new ProbotRuntime({
+          store, skymill: identityB,
+          makeApp: makeProbotApp({
+            store, onPush: async context =>
+              executed.set(context.id, (executed.get(context.id) || 0) + 1),
+          }),
+        });
+        running = runDeliveryProcessor({
+          services: { createDeliveryRun: async ({ limit }) => {
+            const results = await runtimeB.drain({ limit });
+            return { processed: results.length };
+          } },
+          signal: controller.signal, batchLimit: 1,
+          fallbackIntervalMs: 1000,
+          onError: error => {
+            if (error?.name !== 'TimeoutError') failures.push(String(error?.message || error));
+          },
+        });
+        await until('independent provider PEL reclaim', async () => {
+          const d = await store.getDelivery(firstId);
+          if (d?.executionStatus !== 'succeeded' || d?.outcomeStatus !== 'acked') return false;
+          const response = await fetch('http://127.0.0.1:8082/v1/status', {
+            headers: { authorization: 'Bearer ' + skymillToken },
+            signal: AbortSignal.timeout(1000),
+          });
+          if (!response.ok) return false;
+          const state = await response.json();
+          return state.Pending.Count === 0 && state.Consumers >= 2;
+        }, 105000);
+        assert.equal(executed.get(firstId), 1);
+        assert.deepEqual(failures, []);
+        console.log('AGNI_PROBOT_INDEPENDENT_RECLAIM=passed from=processor-a to=processor-b pending=0 effect_once=true');
+
+        // A fresh delivery proves B can process without A's HTTP service.
+        const nextId = crypto.randomUUID();
+        const accepted = await identityB.publish({
+          idempotencyKey: nextId, messageId: nextId,
+          metadata: {
+            github_delivery_id: nextId, github_app_id: String(appId),
+            github_event: 'push',
+          },
+          payload: {
+            ref: 'refs/heads/fixture', installation: { id: installationId },
+            repository: { full_name: 'xd-dash/worker-qualification' },
+          },
+        });
+        assert.equal(accepted.duplicate, false);
+        await store.recordDelivery({
+          deliveryId: nextId, appId, routingKey, installationId,
+          event: 'push', receivedAt: new Date().toISOString(),
+          streamMessageId: nextId, providerDeliveryId: accepted.providerDeliveryId,
+        });
+        await until('independent provider fresh delivery', async () => {
+          const d = await store.getDelivery(nextId);
+          return d?.executionStatus === 'succeeded' && d?.outcomeStatus === 'acked';
+        }, 90000);
+        assert.equal(executed.get(nextId), 1);
+        assert.deepEqual(failures, []);
+        console.log('AGNI_PROBOT_INDEPENDENT_FRESH=passed consumer=processor-b effect_once=true');
+        assertChildrenHealthy();
+        console.log('AGNI_PROBOT_INDEPENDENT_LIVE=passed services=2 consumers=2 group=shared claim=redis-pel');
+        console.log('AGNI_WORKER_LIVE_GATE=passed gate=processor-independent');
+        return;
+      } finally {
+        controller.abort();
+        if (running) await Promise.allSettled([running]);
+      }
     }
     if (gate === 'processor-subscriber') {
       const { ProbotRuntime } = require(path.join(probotRoot, 'src/runtime'));
@@ -997,7 +1114,7 @@ async function main() {
       catch { console.error('AGNI_WORKER_LIVE_REDIS_CLIENT=close-failed'); }
     }
     const failures = [];
-    for (const name of ['probot', 'skymill', 'redis']) {
+    for (const name of ['probot', 'skymill-peer', 'skymill', 'redis']) {
       try { await stop(name, 'SIGKILL'); }
       catch { failures.push(name); }
     }
