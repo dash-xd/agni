@@ -470,3 +470,6 @@ and bootstrap revocation after the candidate exits.
 live GitHub App credentials, change real webhook ingress, or activate the
 worker for the existing VM1 generation. Rollback proof is scoped to the
 transient candidate, not a production traffic switch.
+
+The isolated live candidate's `/tmp` tmpfs uses mode `1777` so its UID 1000
+process can create temporary state while the root filesystem remains read-only.

@@ -473,7 +473,7 @@ case "$action" in
       --read-only --read-only-tmpfs=false --security-opt label=disable \
       --cap-drop all --security-opt no-new-privileges \
       --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
-      --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+      --tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m \
       --rootfs "$apps/rootfs" "$node" "$tool_store/probot-worker-live.js" \
       "$redis" "$skymill" "$node" "$probot"
     bash "$tools/runtime.sh" status "$scope"

@@ -118,3 +118,6 @@ if command -v node >/dev/null 2>&1; then
   node --check "$here/startup-profile/probot-worker-live.js"
 fi
 echo 'AGNI_WORKER_LIVE_STATIC=passed isolated=true credential_source=ephemeral'
+
+# The non-root candidate must be able to create its own temporary state.
+grep -Fq -- '--tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m' "$here/startup-profile/probot-guest-app.sh"
