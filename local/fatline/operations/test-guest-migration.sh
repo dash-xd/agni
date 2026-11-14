@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -99,3 +99,12 @@ grep -Fq 'AGNI_PROBOT_INTEGRATION=passed ' "$here/startup-profile/probot-guest-a
 grep -Fq 'AGNI_SKYMILL_REDELIVERY=passed ' "$here/startup-profile/probot-integration-qualify.py"
 grep -Fq 'PROBOT_RUNTIME_WORKER_ENABLED=false' "$here/startup-profile/probot-guest-app.sh"
 echo 'AGNI_PROBOT_INTEGRATION_STATIC=passed worker=disabled auth=isolated retry=bounded'
+
+grep -Fq '  qualify-worker-candidate)' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_WORKER_CANDIDATE_QUALIFICATION=passed' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_WORKER_SIGNED_INGRESS=passed' "$here/startup-profile/probot-worker-candidate.js"
+grep -Fq 'AGNI_WORKER_ROLLBACK=passed' "$here/startup-profile/probot-worker-candidate.js"
+if command -v node >/dev/null 2>&1; then
+  node --check "$here/startup-profile/probot-worker-candidate.js"
+fi
+echo 'AGNI_WORKER_CANDIDATE_STATIC=passed offline_fixture=true vm1=unchanged'

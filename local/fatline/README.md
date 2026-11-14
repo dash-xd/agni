@@ -428,3 +428,22 @@ not change and Redis bootstrap credentials remain revoked.
 ingress.** Those require separate selected generations and GHXD authority.
 The test intentionally appends an isolated synthetic message/idempotency record
 and publishes one scoped lifecycle notification in disposable VM1 Redis.
+
+## Isolated Probot worker candidate
+
+`deployment-qualify-worker-candidate` executes the pinned Probot source and
+Node executable from the installed immutable guest bundle. The candidate runs
+in a transient rootless Podman container with no external network, credentials,
+Redis mounts, or service unit changes. It runs the actual source's HTTP routing,
+webhook signature verification, delivery service, execution fencing, and worker
+loop against disposable in-memory Redis/Skymill adapters and a fixture handler.
+
+It rejects an invalid signed delivery; accepts a signed fixture; verifies
+duplicate webhook ingress and replay, one handler execution, the execution
+fence and ACK settlement, and clears fixture state. The transient container
+is removed after the run; all five VM1 service invocation IDs must match.
+
+This gate is **worker-code fixture qualification only**. It does not exercise
+a worker-enabled Quadlet, actual Redis/Skymill delivery through a worker,
+real Probot event handler behavior, or GitHub App credentials/ingress. Promotion
+is deliberately blocked pending a fully isolated, live backing-store candidate.
