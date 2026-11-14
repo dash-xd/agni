@@ -380,7 +380,7 @@ async function main() {
       await stop('redis', 'SIGKILL');
       let rejected = false;
       try {
-        const unavailableRedis = await post(signature, 'redis-unavailable');
+        const unavailableRedis = await post(signature, 'redis-unavailable', crypto.randomUUID());
         rejected = unavailableRedis.status >= 500;
       } catch (error) {
         // An interrupted ingress connection is failure, never acceptance.
