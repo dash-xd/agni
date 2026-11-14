@@ -520,11 +520,18 @@ async function main() {
         assert.equal(pending.executionStatus, 'ambiguous');
         assert.equal(pending.providerDeliveryId, retryDelivery.provider_delivery_id);
 
-        const retryProof = async ({ delivery }) => ({
-          deliveryId: delivery.deliveryId, state: 'absent',
-          source: 'fixture-worker-disabled',
-          evidenceRef: 'no-handler-execution:' + delivery.deliveryId,
-        });
+        const retryProof = async ({ delivery }) => {
+          const priorEffect = JSON.parse(fs.readFileSync(effectMarkerFile, 'utf8'));
+          const verifiedAbsent = priorEffect.delivery_id !== delivery.deliveryId &&
+            delivery.deliveryId === retryGuid &&
+            delivery.executionStatus === 'ambiguous';
+          return {
+            deliveryId: delivery.deliveryId,
+            state: verifiedAbsent ? 'absent' : 'unknown',
+            source: 'fixture-worker-disabled',
+            evidenceRef: 'no-handler-execution:' + delivery.deliveryId,
+          };
+        };
         const retryDecision = 'absent-' + retryGuid;
         const retryArgs = {
           store, skymill: transport, deliveryId: retryGuid,
