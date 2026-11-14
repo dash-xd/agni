@@ -522,7 +522,7 @@
             type = "app";
             program = "${pkgs.writeShellScript "agni-declarative-processors-quadlets" ''
               set -euo pipefail
-              printf '%s\\n' "AGNI_DECLARATIVE_PROCESSORS_QUADLETS=${pkgs.runCommand "agni-inert-subscription-quadlets" {
+              printf '%s\n' "AGNI_DECLARATIVE_PROCESSORS_QUADLETS=${pkgs.runCommand "agni-inert-subscription-quadlets" {
                 nativeBuildInputs = [ pkgs.python3 ];
               } ''
                 cat > spec.json <<'JSON'
