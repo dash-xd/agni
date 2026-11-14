@@ -34,6 +34,7 @@ async function main() {
   const children = new Map();
   const processFailures = new Map();
   const redisConnectionFailures = [];
+  let activeStore;
   const baseEnv = { HOME: workspace, TMPDIR: workspace, PATH: '/bin:/usr/bin',
     NODE_ENV: 'test', NO_COLOR: '1' };
   const acl = [
@@ -189,6 +190,7 @@ async function main() {
     });
 
     const store = redisStore();
+    activeStore = store;
     await store.connect();
     const binding = normalizeBinding({
       org_id: 'xd-dash', tenant_id: scope, auth_profile: 'minimal-v1',
@@ -274,8 +276,14 @@ async function main() {
 
     assertChildrenHealthy();
     await store.close();
+    activeStore = undefined;
     console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
   } finally {
+    // Shut down the client before terminating its backing Redis process.
+    if (activeStore) {
+      try { await activeStore.close(); }
+      catch (error) { console.error('AGNI_WORKER_LIVE_REDIS_CLIENT=close-failed'); }
+    }
     for (const name of ['probot', 'skymill', 'redis']) await stop(name, 'SIGKILL');
     fs.rmSync(workspace, { recursive: true, force: true });
     assert.equal(children.size, 0);
