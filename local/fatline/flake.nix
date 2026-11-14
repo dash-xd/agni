@@ -17,6 +17,8 @@
       probotProcessorCheckout = "/workspaces/probot-runtime20261114";
       probotSubscriptionRevision = "1788ee94235b83f2b6229b95acbc98469f3eaf85";
       probotSubscriptionCheckout = "/workspaces/probot-runtime20261115";
+      probotFactoryRevision = "33b604edbbbce474715af916c2508acc2b8343bf";
+      probotFactoryCheckout = "/workspaces/probot-runtime20261116";
       # Smoke ghxd seeds the exact private-source commit into Nix-Alpine.
       # The Nix app validates it at execution time; no private fetch during evaluation.
       probotReconcileCheckout = "/workspaces/probot-runtime20261114";
@@ -549,6 +551,22 @@
               set -euo pipefail
               ${pkgs.python3}/bin/python3 ${./qualification}/test-render-subscription-units.py
               echo "AGNI_DECLARATIVE_PROCESSORS_CONTRACT=passed roles=4 subscriptions=2 unit_format=quadlet activation=blocked worker=disabled"
+            ''}";
+          };
+          subscription-factory-contract = {
+            type = "app";
+            program = "${pkgs.writeShellScript "agni-subscription-factory-contract" ''
+              set -euo pipefail
+              src=${probotFactoryCheckout}
+              rev=${probotFactoryRevision}
+              test -f "$src/.nix-xd-source-revision"
+              test "$(cat "$src/.nix-xd-source-revision")" = "$rev"
+              ${pkgs.nodejs_22}/bin/node --check "$src/src/subscription-factory.js"
+              ${pkgs.nodejs_22}/bin/node --check "$src/src/factory.js"
+              ${pkgs.nodejs_22}/bin/node --check "$src/src/services.js"
+              ${pkgs.nodejs_22}/bin/node --check "$src/src/subscription-execution.js"
+              ${pkgs.nodejs_22}/bin/node --test "$src/test/subscription-execution.test.js" "$src/test/subscription-factory.test.js"
+              echo "AGNI_PROBOT_FACTORY_CONTRACT=passed source=$rev subscription=isolated ingress=shared production=unchanged"
             ''}";
           };
           subscription-groups-contract = {
