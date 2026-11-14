@@ -227,7 +227,7 @@ grep -Fq '"$worker_gate" == processor-independent' "$here/startup-profile/probot
 grep -Fq 'SKYMILL_CONSUMER: '\''processor-a'\''' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'SKYMILL_CONSUMER: '\''processor-b'\''' "$here/startup-profile/probot-worker-live.js"
 
-grep -Fq '"revision": "a189e3d8337add66f656055296e7315041a763bf"' "$here/qualification/probot-subscription-ghxd-sources.json"
+grep -Fq '"revision": "1788ee94235b83f2b6229b95acbc98469f3eaf85"' "$here/qualification/probot-subscription-ghxd-sources.json"
 grep -Fq 'probotSubscriptionCheckout = "/workspaces/probot-subscription20261114";' "$here/flake.nix"
 grep -Fq "TARGET='#subscription-groups-contract'" "$here/operations/guest-migration.sh"
 grep -Fq "TARGET='#subscription-groups-source-artifact'" "$here/operations/guest-migration.sh"
