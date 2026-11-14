@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -50,6 +50,9 @@ set -e
 grep -Fq '    activation_check' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'install-probot "$scope" "$target/rendered"' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'bootstrap.sh" verify "$scope" "$profile_probe"' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq '  qualify-runtime)' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_RUNTIME_QUALIFICATION=passed ' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'provider_delivery_id' "$here/startup-profile/probot-runtime-qualify.py"
 # The CoreOS guest does not expose the Nix store at /nix/store on its host.
 # Its recovery Python must execute inside a rootless store-mapped container.
 grep -Fq -- '--mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro' "$here/startup-profile/probot-guest-app.sh"

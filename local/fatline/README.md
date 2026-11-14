@@ -323,3 +323,21 @@ mounted at `/nix/store` inside its isolated container. Running the
 Nix-pinned interpreter directly on CoreOS is incorrect: the host's store
 mount is `/var/mnt/nixstore`. This update does not change the selected
 application generation or restart Redis.
+
+## Live, non-restarting VM1 runtime gate
+
+Run `make -C local/fatline deployment-qualify-runtime DEPLOYMENT=vm1`
+from the version-pinned Nix-Alpine owner workflow. This target checks the
+already activated generation and all five user-systemd service invocations,
+validates legacy Logma/Skymill ACL denials against live Redis with the pinned
+Go probe, tests Logma's strict HTTP readiness and Probot's local HTTP/router
+authentication, and exercises the **current** Skymill HTTP bearer API using
+an isolated synthetic message. It checks publish-once idempotency, opaque
+provider delivery IDs, NACK acceptance and ACK state cleanup. It does not
+assert a completed NACK retry/redelivery (the current Redis provider reclaims
+idle pending entries separately), a genuine GitHub App webhook, the disabled
+Probot worker, or every adversarial tenant boundary. It never restarts Redis,
+installs Quadlets or modifies credentials; the synthetic stream fixture and
+idempotency key are the intended ephemeral Redis changes. The Skymill gate
+fails closed if consumer group pending deliveries exist rather than ACKing
+unknown application messages.
