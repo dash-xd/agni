@@ -175,6 +175,9 @@ grep -Fq 'AGNI_WORKER_RECONCILE_PROOF=denied' "$here/startup-profile/probot-work
 # Probot application-owned contract runs as a pinned Nix-Alpine app, not in VM1.
 grep -Fq "TARGET='#reconcile-service-contract'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_RECONCILE_SERVICE_CONTRACT=passed' "$here/flake.nix"
+grep -Fq 'AGNI_RECONCILE_SOURCE=passed blobs=verified mode=offline' "$here/flake.nix"
+grep -Fq 'probotReconcileSource = ./qualification/probot-reconcile-snapshot;' "$here/flake.nix"
+! grep -Fq 'probotReconcileSource = builtins.fetchGit' "$here/flake.nix"
 grep -Fq '1a0ce1f3684c120a8a800e7e63c45f0780bdda09' "$here/flake.nix"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
