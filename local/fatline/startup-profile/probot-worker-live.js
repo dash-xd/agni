@@ -180,19 +180,24 @@ async function main() {
     if (!response.ok) throw new Error('Skymill HTTP not ready');
     return response.json();
   }
-  async function post(signature) {
+  async function post(signature, phase) {
     const body = Buffer.from(JSON.stringify({
       ref: 'refs/heads/fixture', installation: { id: installationId },
       repository: { full_name: 'xd-dash/worker-qualification' },
     }));
+    console.log('AGNI_WORKER_LIVE_INGRESS_PHASE=begin phase=' + phase);
     const response = await fetch('http://127.0.0.1:3000/probot/apps/' + routingKey + '/deliveries', {
-      method: 'POST', body, signal: AbortSignal.timeout(5000),
+      // Skymill HTTP dependency requests have a 15s timeout; the outer
+      // ingress deadline must exceed it to observe an authoritative 5xx.
+      method: 'POST', body, signal: AbortSignal.timeout(22000),
       headers: {
         'content-type': 'application/json', 'x-github-event': 'push',
         'x-github-delivery': guid, 'x-hub-signature-256': signature,
       },
     });
-    return { status: response.status, body: await response.text() };
+    const result = { status: response.status, body: await response.text() };
+    console.log('AGNI_WORKER_LIVE_INGRESS_PHASE=completed phase=' + phase + ' status=' + response.status);
+    return result;
   }
   const body = Buffer.from(JSON.stringify({
     ref: 'refs/heads/fixture', installation: { id: installationId },
@@ -266,20 +271,20 @@ async function main() {
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
 
-    const rejected = await post('sha256=' + '0'.repeat(64));
+    const rejected = await post('sha256=' + '0'.repeat(64), 'invalid-signature');
     assert.equal(rejected.status, 401);
     assert.equal(await store.getDelivery(guid), null);
 
     // Fault injection only affects the disposable Skymill process.
     await stop('skymill', 'SIGKILL');
-    const unavailable = await post(signature);
+    const unavailable = await post(signature, 'dependency-unavailable');
     assert.ok([500, 502, 503].includes(unavailable.status));
     assert.equal(await store.getDelivery(guid), null);
     startSkymill();
     await until('Skymill recovery', status);
-    const accepted = await post(signature);
+    const accepted = await post(signature, 'accepted');
     assert.equal(accepted.status, 202);
-    const duplicate = await post(signature);
+    const duplicate = await post(signature, 'duplicate');
     assert.equal(duplicate.status, 200);
     console.log('AGNI_WORKER_LIVE_INGRESS=passed invalid=denied dependency_failure=denied signed=accepted duplicate=deduplicated');
 
@@ -299,7 +304,7 @@ async function main() {
     await stop('probot', 'SIGKILL');
     startProbot(true);
     await waitProbot('Probot restart');
-    const replay = await post(signature);
+    const replay = await post(signature, 'replay');
     assert.equal(replay.status, 200);
     assert.equal((await store.getDelivery(guid)).executionStatus, 'succeeded');
     assert.equal((await status()).Pending.Count, 0);

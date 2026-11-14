@@ -135,3 +135,7 @@ grep -Fq 'child_categories=' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_WORKER_LIVE_HTTP_BASELINE=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'startProbot(false)' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'startProbot(true)' "$here/startup-profile/probot-worker-live.js"
+
+# The ingress outer deadline exceeds Probot's pinned Skymill client deadline.
+grep -Fq 'AbortSignal.timeout(22000)' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_WORKER_LIVE_INGRESS_PHASE=begin' "$here/startup-profile/probot-worker-live.js"
