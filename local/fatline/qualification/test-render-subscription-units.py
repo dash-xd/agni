@@ -63,7 +63,7 @@ class Qualification(unittest.TestCase):
             network.unlink()
             with self.assertRaises(ValueError):
                 validator.verify(out)
-            network.write_text("[Network]\\nNetworkName=wrong-network\\nInternal=true\\n")
+            network.write_text("[Network]\nNetworkName=wrong-network\nInternal=true\n")
             with self.assertRaises(ValueError):
                 validator.verify(out)
 
@@ -71,7 +71,7 @@ class Qualification(unittest.TestCase):
         entries = self.render()
         self.assertEqual(len(entries), 6)
         self.assertEqual(json.loads(entries["manifest.json"])["activation"], "blocked")
-        self.assertEqual(entries["fatline-arm-vm1.network"], "[Network]\\nNetworkName=nix-xd-fatline-arm-vm1\\nInternal=true\\n")
+        self.assertEqual(entries["fatline-arm-vm1.network"], "[Network]\nNetworkName=nix-xd-fatline-arm-vm1\nInternal=true\n")
         for group in ("a", "b"):
             prefix = "fatline-arm-vm1-subscription-" + group
             transport = entries[prefix + "-skymill.container"]
