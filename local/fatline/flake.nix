@@ -539,7 +539,7 @@
               type = "app";
               program = "${pkgs.writeShellScript "agni-declarative-processors-quadlets" ''
                 set -euo pipefail
-                echo "AGNI_DECLARATIVE_PROCESSORS_QUADLETS=${artifact}"
+                echo "AGNI_DECLARATIVE_PROCESSORS_QUADLET_ARTIFACT=${artifact}"
                 echo 'AGNI_DECLARATIVE_PROCESSORS_QUADLETS=passed activation=blocked source=agni-rendered'
               ''}";
             };
