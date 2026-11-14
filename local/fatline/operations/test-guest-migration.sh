@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers seed-subscription-source qualify-subscription-contract qualify-subscription-groups refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers seed-subscription-source qualify-subscription-contract qualify-subscription-groups qualify-declarative-processors refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -242,6 +242,12 @@ grep -Fq '"$worker_gate" == subscription-groups' "$here/startup-profile/probot-g
 grep -Fq "groupB = consumerGroup + '-subscription-b'" "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'subscriptionId: consumerGroup' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'subscriptionId: groupB' "$here/startup-profile/probot-worker-live.js"
+
+grep -Fq "TARGET='#declarative-processors-contract'" "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_DECLARATIVE_PROCESSORS_CONTRACT=passed' "$here/flake.nix"
+grep -Fq 'PROBOT_RUNTIME_WORKER_ENABLED=false' "$here/qualification/render-subscription-units.py"
+grep -Fq 'ConditionPathExists=/run/agni/unqualified-subscription-activation' "$here/qualification/render-subscription-units.py"
+grep -Fq 'execution_factory": "not-yet-integrated"' "$here/qualification/render-subscription-units.py"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
