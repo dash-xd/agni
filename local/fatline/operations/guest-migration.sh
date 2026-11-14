@@ -70,7 +70,7 @@ grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-sou
 if [[ "$operation" == qualify-reconcile-service-contract ]]; then
   run_step "$log_dir/reconcile-service-contract.log" xd_make qualify QUALIFY_APP=1 \
     FLAKE="$flake" TARGET='#reconcile-service-contract'
-  grep -Fq 'AGNI_RECONCILE_SERVICE_CONTRACT=passed source=508f147da39e24aaad6bc5507192e6377a44a675 scope=isolated production_route=absent' \
+  grep -Fq 'AGNI_RECONCILE_SERVICE_CONTRACT=passed source=1a0ce1f3684c120a8a800e7e63c45f0780bdda09 scope=isolated production_route=absent' \
     "$log_dir/reconcile-service-contract.log" || fail reconciliation-service-contract-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-reconcile-service-contract source=pinned production=unchanged'
   exit 0
