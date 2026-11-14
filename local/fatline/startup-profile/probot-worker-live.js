@@ -158,7 +158,7 @@ async function main() {
       SKYMILL_HTTP_TOKEN_FILE: skymillFile,
     });
   }
-  function startProbot() {
+  function startProbot(workerEnabled = true) {
     return launch('probot', nodeBin, [path.join(probotRoot, 'router/serve.js')], {
       HOST: '127.0.0.1', PORT: '3000', REDIS_URL: redisUrl, REDIS_DB: '0',
       REDIS_USERNAME: 'probot_state', REDIS_PASSWORD_FILE: stateFile,
@@ -166,7 +166,7 @@ async function main() {
       PROBOT_RUNTIME_TENANT_ID: scope, PROBOT_RUNTIME_GITHUB_ORG: 'xd-dash',
       PROBOT_RUNTIME_PUBLIC_URL: 'http://127.0.0.1:3000',
       PROBOT_RUNTIME_OPERATOR_TOKEN_FILE: operatorFile, PROBOT_RUNTIME_RECONCILE_EVERY: '0',
-      PROBOT_RUNTIME_WORKER_ENABLED: 'true', PROBOT_RUNTIME_WORKER_BATCH_LIMIT: '1',
+      PROBOT_RUNTIME_WORKER_ENABLED: workerEnabled ? 'true' : 'false', PROBOT_RUNTIME_WORKER_BATCH_LIMIT: '1',
       PROBOT_RUNTIME_WORKER_INTERVAL_MS: '150',
       SKYMILL_URL: 'http://127.0.0.1:8081', SKYMILL_TOKEN: skymillToken,
       SKYMILL_STREAM: 'worker-candidate.webhooks', SKYMILL_CONSUMER_GROUP: consumerGroup,
@@ -248,11 +248,22 @@ async function main() {
       });
       return response.status === 401;
     });
-    startProbot();
-    await until('worker-enabled Probot HTTP', async () => {
-      const response = await fetch('http://127.0.0.1:3000/', { signal: AbortSignal.timeout(1000) });
-      return response.ok;
-    });
+    // First establish that the pinned HTTP process can initialize and bind
+    // without its delivery worker. Same credentials, Redis, and Skymill.
+    async function waitProbot(label) {
+      await until(label, async () => {
+        const response = await fetch('http://127.0.0.1:3000/', {
+          signal: AbortSignal.timeout(1000),
+        });
+        return response.ok;
+      });
+    }
+    startProbot(false);
+    await waitProbot('worker-disabled Probot HTTP');
+    console.log('AGNI_WORKER_LIVE_HTTP_BASELINE=passed worker=disabled redis=real');
+    await stop('probot');
+    startProbot(true);
+    await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
 
     const rejected = await post('sha256=' + '0'.repeat(64));
@@ -286,11 +297,8 @@ async function main() {
     console.log('AGNI_WORKER_LIVE_DELIVERY=passed durable_execution=succeeded skymill_ack=true pending=0');
 
     await stop('probot', 'SIGKILL');
-    startProbot();
-    await until('Probot restart', async () => {
-      const response = await fetch('http://127.0.0.1:3000/', { signal: AbortSignal.timeout(1000) });
-      return response.ok;
-    });
+    startProbot(true);
+    await waitProbot('Probot restart');
     const replay = await post(signature);
     assert.equal(replay.status, 200);
     assert.equal((await store.getDelivery(guid)).executionStatus, 'succeeded');

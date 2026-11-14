@@ -130,3 +130,8 @@ grep -Fq 'assertChildrenHealthy()' "$here/startup-profile/probot-worker-live.js"
 # Candidate child startup errors must be categorized without logging raw credential-bearing output.
 grep -Fq 'AGNI_WORKER_LIVE_CHILD_SIGNAL role=' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'child_categories=' "$here/startup-profile/probot-worker-live.js"
+
+# The real worker must qualify the same pinned HTTP startup with worker disabled first.
+grep -Fq 'AGNI_WORKER_LIVE_HTTP_BASELINE=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'startProbot(false)' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'startProbot(true)' "$here/startup-profile/probot-worker-live.js"
