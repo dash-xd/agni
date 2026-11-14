@@ -68,7 +68,9 @@ xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
 
 if [[ "$operation" == seed-reconcile-source ]]; then
-  xd_make exec CMD="bash /workspaces/$checkout/local/fatline/operations/seed-reconcile-source.sh"
+  run_step "$log_dir/reconcile-source-seed.log" xd_make run FLAKE="$flake" TARGET='#reconcile-source-seed'
+  grep -Fq 'AGNI_RECONCILE_SOURCE_SEED=passed authority=smoke-ghxd sha=1a0ce1f3684c120a8a800e7e63c45f0780bdda09' \
+    "$log_dir/reconcile-source-seed.log" || fail smoke-source-seed-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-reconcile-source execution=nix-alpine promotion=blocked'
   exit 0
 fi
