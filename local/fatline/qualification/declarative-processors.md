@@ -36,6 +36,20 @@ The current gate checks **rendering and static lifecycle policy only**.
 It does **not** claim that the Podman systemd generator has accepted the Quadlets,
 nor that systemd has started or independently restarted them.
 
+## CoreOS generator dry-run
+
+The next `deployment-qualify-declarative-generator` gate builds the four inert Quadlet
+files into an immutable Nix store artifact and runs CoreOS's real
+`podman-system-generator --user --dryrun` against a temporary copy.
+
+The generated executable store paths are **synthetic fixture paths**; this gate
+qualifies unit parsing and dependency policy, **not** executable closure or startup.
+The guest checks the five existing VM1 service InvocationIDs before and after
+and removes the temporary candidate files. No Quadlet is installed.
+
+This is intentionally separate from a systemd startup qualification because
+subscription-scoped Probot factory integration is still absent.
+
 ## Next qualification, after this one passes
 
 1. Integrate and qualify subscription-mode factory wiring, binding the execution
