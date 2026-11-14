@@ -89,6 +89,7 @@ grep -Fq 'http://logma:18081/lifecycle/api/v0.0.1/policies' "$here/startup-profi
 echo 'AGNI_LOGMA_RUNTIME_CONTRACT=passed entrypoint=cmd/api-lifecycle port=18081 auth=x-api-key strict_ready=unqualified'
 
 # Integration contract must be parsed before any runtime entrypoint is built.
+python3 "$here/operations/test-probot-integration.py" "$here/startup-profile/probot-integration-qualify.py"
 python3 - "$here/startup-profile/probot-integration-qualify.py" <<'PY'
 import ast, pathlib, sys
 ast.parse(pathlib.Path(sys.argv[1]).read_text())
