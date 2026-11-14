@@ -12,6 +12,11 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
+      probotReconcileRevision = "602dd2f0bd3efbdf4f4771748e2134a19f841340";
+      probotReconcileSource = builtins.fetchGit {
+        url = "https://github.com/xd-dash/probot-runtime.git";
+        rev = probotReconcileRevision;
+      };
       smokeRevision = "66950da9a5e4e5303f5dcd018f9039f9b6fc8496";
       smokeSource = builtins.fetchGit {
         url = "https://github.com/xd-dash/smoke.git";
@@ -461,6 +466,16 @@
             type = "app";
             program = "${pkgs.writeShellScript "agni-fatline-isolated-runtime-grants" ''
               exec ${pkgs.coreutils}/bin/cat ${self.packages.${system}.isolated-runtime-grants}
+            ''}";
+          };
+          reconcile-service-contract = {
+            type = "app";
+            program = "${pkgs.writeShellScript "agni-reconcile-service-contract" ''
+              set -euo pipefail
+              ${pkgs.nodejs_22}/bin/node --test \
+                ${probotReconcileSource}/test/delivery-reconciliation.test.js
+              printf 'AGNI_RECONCILE_SERVICE_CONTRACT=passed source=%s scope=isolated production_route=absent\n' \
+                ${probotReconcileRevision}
             ''}";
           };
           resource-preflight = {
