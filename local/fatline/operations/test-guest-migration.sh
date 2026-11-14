@@ -25,7 +25,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers seed-subscription-source qualify-subscription-contract qualify-subscription-groups qualify-declarative-processors refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers seed-subscription-source qualify-subscription-contract qualify-subscription-groups qualify-declarative-processors qualify-declarative-generator refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -254,6 +254,13 @@ grep -Fq 'ConditionPathExists=/run/agni/unqualified-subscription-activation' "$h
 grep -Fq 'execution_factory": "not-yet-integrated"' "$here/qualification/render-subscription-units.py"
 python3 "$here/qualification/test-render-subscription-units.py"
 echo 'AGNI_DECLARATIVE_PROCESSORS_STATIC=passed roles=4 subscriptions=2 activation=blocked'
+grep -Fq "TARGET='#declarative-processors-quadlets'" "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_DECLARATIVE_PROCESSORS_QUADLETS=passed' "$here/flake.nix"
+grep -Fq '  qualify-declarative-generator)' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'QUADLET_UNIT_DIRS="$candidate_dir" "$generator" --user --dryrun' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_DECLARATIVE_GENERATOR=passed units=4' "$here/startup-profile/probot-guest-app.sh"
+echo 'AGNI_DECLARATIVE_GENERATOR_STATIC=passed guest=coreos systemd=dryrun baseline=unchanged'
+
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
