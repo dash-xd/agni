@@ -26,7 +26,7 @@ two processors within **one** group use one subscription ID and share a fence.
 
 ## Live qualification
 
-1. Launch isolated Redis and two independent Skymill HTTP service instances, with distinct groups.
+1. Launch isolated Redis and two independent Skymill HTTP service instances, with distinct groups and distinct bearer tokens. Verify cross-group bearer tokens are rejected with HTTP 401.
 2. Ingest one signed webhook into the shared stream.
 3. Let group B receive it, creating one pending entry; terminate B's Skymill service.
 4. Allow group A to execute and ACK. B's effect must remain absent.
