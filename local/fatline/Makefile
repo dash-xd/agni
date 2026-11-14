@@ -12,7 +12,7 @@ MACHINE ?= coreos-arm64
 export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
-.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-memory deployment-qualify-worker-fence deployment-qualify-worker-effect deployment-qualify-worker-reconcile deployment-seed-reconcile-source deployment-qualify-reconcile-service-contract deployment-diagnose-runtime-network check-deployment
+.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-memory deployment-qualify-worker-fence deployment-qualify-worker-effect deployment-qualify-worker-reconcile deployment-refresh-reconcile-auth deployment-seed-reconcile-source deployment-qualify-reconcile-service-contract deployment-diagnose-runtime-network check-deployment
 
 help:
 	@printf '%s\n' \
@@ -37,6 +37,7 @@ help:
 	  'make deployment-qualify-worker-fence DEPLOYMENT=vm1      Worker crash after execution fence; no automatic replay' \
 	  'make deployment-qualify-worker-effect DEPLOYMENT=vm1     Worker crash after test-local effect, before completion' \
 	  'make deployment-qualify-worker-reconcile DEPLOYMENT=vm1  Evidence-gated ambiguous delivery ACK; isolated only' \
+	  'make deployment-refresh-reconcile-auth              Refresh encrypted Smoke GHXD OAuth credentials' \
 	  'make deployment-seed-reconcile-source              Smoke ghxd exact-SHA Probot source seed inside Nix-Alpine' \
 	  'make deployment-qualify-reconcile-service-contract  Test Smoke-seeded Probot contract inside Nix-Alpine' \
 	  'make deployment-qualify-worker-live DEPLOYMENT=vm1       Complete gated live candidate; no activation' \
@@ -89,6 +90,9 @@ deployment-qualify-worker-effect:
 
 deployment-qualify-worker-reconcile:
 	@bash operations/guest-migration.sh qualify-worker-reconcile
+
+deployment-refresh-reconcile-auth:
+	@bash operations/guest-migration.sh refresh-reconcile-auth
 
 deployment-seed-reconcile-source:
 	@bash operations/guest-migration.sh seed-reconcile-source
