@@ -252,6 +252,8 @@ grep -Fq 'AGNI_DECLARATIVE_PROCESSORS_CONTRACT=passed' "$here/flake.nix"
 grep -Fq 'PROBOT_RUNTIME_WORKER_ENABLED=false' "$here/qualification/render-subscription-units.py"
 grep -Fq 'ConditionPathExists=/run/agni/unqualified-subscription-activation' "$here/qualification/render-subscription-units.py"
 grep -Fq 'execution_factory": "not-yet-integrated"' "$here/qualification/render-subscription-units.py"
+python3 "$here/qualification/test-render-subscription-units.py"
+echo 'AGNI_DECLARATIVE_PROCESSORS_STATIC=passed roles=4 subscriptions=2 activation=blocked'
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
