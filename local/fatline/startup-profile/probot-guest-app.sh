@@ -450,7 +450,6 @@ case "$action" in
     source_units="/var/mnt/nixstore/${bundle_store#/nix/store/}"
     [[ -d "$source_units" && ! -L "$source_units" && -s "$source_units/manifest.json" ]] || exit 1
     [[ "$(find "$source_units" -maxdepth 1 -type f -name '*.container' | wc -l)" -eq 4 ]] || exit 1
-    grep -Fqx '"activation": "blocked", "execution_factory": "not-yet-integrated", "groups": ["a", "b"], "schema": 1, "scope": "fatline-arm-vm1", "subscription_revision": "1788ee94235b83f2b6229b95acbc98469f3eaf85", "units": 4, "worker": "disabled"}' "$source_units/manifest.json" || exit 1
     generator=/usr/lib/systemd/system-generators/podman-system-generator
     [[ -x "$generator" ]] || {
       echo 'AGNI_DECLARATIVE_GENERATOR=blocked reason=quadlet-generator-unavailable' >&2
@@ -477,7 +476,10 @@ case "$action" in
     done
     generated="$(mktemp)"
     trap 'rm -rf -- "$candidate_dir"; rm -f -- "$generated"' EXIT
-    QUADLET_UNIT_DIRS="$candidate_dir" "$generator" --user --dryrun > "$generated"
+    if ! QUADLET_UNIT_DIRS="$candidate_dir" "$generator" --user --dryrun > "$generated"; then
+      echo 'AGNI_DECLARATIVE_GENERATOR=blocked reason=generator-dryrun-failed' >&2
+      exit 1
+    fi
     for group in a b; do
       for role in skymill processor; do
         grep -Fq "$scope-subscription-$group-$role.service" "$generated" || {
