@@ -62,7 +62,7 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract || "$operation" == qualify-processor-live ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
@@ -136,6 +136,21 @@ if [[ "$operation" == qualify-processor-contract ]]; then
   grep -Fxq 'AGNI_PROBOT_PROCESSOR_CONTRACT=passed source=96fc8561096dd9002cbba2ba2e6fbff37d67b5a2 hints=optional fallback=bounded stream=authoritative' \
     "$log_dir/processor-contract.log" || fail processor-contract-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-processor-contract source=pinned production=unchanged'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-processor-live ]]; then
+  run_step "$log_dir/processor-artifact.log" xd_make run FLAKE="$flake" TARGET='#processor-source-artifact'
+  source_artifact="$(agni_capture_value AGNI_PROBOT_PROCESSOR_ARTIFACT "$log_dir/processor-artifact.log")"
+  [[ "$source_artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-processor20261114$ ]] || fail processor-source-artifact-not-pinned
+  grep -Fxq 'AGNI_PROBOT_PROCESSOR_ARTIFACT_QUALIFIED=passed revision=96fc8561096dd9002cbba2ba2e6fbff37d67b5a2 rooted=true' \
+    "$log_dir/processor-artifact.log" || fail processor-artifact-not-qualified
+  run_step "$log_dir/processor-live.log" guest qualify-worker-live processor-subscriber "$source_artifact"
+  grep -Fxq 'AGNI_PROBOT_PROCESSOR_LIVE=passed redis=real skymill=real logma=redis-pubsub processors=2 group=shared' \
+    "$log_dir/processor-live.log" || fail processor-live-not-qualified
+  grep -Fxq 'AGNI_WORKER_LIVE_QUALIFICATION=passed gate=processor-subscriber backing=real service_invocations=unchanged worker=isolated promotion=blocked' \
+    "$log_dir/processor-live.log" || fail processor-baseline-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-processor-live backing=real promotion=blocked'
   exit 0
 fi
 
