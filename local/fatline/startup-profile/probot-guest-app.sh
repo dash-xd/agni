@@ -532,10 +532,19 @@ case "$action" in
     for role in redis nginx logma skymill probot; do
       after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
     done
-    [[ "${before[*]}" == "${after[*]}" ]] || {
+    if [[ "${before[*]}" != "${after[*]}" ]]; then
+      index=0
+      for role in redis nginx logma skymill probot; do
+        if [[ "${before[index]}" != "${after[index]}" ]]; then
+          active="$(systemctl --user show "$scope-$role.service" -p ActiveState --value)"
+          printf 'AGNI_WORKER_LIVE_BASELINE_DELTA=failed role=%s before=%s after=%s active=%s\n' \
+            "$role" "${before[index]:+present}" "${after[index]:+present}" "$active" >&2
+        fi
+        index=$((index + 1))
+      done
       echo 'AGNI_WORKER_LIVE=blocked reason=service-invocation-changed' >&2
       exit 1
-    }
+    fi
     bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
     echo "AGNI_WORKER_LIVE_BASELINE=passed gate=$worker_gate invocations=unchanged bootstrap=verified"
     if [[ "$candidate_rc" != 0 ]]; then
