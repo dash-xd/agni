@@ -42,6 +42,8 @@ The next `deployment-qualify-declarative-generator` gate builds the four inert Q
 files into an immutable Nix store artifact and runs CoreOS's real
 `podman-system-generator --user --dryrun` against a temporary copy.
 
+The Nix build checks the parsed manifest, exact unit set, consumer-group bindings, activation guards, and isolated credential mounts before exposing the immutable artifact. CoreOS only verifies guest-visible safety constraints and runs its native generator; it does not repeat JSON serialization checks.
+
 The generated executable store paths are **synthetic fixture paths**; this gate
 qualifies unit parsing and dependency policy, **not** executable closure or startup.
 The guest checks the five existing VM1 service InvocationIDs before and after
