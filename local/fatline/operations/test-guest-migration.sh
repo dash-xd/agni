@@ -175,7 +175,7 @@ grep -Fq 'AGNI_WORKER_RECONCILE_PROOF=denied' "$here/startup-profile/probot-work
 # Probot application-owned contract runs as a pinned Nix-Alpine app, not in VM1.
 grep -Fq "TARGET='#reconcile-service-contract'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_RECONCILE_SERVICE_CONTRACT=passed' "$here/flake.nix"
-grep -Fq '602dd2f0bd3efbdf4f4771748e2134a19f841340' "$here/flake.nix"
+grep -Fq '508f147da39e24aaad6bc5507192e6377a44a675' "$here/flake.nix"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
