@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# Report the failing static assertion rather than exiting without a diagnostic.
+trap 'status=$?; printf "AGNI_DEPLOYMENT_STATIC=failed line=%s command=%s exit=%s\\n" "$LINENO" "$BASH_COMMAND" "$status" >&2' ERR
 bash -n "$here/operations/guest-migration.sh"
 bash -n "$here/operations/output.sh"
 source "$here/operations/output.sh"
@@ -225,7 +227,9 @@ grep -Fq 'AGNI_PROBOT_INDEPENDENT_RECLAIM=passed' "$here/startup-profile/probot-
 grep -Fq 'AGNI_PROBOT_INDEPENDENT_LIVE=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq '"$worker_gate" == processor-independent' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'SKYMILL_CONSUMER: '\''processor-a'\''' "$here/startup-profile/probot-worker-live.js"
-grep -Fq 'SKYMILL_CONSUMER: '\''processor-b'\''' "$here/startup-profile/probot-worker-live.js"
+grep -Fq "function startSkymillPeer(consumer = 'processor-b')" "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'SKYMILL_CONSUMER: consumer,' "$here/startup-profile/probot-worker-live.js"
+grep -Fq "startSkymillPeer('processor-b-recovery')" "$here/startup-profile/probot-worker-live.js"
 
 grep -Fq '"revision": "1788ee94235b83f2b6229b95acbc98469f3eaf85"' "$here/qualification/probot-subscription-ghxd-sources.json"
 grep -Fq 'probotSubscriptionCheckout = "/workspaces/probot-runtime20261115";' "$here/flake.nix"
