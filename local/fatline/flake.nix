@@ -13,7 +13,7 @@
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
       probotReconcileRevision = "1a0ce1f3684c120a8a800e7e63c45f0780bdda09";
-      probotProcessorRevision = "96fc8561096dd9002cbba2ba2e6fbff37d67b5a2";
+      probotProcessorRevision = "8eac84c8e46228c6943b08720ba487c17f63d5f9";
       probotProcessorCheckout = "/workspaces/probot-runtime20261114";
       # Smoke ghxd seeds the exact private-source commit into Nix-Alpine.
       # The Nix app validates it at execution time; no private fetch during evaluation.
