@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -171,6 +171,11 @@ grep -Fq 'worker_gate=reconcile' "$here/operations/guest-migration.sh"
 grep -Fq '"$worker_gate" == reconcile' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'AGNI_WORKER_RECONCILE=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_WORKER_RECONCILE_PROOF=denied' "$here/startup-profile/probot-worker-live.js"
+
+# Probot application-owned contract runs as a pinned Nix-Alpine app, not in VM1.
+grep -Fq "TARGET='#reconcile-service-contract'" "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_RECONCILE_SERVICE_CONTRACT=passed' "$here/flake.nix"
+grep -Fq '602dd2f0bd3efbdf4f4771748e2134a19f841340' "$here/flake.nix"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
