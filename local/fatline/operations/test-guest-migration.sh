@@ -50,6 +50,11 @@ set -e
 grep -Fq '    activation_check' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'install-probot "$scope" "$target/rendered"' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'bootstrap.sh" verify "$scope" "$profile_probe"' "$here/startup-profile/probot-guest-app.sh"
+# The CoreOS guest does not expose the Nix store at /nix/store on its host.
+# Its recovery Python must execute inside a rootless store-mapped container.
+grep -Fq -- '--mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq -- '--base /run/fatline-base --generation "$basename"' "$here/startup-profile/probot-guest-app.sh"
+! grep -Fq '"$python" "$tools/probot-sandbox-http-recover.py"' "$here/startup-profile/probot-guest-app.sh"
 # nix.xd executes the guest via a Bash stream, where $0 is bash itself.
 # Recovery must invoke the shared preflight function, not bash "$0".
 grep -Fq 'activation_check() {' "$here/startup-profile/probot-guest-app.sh"

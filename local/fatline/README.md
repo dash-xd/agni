@@ -317,3 +317,9 @@ It does not alter the staged private generation, redis credentials, ACLs,
 VM topology, or activate GitHub ingress. A failure remains unqualified and
 is reported without claiming recovery or rollback. New candidate generations
 write these bearer token files without a trailing newline.
+
+The repair helper runs through rootless Podman with the guest 9P store
+mounted at `/nix/store` inside its isolated container. Running the
+Nix-pinned interpreter directly on CoreOS is incorrect: the host's store
+mount is `/var/mnt/nixstore`. This update does not change the selected
+application generation or restart Redis.

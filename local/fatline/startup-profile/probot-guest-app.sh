@@ -408,7 +408,21 @@ case "$action" in
     flock -x 9
     python="$(sed -n '1p' "$tools/python-path")"
     [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
-    "$python" "$tools/probot-sandbox-http-recover.py" --base "$base" --generation "$basename"
+    [[ -d "$apps/rootfs" && -x "$apps/rootfs/bin/busybox" ]] || {
+      echo 'AGNI_SANDBOX_HTTP_RECOVERY=blocked reason=guest-rootfs-missing' >&2
+      exit 1
+    }
+    # The CoreOS host mounts the owner store at /var/mnt/nixstore, not /nix/store.
+    # Execute the pinned Python within the existing rootless Nix-store-mapped container.
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$base,dst=/run/fatline-base,rw" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-sandbox-http-recover.py" \
+      --base /run/fatline-base --generation "$basename"
     systemctl --user reset-failed "$scope-skymill.service" "$scope-probot.service"
     systemctl --user restart "$scope-skymill.service"
     systemctl --user start "$scope-probot.service"
