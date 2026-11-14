@@ -183,7 +183,7 @@ if [[ "$operation" == seed-subscription-source ]]; then
       MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
       PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
   grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$log_dir/subscription-source-seed.log" || fail subscription-ghxd-sync-not-qualified
-  grep -Fq 'checkout=probot-subscription20261114 sha=a189e3d8337add66f656055296e7315041a763bf' \
+  grep -Fq 'checkout=probot-subscription20261114 sha=1788ee94235b83f2b6229b95acbc98469f3eaf85' \
     "$log_dir/subscription-source-seed.log" || fail subscription-source-identity-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-subscription-source source=smoke-ghxd production=unchanged'
   exit 0
@@ -191,7 +191,7 @@ fi
 
 if [[ "$operation" == qualify-subscription-contract ]]; then
   run_step "$log_dir/subscription-contract.log" xd_make run FLAKE="$flake" TARGET='#subscription-groups-contract'
-  grep -Fxq 'AGNI_PROBOT_SUBSCRIPTION_CONTRACT=passed source=a189e3d8337add66f656055296e7315041a763bf scope=org-tenant-application-subscription' \
+  grep -Fxq 'AGNI_PROBOT_SUBSCRIPTION_CONTRACT=passed source=1788ee94235b83f2b6229b95acbc98469f3eaf85 scope=org-tenant-application-subscription' \
     "$log_dir/subscription-contract.log" || fail subscription-contract-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-subscription-contract source=pinned production=unchanged'
   exit 0
@@ -201,7 +201,7 @@ if [[ "$operation" == qualify-subscription-groups ]]; then
   run_step "$log_dir/subscription-artifact.log" xd_make run FLAKE="$flake" TARGET='#subscription-groups-source-artifact'
   source_artifact="$(agni_capture_value AGNI_PROBOT_SUBSCRIPTION_ARTIFACT "$log_dir/subscription-artifact.log")"
   [[ "$source_artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-subscription20261114$ ]] || fail subscription-source-artifact-not-pinned
-  grep -Fxq 'AGNI_PROBOT_SUBSCRIPTION_ARTIFACT_QUALIFIED=passed revision=a189e3d8337add66f656055296e7315041a763bf rooted=true' \
+  grep -Fxq 'AGNI_PROBOT_SUBSCRIPTION_ARTIFACT_QUALIFIED=passed revision=1788ee94235b83f2b6229b95acbc98469f3eaf85 rooted=true' \
     "$log_dir/subscription-artifact.log" || fail subscription-source-artifact-not-qualified
   run_step "$log_dir/subscription-live.log" guest qualify-worker-live subscription-groups "$source_artifact"
   for marker in \
