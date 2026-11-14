@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "sources": {
+    "probot-subscription": {
+      "repository": "xd-dash/probot-runtime",
+      "revision": "a189e3d8337add66f656055296e7315041a763bf",
+      "checkout": "probot-subscription20261114"
+    }
+  }
+}
