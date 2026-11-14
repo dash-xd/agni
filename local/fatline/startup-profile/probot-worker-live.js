@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full'] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -260,7 +260,10 @@ async function main() {
   }
 
   const effectMarkerFile = path.join(workspace, 'effect-once');
-  if (gate === 'effect') {
+  if (gate === 'effect' || gate === 'reconcile') {
+    const effectValue = gate === 'reconcile'
+      ? "JSON.stringify({ delivery_id: receiveArgs[0].id, kind: 'fixture-effect-applied' })"
+      : "'effect-applied'";
     fs.writeFileSync(fenceHookFile, [
       "'use strict';",
       "const fs = require('node:fs');",
@@ -272,7 +275,7 @@ async function main() {
       "    const originalReceive = app.receive.bind(app);",
       "    app.receive = async (...receiveArgs) => {",
       "      const result = await originalReceive(...receiveArgs);",
-      "      fs.writeFileSync(" + JSON.stringify(effectMarkerFile) + ", 'effect-applied', { mode: 0o600, flag: 'wx' });",
+      "      fs.writeFileSync(" + JSON.stringify(effectMarkerFile) + ", " + effectValue + ", { mode: 0o600, flag: 'wx' });",
       "      await new Promise(() => {});",
       "      return result;",
       "    };",
@@ -369,7 +372,7 @@ async function main() {
       throw new Error('pinned Probot module closure unavailable category=' + reason);
     }
     checkpoint('pinned-probot-module-closure');
-    startProbot(true, gate === 'fence' || gate === 'effect');
+    startProbot(true, gate === 'fence' || gate === 'effect' || gate === 'reconcile');
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
     checkpoint('bootstrap-complete');
@@ -391,6 +394,90 @@ async function main() {
     await until('Skymill recovery', status);
     const accepted = await post(signature, 'accepted');
     assert.equal(accepted.status, 202);
+
+    if (gate === 'reconcile') {
+      await until('reconcile effect before completion', async () => {
+        if (!fs.existsSync(effectMarkerFile)) return false;
+        const observed = await store.getDelivery(guid);
+        return observed && observed.executionStatus === 'running' &&
+          (await status()).Pending.Count > 0;
+      }, 90000);
+      const effectProof = JSON.parse(fs.readFileSync(effectMarkerFile, 'utf8'));
+      assert.deepEqual(effectProof, { delivery_id: guid, kind: 'fixture-effect-applied' });
+      await stop('probot', 'SIGKILL');
+      assert.equal((await store.getDelivery(guid)).executionStatus, 'running');
+      assert.ok((await status()).Pending.Count > 0);
+      console.log('AGNI_WORKER_RECONCILE_INTERRUPTED=passed effect=observed completion=uncommitted');
+
+      startProbot(true);
+      await waitProbot('reconcile worker restart');
+      await until('reconcile ambiguous', async () => {
+        const observed = await store.getDelivery(guid);
+        return observed && observed.executionStatus === 'ambiguous' &&
+          observed.outcomeStatus === 'nacked';
+      }, 120000);
+      assert.ok((await status()).Pending.Count > 0);
+      const before = await store.getDelivery(guid);
+      assert.equal(before.executionStatus, 'ambiguous');
+
+      function independentlyVerifiedEffect(requestedDeliveryId) {
+        if (!requestedDeliveryId || !fs.existsSync(effectMarkerFile)) return false;
+        const observed = JSON.parse(fs.readFileSync(effectMarkerFile, 'utf8'));
+        return observed.kind === 'fixture-effect-applied' &&
+          observed.delivery_id === requestedDeliveryId &&
+          requestedDeliveryId === guid;
+      }
+      assert.equal(independentlyVerifiedEffect(null), false);
+      assert.equal(independentlyVerifiedEffect(crypto.randomUUID()), false);
+      assert.equal((await store.getDelivery(guid)).executionStatus, 'ambiguous');
+      console.log('AGNI_WORKER_RECONCILE_PROOF=denied absent=true mismatched=true');
+
+      assert.ok(independentlyVerifiedEffect(guid), 'external effect proof required');
+      // A conditional Redis transition prevents reconciliation from
+      // overwriting another execution decision or a newer generation.
+      const changed = await store.client.eval([
+        "if redis.call('HGET', KEYS[1], 'delivery_guid') ~= ARGV[1] then return 0 end",
+        "if redis.call('HGET', KEYS[1], 'execution_status') ~= 'ambiguous' then return 0 end",
+        "redis.call('HSET', KEYS[1], 'execution_status', 'succeeded',",
+        "  'execution_completed_at', ARGV[2],",
+        "  'execution_result_json', ARGV[3], 'execution_error', '')",
+        "return 1",
+      ].join('\n'), {
+        keys: [store.key('delivery', guid)],
+        arguments: [guid, new Date().toISOString(),
+          JSON.stringify({ reconciled: true, evidence: 'fixture-effect-applied' })],
+      });
+      assert.equal(Number(changed), 1, 'ambiguous fence CAS must succeed exactly once');
+      assert.equal((await store.getDelivery(guid)).executionStatus, 'succeeded');
+      console.log('AGNI_WORKER_RECONCILE_DECISION=passed evidence=verified transition=conditional');
+
+      const providerDeliveryId = (await store.getDelivery(guid)).providerDeliveryId;
+      assert.ok(providerDeliveryId, 'missing Skymill provider delivery ID');
+      const ackResponse = await fetch('http://127.0.0.1:8081/v1/deliveries/ack', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer ' + skymillToken,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ provider_delivery_id: providerDeliveryId }),
+        signal: AbortSignal.timeout(15000),
+      });
+      assert.equal(ackResponse.status, 200, 'Skymill must accept proof-gated ACK');
+      await store.recordDeliveryOutcome(guid, { status: 'acked', providerDeliveryId });
+      assert.equal((await status()).Pending.Count, 0);
+      assert.equal((await store.getDelivery(guid)).outcomeStatus, 'acked');
+
+      const duplicate = await post(signature, 'reconcile-duplicate');
+      assert.equal(duplicate.status, 200);
+      assert.deepEqual(JSON.parse(fs.readFileSync(effectMarkerFile, 'utf8')), effectProof);
+      assertChildrenHealthy();
+      console.log('AGNI_WORKER_RECONCILE=passed evidence=verified effect=once execution=succeeded acked=true pending=0 replay=deduplicated');
+      store.client.destroy();
+      activeStore = undefined;
+      console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=reconcile');
+      return;
+    }
 
     if (gate === 'effect') {
       await until('observable effect before completion', async () => {
