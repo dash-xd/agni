@@ -90,7 +90,7 @@ if __name__ == "__main__":
     with open(args.token_file, "rb") as credential:
         token = credential.read().decode()
     with open(args.logma_api_key_file, "rb") as credential:
-        logma_key = credential.read().decode().removesuffix("\\n")
+        logma_key = credential.read().decode().removesuffix("\n")
     if not logma_key or any(c.isspace() for c in logma_key):
         raise RuntimeError("Logma API key credential invalid")
     qualify(token, logma_key)
