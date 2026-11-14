@@ -505,6 +505,11 @@ async function main() {
 
         // A fresh delivery proves B can process without A's HTTP service.
         const nextId = crypto.randomUUID();
+        await store.recordDelivery({
+          deliveryId: nextId, appId, routingKey, installationId,
+          event: 'push', receivedAt: new Date().toISOString(),
+          streamMessageId: nextId,
+        });
         const accepted = await identityB.publish({
           idempotencyKey: nextId, messageId: nextId,
           metadata: {
@@ -517,11 +522,6 @@ async function main() {
           },
         });
         assert.equal(accepted.duplicate, false);
-        await store.recordDelivery({
-          deliveryId: nextId, appId, routingKey, installationId,
-          event: 'push', receivedAt: new Date().toISOString(),
-          streamMessageId: nextId, providerDeliveryId: accepted.providerDeliveryId,
-        });
         await until('independent provider fresh delivery', async () => {
           const d = await store.getDelivery(nextId);
           return d?.executionStatus === 'succeeded' && d?.outcomeStatus === 'acked';
