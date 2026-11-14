@@ -414,7 +414,15 @@ async function main() {
       // external bootstrap would, rather than pretending Redis retained it.
       await seedApplicationState(recoveredStore);
       startSkymill();
-      await until('Skymill memory recovery', status);
+      // The new Redis generation has no stream or consumer group yet.
+      // /v1/status can fail until the first delivery initializes that state;
+      // qualify HTTP authentication/readiness first, as during bootstrap.
+      await until('Skymill memory recovery', async () => {
+        const response = await fetch('http://127.0.0.1:8081/v1/status', {
+          signal: AbortSignal.timeout(1000),
+        });
+        return response.status === 401;
+      });
       startProbot(true);
       await waitProbot('Probot memory recovery');
 
