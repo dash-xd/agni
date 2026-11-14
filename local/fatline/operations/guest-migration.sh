@@ -62,10 +62,18 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
+
+if [[ "$operation" == seed-reconcile-source ]]; then
+  # Smoke ghxd fetches the source inside Nix-Alpine, with runtime-only GH_TOKEN.
+  # Nix never evaluates a private Git URL or receives credentials.
+  xd_make exec CMD='set -euo pipefail; src=/workspaces/probot-reconcile20261114; rev=1a0ce1f3684c120a8a800e7e63c45f0780bdda09; if test -e "$src"; then test "$(git -C "$src" rev-parse HEAD)" = "$rev" && test -z "$(git -C "$src" status --porcelain)" && test -z "$(git -C "$src" symbolic-ref -q HEAD || true)"; else command -v smoke >/dev/null || { echo "AGNI_RECONCILE_SOURCE=blocked reason=smoke-cli-unavailable" >&2; exit 1; }; smoke ghxd worktree seed --repository xd-dash/probot-runtime --sha "$rev" --destination "$src" --object-root "$HOME/.local/state/smoke/ghxd/objects"; fi; echo "AGNI_RECONCILE_SOURCE_SEED=passed authority=smoke-ghxd sha=$rev"'
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-reconcile-source execution=nix-alpine promotion=blocked'
+  exit 0
+fi
 
 if [[ "$operation" == qualify-reconcile-service-contract ]]; then
   run_step "$log_dir/reconcile-service-contract.log" xd_make qualify QUALIFY_APP=1 \
