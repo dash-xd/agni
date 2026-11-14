@@ -469,6 +469,38 @@
               exec ${pkgs.coreutils}/bin/cat ${self.packages.${system}.isolated-runtime-grants}
             ''}";
           };
+          processor-source-artifact = {
+            type = "app";
+            program = "${pkgs.writeShellApplication {
+              name = "agni-processor-source-artifact";
+              runtimeInputs = [ pkgs.bash pkgs.coreutils pkgs.nix ];
+              text = ''
+                set -Eeuo pipefail
+                rev=${probotProcessorRevision}
+                source=${probotProcessorCheckout}
+                test -f "$source/.nix-xd-source-revision"
+                test "$(cat "$source/.nix-xd-source-revision")" = "$rev"
+                test -f "$source/src/processor.js"
+                test -f "$source/src/logma-subscriber.js"
+                root="$HOME/.local/state/agni/fatline/processor/$rev"
+                mkdir -p "$root"
+                candidate="$(mktemp -d)"
+                trap 'rm -rf -- "$candidate"' EXIT
+                mkdir -p "$candidate/probot-processor20261114"
+                cp -R "$source/src" "$candidate/probot-processor20261114/"
+                printf '%s\n' "$rev" > "$candidate/probot-processor20261114/.source-revision"
+                artifact="$(nix-store --add "$candidate/probot-processor20261114")"
+                [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-processor20261114$ ]] || exit 1
+                if [[ ! -e "$root/source" ]]; then
+                  nix-store --realise --add-root "$root/source" "$artifact" >/dev/null
+                else
+                  test "$(readlink -f "$root/source")" = "$artifact"
+                fi
+                echo "AGNI_PROBOT_PROCESSOR_ARTIFACT=$artifact"
+                echo "AGNI_PROBOT_PROCESSOR_ARTIFACT_QUALIFIED=passed revision=$rev rooted=true"
+              '';
+            }}/bin/agni-processor-source-artifact";
+          };
           processor-subscriber-contract = {
             type = "app";
             program = "${pkgs.writeShellScript "agni-processor-subscriber-contract" ''
