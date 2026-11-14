@@ -47,8 +47,12 @@ def verify(directory):
         for group in ("a", "b") for role in ("skymill", "processor")
     }
     actual = {p.name for p in directory.iterdir() if p.is_file()}
-    if actual != names | {"manifest.json"}:
+    network_name = SCOPE + ".network"
+    if actual != names | {"manifest.json", network_name}:
         raise ValueError("unexpected, missing or additional Quadlet source files")
+    network = (directory / network_name).read_text()
+    if network != "[Network]\nNetworkName=nix-xd-" + SCOPE + "\nInternal=true\n":
+        raise ValueError("incorrect or missing shared network Quadlet")
     for group in ("a", "b"):
         prefix = f"{SCOPE}-subscription-{group}"
         skymill = directory / f"{prefix}-skymill.container"
@@ -58,6 +62,8 @@ def verify(directory):
             if "[Install]" in content or "[Container]" not in content or "[Service]" not in content:
                 raise ValueError(f"unsafe or incomplete Quadlet: {path.name}")
             values = fields(path)
+            if one(values, "Network") != network_name:
+                raise ValueError("unresolved network dependency")
             if one(values, "ConditionPathExists") != GUARD:
                 raise ValueError("missing inert guard")
             for key, expected in (
