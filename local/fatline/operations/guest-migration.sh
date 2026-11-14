@@ -205,6 +205,7 @@ if [[ "$operation" == qualify-subscription-groups ]]; then
     "$log_dir/subscription-artifact.log" || fail subscription-source-artifact-not-qualified
   run_step "$log_dir/subscription-live.log" guest qualify-worker-live subscription-groups "$source_artifact"
   for marker in \
+    'AGNI_PROBOT_SUBSCRIPTION_AUTH=passed group_a_token=isolated group_b_token=isolated' \
     'AGNI_PROBOT_SUBSCRIPTION_ISOLATION=passed group_a=acked group_b=failed effect_a=1 effect_b=0' \
     'AGNI_PROBOT_SUBSCRIPTION_RECOVERY=passed group_b=reclaimed group_a=unchanged effects=one-per-group' \
     'AGNI_PROBOT_SUBSCRIPTION_REPLAY=passed group_a=deduplicated group_b=deduplicated effects=unchanged' \
