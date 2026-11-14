@@ -4,7 +4,7 @@
   "sources": {
     "probot-runtime": {
       "repository": "xd-dash/probot-runtime",
-      "revision": "8eac84c8e46228c6943b08720ba487c17f63d5f9",
+      "revision": "b09e8c2fd73541e5d3520ccaffab24e6bd74e702",
       "checkout": "probot-runtime20261114"
     }
   }
