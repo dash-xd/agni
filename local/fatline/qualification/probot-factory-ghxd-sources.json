@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "sources": {
+    "probot-factory": {
+      "repository": "xd-dash/probot-runtime",
+      "revision": "33b604edbbbce474715af916c2508acc2b8343bf",
+      "checkout": "probot-runtime20261116"
+    }
+  }
+}
