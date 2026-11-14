@@ -126,3 +126,7 @@ grep -Fq -- '--tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m' "$here/startup-pr
 grep -Fq "store.client.on('error'" "$here/startup-profile/probot-worker-live.js"
 grep -Fq "child.on('exit'" "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'assertChildrenHealthy()' "$here/startup-profile/probot-worker-live.js"
+
+# Candidate child startup errors must be categorized without logging raw credential-bearing output.
+grep -Fq 'AGNI_WORKER_LIVE_CHILD_SIGNAL role=' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'child_categories=' "$here/startup-profile/probot-worker-live.js"

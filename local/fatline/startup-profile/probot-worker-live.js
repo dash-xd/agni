@@ -33,6 +33,7 @@ async function main() {
   const guid = crypto.randomUUID();
   const children = new Map();
   const processFailures = new Map();
+  const childSignals = new Map();
   const redisConnectionFailures = [];
   let activeStore;
   const baseEnv = { HOME: workspace, TMPDIR: workspace, PATH: '/bin:/usr/bin',
@@ -76,9 +77,27 @@ async function main() {
     });
     for (const stream of [child.stdout, child.stderr]) {
       stream.on('data', chunk => {
-        const output = String(chunk).trim();
-        if (output && /error|failed|panic|fatal|unavailable/i.test(output)) {
-          console.error('AGNI_WORKER_LIVE_PROCESS=' + name + ' event=application-error');
+        const output = String(chunk).slice(0, 4096);
+        const categories = [
+          ['redis-acl-denied', /NOPERM/i],
+          ['redis-auth-rejected', /WRONGPASS|NOAUTH|invalid username-password/i],
+          ['redis-connection-refused', /ECONNREFUSED|connect: connection refused/i],
+          ['redis-socket-closed', /SocketClosedUnexpectedlyError|socket closed/i],
+          ['module-not-found', /MODULE_NOT_FOUND|Cannot find module/i],
+          ['missing-credential', /ENOENT.*credential|credential.*required/i],
+          ['filesystem-access-denied', /EACCES|permission denied/i],
+          ['address-conflict', /EADDRINUSE|address already in use/i],
+          ['uncaught-application-error', /(?:^|\n)\s*(?:Error:|TypeError:|ReferenceError:|SyntaxError:|panic:|fatal:)/i],
+        ];
+        for (const [label, pattern] of categories) {
+          if (pattern.test(output)) {
+            const previous = childSignals.get(name) || new Set();
+            if (!previous.has(label)) {
+              previous.add(label);
+              childSignals.set(name, previous);
+              console.error('AGNI_WORKER_LIVE_CHILD_SIGNAL role=' + name + ' category=' + label);
+            }
+          }
         }
       });
     }
@@ -111,7 +130,11 @@ async function main() {
       } catch (error) { last = error; }
       await delay(150);
     }
-    throw new Error(label + ' unavailable' + (last ? ': ' + String(last.message) : ''));
+    const signs = [...childSignals.entries()]
+      .map(([role, entries]) => role + ':' + [...entries].join(','))
+      .join(';') || 'none';
+    throw new Error(label + ' unavailable' +
+      (last ? ': ' + String(last.message) : '') + ' child_categories=' + signs);
   }
   function redisStore() {
     const store = new RedisStore({ url: redisUrl, username: 'probot_state', password: redisState,
