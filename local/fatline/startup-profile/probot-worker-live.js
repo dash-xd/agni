@@ -10,13 +10,28 @@ const { spawn, execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
-  const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full'] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'full'].includes(gate), 'unsupported qualification gate');
+  const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full', reconcileSource = ''] = process.argv.slice(2);
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
   assert.equal(probotRoot, '/run/probot', 'pinned Probot module cache must be mounted read-only');
-  const { RedisStore } = require(path.join(probotRoot, 'src/store'));
+  let { RedisStore } = require(path.join(probotRoot, 'src/store'));
+  let reconcileDelivery;
+  let SkymillClient;
+  if (gate === 'reconcile-service') {
+    assert.match(reconcileSource, /^\/nix\/store\/[a-z0-9]{32}-probot-runtime20261114$/);
+    // The Nix store is read-only in this candidate. Resolve the new Probot
+    // source against the existing qualified npm closure, without npm install.
+    process.env.NODE_PATH = path.join(probotRoot, 'node_modules');
+    require('node:module').Module._initPaths();
+    ({ RedisStore } = require(path.join(reconcileSource, 'src/store')));
+    ({ reconcileDelivery } = require(path.join(reconcileSource, 'src/delivery-reconciliation')));
+    ({ SkymillClient } = require(path.join(probotRoot, 'src/skymill')));
+    console.log('AGNI_RECONCILE_SERVICE_SOURCE=passed origin=nix-store revision=pinned');
+  } else {
+    assert.equal(reconcileSource, '', 'unexpected unqualified source argument');
+  }
   const { normalizeBinding, bindingDigest, bindingArtifactKey } = require(path.join(probotRoot, 'src/authority'));
   const workspace = fs.mkdtempSync('/tmp/agni-worker-live-');
   fs.chmodSync(workspace, 0o700);
@@ -260,8 +275,8 @@ async function main() {
   }
 
   const effectMarkerFile = path.join(workspace, 'effect-once');
-  if (gate === 'effect' || gate === 'reconcile') {
-    const effectValue = gate === 'reconcile'
+  if (gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service') {
+    const effectValue = gate === 'reconcile' || gate === 'reconcile-service'
       ? "JSON.stringify({ delivery_id: receiveArgs[0].id, kind: 'fixture-effect-applied' })"
       : "'effect-applied'";
     fs.writeFileSync(fenceHookFile, [
@@ -374,7 +389,7 @@ async function main() {
       throw new Error('pinned Probot module closure unavailable category=' + reason);
     }
     checkpoint('pinned-probot-module-closure');
-    startProbot(true, gate === 'fence' || gate === 'effect' || gate === 'reconcile');
+    startProbot(true, gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
     checkpoint('bootstrap-complete');
@@ -397,7 +412,7 @@ async function main() {
     const accepted = await post(signature, 'accepted');
     assert.equal(accepted.status, 202);
 
-    if (gate === 'reconcile') {
+    if (gate === 'reconcile' || gate === 'reconcile-service') {
       await until('reconcile effect before completion', async () => {
         if (!fs.existsSync(effectMarkerFile)) return false;
         const observed = await store.getDelivery(guid);
@@ -421,6 +436,124 @@ async function main() {
       assert.ok((await status()).Pending.Count > 0);
       const before = await store.getDelivery(guid);
       assert.equal(before.executionStatus, 'ambiguous');
+
+      if (gate === 'reconcile-service') {
+        const transport = new SkymillClient({
+          baseUrl: 'http://127.0.0.1:8081', token: skymillToken,
+          consumerGroup, stream: 'worker-candidate.webhooks',
+        });
+        const appliedDecision = 'applied-' + guid;
+        const common = { store, skymill: transport, deliveryId: guid, actor: 'fixture-owner' };
+        const authorize = async ({ actor, delivery }) =>
+          actor === 'fixture-owner' && delivery.deliveryId === guid;
+        const appliedVerifier = async ({ delivery }) => {
+          if (delivery.deliveryId !== guid || !fs.existsSync(effectMarkerFile)) {
+            return { deliveryId: delivery.deliveryId, state: 'unknown',
+              source: 'fixture', evidenceRef: 'no-matching-effect' };
+          }
+          const proof = JSON.parse(fs.readFileSync(effectMarkerFile, 'utf8'));
+          return { deliveryId: delivery.deliveryId,
+            state: proof.delivery_id === delivery.deliveryId &&
+              proof.kind === 'fixture-effect-applied' ? 'applied' : 'unknown',
+            source: 'fixture-observed-effect',
+            evidenceRef: 'local:effect:' + delivery.deliveryId };
+        };
+        const unresolved = await reconcileDelivery({
+          ...common, authorize, decisionId: 'unknown-' + guid,
+          decision: 'confirm_applied', verifyEffect: async ({ delivery }) => ({
+            deliveryId: delivery.deliveryId, state: 'unknown', source: 'fixture',
+            evidenceRef: 'unresolved',
+          }),
+        });
+        assert.equal(unresolved.status, 'blocked');
+        assert.equal(unresolved.reason, 'effect_unresolved');
+        const unauthorized = await reconcileDelivery({
+          ...common, actor: 'unauthorized', authorize,
+          decisionId: 'unauthorized-' + guid, decision: 'confirm_applied',
+          verifyEffect: appliedVerifier,
+        });
+        assert.equal(unauthorized.status, 'blocked');
+        assert.equal(unauthorized.reason, 'unauthorized');
+        assert.equal((await store.getDelivery(guid)).executionStatus, 'ambiguous');
+        assert.ok((await status()).Pending.Count > 0);
+        console.log('AGNI_RECONCILE_SERVICE_UNRESOLVED=passed authority=denied effect=unknown fence=retained');
+
+        const appliedArgs = {
+          ...common, authorize, verifyEffect: appliedVerifier,
+          decisionId: appliedDecision, decision: 'confirm_applied',
+        };
+        const applied = await reconcileDelivery(appliedArgs);
+        assert.deepEqual(applied, {
+          status: 'reconciled', decisionId: appliedDecision, settlement: 'acked',
+        });
+        assert.equal((await store.getDelivery(guid)).executionStatus, 'succeeded');
+        assert.equal((await store.getDelivery(guid)).outcomeStatus, 'acked');
+        assert.equal((await status()).Pending.Count, 0);
+        assert.equal((await reconcileDelivery(appliedArgs)).status, 'reconciled');
+        assert.equal((await status()).Pending.Count, 0);
+        console.log('AGNI_RECONCILE_SERVICE_APPLIED=passed cas=atomic acked=true replay=noop');
+
+        await stop('probot', 'SIGKILL');
+        startProbot(false);
+        await waitProbot('retry preparation HTTP without worker');
+        const retryGuid = crypto.randomUUID();
+        const acceptedRetry = await post(signature, 'verified-absent', retryGuid);
+        assert.equal(acceptedRetry.status, 202);
+        let retryDelivery;
+        await until('retry pending claim', async () => {
+          const batch = await transport.receive({ limit: 1 });
+          retryDelivery = (batch.deliveries || []).find(delivery =>
+            delivery.message.metadata.github_delivery_id === retryGuid);
+          return !!retryDelivery && (await status()).Pending.Count > 0;
+        }, 30000);
+        assert.equal(retryDelivery.message.metadata.github_delivery_id, retryGuid);
+        assert.equal(await store.acquireDeliveryExecution(retryGuid), 'acquired');
+        assert.equal(await store.acquireDeliveryExecution(retryGuid), 'ambiguous');
+        const pending = await store.getDelivery(retryGuid);
+        assert.equal(pending.executionStatus, 'ambiguous');
+        assert.equal(pending.providerDeliveryId, retryDelivery.provider_delivery_id);
+
+        const retryProof = async ({ delivery }) => ({
+          deliveryId: delivery.deliveryId, state: 'absent',
+          source: 'fixture-worker-disabled',
+          evidenceRef: 'no-handler-execution:' + delivery.deliveryId,
+        });
+        const retryDecision = 'absent-' + retryGuid;
+        const retryArgs = {
+          store, skymill: transport, deliveryId: retryGuid,
+          actor: 'fixture-owner', decisionId: retryDecision,
+          decision: 'retry_verified_absent',
+          authorize: async ({ actor, delivery }) =>
+            actor === 'fixture-owner' && delivery.deliveryId === retryGuid,
+          verifyEffect: retryProof,
+        };
+        const retried = await reconcileDelivery(retryArgs);
+        assert.deepEqual(retried, {
+          status: 'retry_authorized', decisionId: retryDecision, settlement: 'nacked',
+        });
+        assert.equal((await store.getDelivery(retryGuid)).executionStatus, 'failed');
+        assert.ok((await status()).Pending.Count > 0);
+        console.log('AGNI_RECONCILE_SERVICE_ABSENT=passed evidence=verified retry=nacked pending=retained');
+
+        await stop('probot', 'SIGKILL');
+        startProbot(true);
+        await waitProbot('retry-enabled worker');
+        await until('verified-absent redelivery and ACK', async () => {
+          const delivery = await store.getDelivery(retryGuid);
+          return delivery && delivery.executionStatus === 'succeeded' &&
+            delivery.outcomeStatus === 'acked' &&
+            (await status()).Pending.Count === 0;
+        }, 120000);
+        assert.equal((await store.getDelivery(retryGuid)).reconciliationId, retryDecision);
+        assert.deepEqual(JSON.parse(fs.readFileSync(effectMarkerFile, 'utf8')), effectProof);
+        assertChildrenHealthy();
+        console.log('AGNI_RECONCILE_SERVICE_LIVE=passed applied=acked absent=reexecuted unresolved=fenced backends=real');
+        store.client.destroy();
+        activeStore = undefined;
+        console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
+        console.log('AGNI_WORKER_LIVE_GATE=passed gate=reconcile-service');
+        return;
+      }
 
       function independentlyVerifiedEffect(requestedDeliveryId) {
         if (!requestedDeliveryId || !fs.existsSync(effectMarkerFile)) return false;
