@@ -408,3 +408,23 @@ route. The runtime qualification tests the read-only authenticated
 Logma API key, including unauthenticated denial. This establishes basic HTTP
 availability, **not** strict Redis/Functions readiness; a future dedicated
 readiness qualification must be sourced from Logma and version-pinned.
+
+## Probot VM1 integration gate
+
+`deployment-qualify-integration` qualifies the selected, already running
+five-role generation without installing or restarting units. A rootless
+store-backed Python tool authenticates to Redis as `probot_state` and
+`lifecycle_publish` using their mounted credentials, checks allowed scoped
+operations and NOPERM for foreign keys/channels/admin commands. It then
+publishes one synthetic Skymill delivery, NACKs it, verifies it stays pending
+and waits up to 100 seconds for the **pinned Redis provider's 60-second idle
+claim** to redeliver the same message with an increased attempt count. It
+ACKs only its own provider delivery ID, verifies no pending deliveries remain,
+and attempts cleanup on failure. It refuses to run if the shared consumer
+group already has pending deliveries. It confirms service invocation IDs did
+not change and Redis bootstrap credentials remain revoked.
+
+**This does not enable the Probot worker or qualify signed GitHub webhook
+ingress.** Those require separate selected generations and GHXD authority.
+The test intentionally appends an isolated synthetic message/idempotency record
+and publishes one scoped lifecycle notification in disposable VM1 Redis.

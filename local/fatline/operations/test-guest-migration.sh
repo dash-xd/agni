@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -87,3 +87,14 @@ grep -Fq -- '--logma-api-key-file /run/logma-api-key' "$here/startup-profile/pro
 grep -Fq 'http://logma:18081/lifecycle/api/v0.0.1/policies' "$here/startup-profile/probot-runtime-qualify.py"
 ! grep -Fq 'http://logma:8080/lifecycle/readyz' "$here/startup-profile/probot-runtime-qualify.py"
 echo 'AGNI_LOGMA_RUNTIME_CONTRACT=passed entrypoint=cmd/api-lifecycle port=18081 auth=x-api-key strict_ready=unqualified'
+
+# Integration contract must be parsed before any runtime entrypoint is built.
+python3 - "$here/startup-profile/probot-integration-qualify.py" <<'PY'
+import ast, pathlib, sys
+ast.parse(pathlib.Path(sys.argv[1]).read_text())
+PY
+grep -Fq '  qualify-integration)' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_PROBOT_INTEGRATION=passed ' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_SKYMILL_REDELIVERY=passed ' "$here/startup-profile/probot-integration-qualify.py"
+grep -Fq 'PROBOT_RUNTIME_WORKER_ENABLED=false' "$here/startup-profile/probot-guest-app.sh"
+echo 'AGNI_PROBOT_INTEGRATION_STATIC=passed worker=disabled auth=isolated retry=bounded'

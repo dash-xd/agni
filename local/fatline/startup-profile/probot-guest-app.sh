@@ -441,6 +441,50 @@ case "$action" in
       --rootfs "$apps/rootfs" "$python" "$tool_store/probot-network-diagnose.py"
     echo "AGNI_RUNTIME_NETWORK=observed changes=none"
     ;;
+  qualify-integration)
+    [[ $# == 2 ]]
+    [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" && -s "$apps/profile/profile.env" ]] || exit 1
+    source "$apps/profile/profile.env"
+    [[ "$profile_roles" == 'redis nginx logma skymill probot' ]] || exit 1
+    generation="$(cat "$apps/activated-probot-generation")"
+    [[ "$generation" =~ ^[a-f0-9]{64}-[a-z0-9]{32}-candidate$ ]] || exit 1
+    cmp -s "$apps/profile/manifest.json" "$apps/probot-migrations/$generation/rendered/manifest.json" || exit 1
+    grep -Fxq 'Environment=PROBOT_RUNTIME_WORKER_ENABLED=false' "$HOME/.config/containers/systemd/$scope-probot.container" || exit 1
+    for credential in "$apps/credentials/probot/state" "$apps/credentials/probot/publish" "$apps/credentials/skymill/http-token"; do
+      [[ -s "$credential" && ! -L "$credential" ]] || exit 1
+    done
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    bash "$tools/runtime.sh" status "$scope"
+    before=()
+    for role in redis nginx logma skymill probot; do
+      before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    python="$(sed -n '1p' "$tools/python-path")"
+    [[ "$python" == /nix/store/*/bin/python3 ]] || exit 1
+    podman run --rm --pull=never --network "nix-xd-$scope" \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --mount "type=bind,src=$apps/credentials/probot/state,dst=/run/probot-state,ro" \
+      --mount "type=bind,src=$apps/credentials/probot/publish,dst=/run/probot-publish,ro" \
+      --mount "type=bind,src=$apps/credentials/skymill/http-token,dst=/run/skymill-token,ro" \
+      --tmpfs /tmp:rw,nosuid,nodev,size=4m \
+      --rootfs "$apps/rootfs" "$python" "$tool_store/probot-integration-qualify.py" \
+      --state-file /run/probot-state --publish-file /run/probot-publish --skymill-token-file /run/skymill-token
+    bash "$tools/runtime.sh" status "$scope"
+    after=()
+    for role in redis nginx logma skymill probot; do
+      after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    [[ "${before[*]}" == "${after[*]}" ]] || {
+      echo 'AGNI_PROBOT_INTEGRATION=blocked reason=service-invocation-changed' >&2
+      exit 1
+    }
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    echo 'AGNI_PROBOT_INTEGRATION=passed acl=probot_state,lifecycle_publish redelivery=claimed worker=disabled webhook=not-qualified'
+    ;;
   qualify-runtime)
     [[ $# == 2 ]]
     [[ -s "$apps/activated-probot-generation" && ! -L "$apps/activated-probot-generation" ]] || {
