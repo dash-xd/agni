@@ -12,7 +12,7 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 validator_spec = importlib.util.spec_from_file_location("verify_subscription_quadlets", ROOT / "verify-subscription-quadlets.py")
 validator = importlib.util.module_from_spec(validator_spec)
-validator_spec.loader.exec_module(validator_spec)
+validator_spec.loader.exec_module(validator)
 
 GOOD = {
     "schema": 1,
