@@ -255,6 +255,9 @@ grep -Fq 'execution_factory": "not-yet-integrated"' "$here/qualification/render-
 python3 "$here/qualification/test-render-subscription-units.py"
 echo 'AGNI_DECLARATIVE_PROCESSORS_STATIC=passed roles=4 subscriptions=2 activation=blocked'
 grep -Fq "TARGET='#declarative-processors-quadlets'" "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_DECLARATIVE_PROCESSORS_QUADLET_ARTIFACT=' "$here/flake.nix"
+grep -Fq 'agni_capture_value AGNI_DECLARATIVE_PROCESSORS_QUADLET_ARTIFACT ' "$here/operations/guest-migration.sh"
+! grep -Fq 'agni_capture_value AGNI_DECLARATIVE_PROCESSORS_QUADLETS ' "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_DECLARATIVE_PROCESSORS_QUADLETS=passed' "$here/flake.nix"
 grep -Fq '  qualify-declarative-generator)' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'QUADLET_UNIT_DIRS="$candidate_dir" "$generator" --user --dryrun' "$here/startup-profile/probot-guest-app.sh"
