@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -175,9 +175,11 @@ grep -Fq 'AGNI_WORKER_RECONCILE_PROOF=denied' "$here/startup-profile/probot-work
 # Probot application-owned contract runs as a pinned Nix-Alpine app, not in VM1.
 grep -Fq "TARGET='#reconcile-service-contract'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_RECONCILE_SERVICE_CONTRACT=passed' "$here/flake.nix"
-grep -Fq 'AGNI_RECONCILE_SOURCE=passed blobs=verified mode=offline' "$here/flake.nix"
-grep -Fq 'probotReconcileSource = ./qualification/probot-reconcile-snapshot;' "$here/flake.nix"
+grep -Fq 'AGNI_RECONCILE_SOURCE=passed authority=smoke-ghxd sha=verified mode=offline' "$here/flake.nix"
+grep -Fq 'probotReconcileCheckout = "/workspaces/probot-reconcile20261114";' "$here/flake.nix"
+grep -Fq 'smoke ghxd worktree seed --repository xd-dash/probot-runtime' "$here/operations/guest-migration.sh"
 ! grep -Fq 'probotReconcileSource = builtins.fetchGit' "$here/flake.nix"
+! grep -Fq 'probot-reconcile-snapshot' "$here/flake.nix"
 grep -Fq '1a0ce1f3684c120a8a800e7e63c45f0780bdda09' "$here/flake.nix"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
