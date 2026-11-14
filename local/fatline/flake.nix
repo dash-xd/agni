@@ -467,6 +467,40 @@
               exec ${pkgs.coreutils}/bin/cat ${self.packages.${system}.isolated-runtime-grants}
             ''}";
           };
+          reconcile-source-seed = {
+            type = "app";
+            program = "${pkgs.writeShellApplication {
+              name = "agni-reconcile-source-seed";
+              runtimeInputs = [ pkgs.bash pkgs.coreutils pkgs.git pkgs.go_1_26 ];
+              text = ''
+                set -Eeuo pipefail
+                rev=${probotReconcileRevision}
+                src=${probotReconcileCheckout}
+                if [[ ! -e "$src" ]]; then
+                  [[ -n "''${GH_TOKEN:-}" ]] || {
+                    echo 'AGNI_RECONCILE_SOURCE=blocked reason=gh-token-unavailable-in-nix-alpine' >&2
+                    exit 1
+                  }
+                  state="$HOME/.local/state/agni/reconcile-source"
+                  mkdir -p "$state/go-cache" "$state/mod-cache" "$state/ghxd-objects"
+                  export GOCACHE="$state/go-cache" GOMODCACHE="$state/mod-cache"
+                  (
+                    cd ${smokeSource}
+                    go run -mod=readonly ./cmd/github-worktree seed \\
+                      --repository xd-dash/probot-runtime \\
+                      --sha "$rev" \\
+                      --destination "$src" \\
+                      --object-root "$state/ghxd-objects"
+                  )
+                fi
+                test -e "$src/.git"
+                test "$(git -C "$src" rev-parse HEAD)" = "$rev"
+                test -z "$(git -C "$src" status --porcelain)"
+                test -z "$(git -C "$src" symbolic-ref -q HEAD || true)"
+                echo "AGNI_RECONCILE_SOURCE_SEED=passed authority=smoke-ghxd sha=$rev"
+              '';
+            }}/bin/agni-reconcile-source-seed";
+          };
           reconcile-service-contract = {
             type = "app";
             program = "${pkgs.writeShellScript "agni-reconcile-service-contract" ''
