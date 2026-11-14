@@ -62,10 +62,21 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
+
+if [[ "$operation" == refresh-reconcile-auth ]]; then
+  xd_make stage CHECKOUT=smoke20261112
+  run_step "$log_dir/refresh-reconcile-auth.log" \
+    make --no-print-directory -C "$nix_xd" project-host-run \
+      MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
+      PROJECT=smoke20261112 APPLICATION=ghxd ACTION=auth-refresh
+  grep -Fxq 'GHXD_AUTH_REFRESH=passed persistence=sops-age' "$log_dir/refresh-reconcile-auth.log" || fail smoke-ghxd-refresh-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=refresh-reconcile-auth credential=smoke-ghxd-encrypted production=unchanged'
+  exit 0
+fi
 
 if [[ "$operation" == seed-reconcile-source ]]; then
   # Smoke owns encrypted OAuth and exact-SHA sources in its dedicated GHXD volumes.
