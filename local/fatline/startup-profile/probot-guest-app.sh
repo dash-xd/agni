@@ -441,6 +441,53 @@ case "$action" in
       --rootfs "$apps/rootfs" "$python" "$tool_store/probot-network-diagnose.py"
     echo "AGNI_RUNTIME_NETWORK=observed changes=none"
     ;;
+  qualify-worker-live)
+    [[ $# == 2 ]]
+    [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" ]] || exit 1
+    generation="$(cat "$apps/activated-probot-generation")"
+    [[ "$generation" =~ ^[a-f0-9]{64}-([a-z0-9]{32}-candidate)$ ]] || exit 1
+    bundle_store="/nix/store/${BASH_REMATCH[1]}"
+    check_bundle
+    cmp -s "$apps/profile/manifest.json" "$apps/probot-migrations/$generation/rendered/manifest.json" || exit 1
+    grep -Fxq 'Environment=PROBOT_RUNTIME_WORKER_ENABLED=false' "$HOME/.config/containers/systemd/$scope-probot.container" || exit 1
+    node="$(awk -F '\t' '$1=="node" {print $2}' "$candidate_store/artifacts.tsv")"
+    probot="$(awk -F '\t' '$1=="probot-runtime" {print $2}' "$candidate_store/artifacts.tsv")"
+    skymill="$(awk -F '\t' '$1=="skymill" {print $2}' "$candidate_store/artifacts.tsv")"
+    redis="$(sed -nE 's/^[[:space:]]*"redis": "([^"]+)",?$/\1/p' "$apps/profile/manifest.json")"
+    [[ "$node" =~ ^/nix/store/[a-z0-9]{32}-[^/]+/bin/node$ &&
+       "$probot" =~ ^/nix/store/[a-z0-9]{32}-probot$ &&
+       "$skymill" =~ ^/nix/store/[a-z0-9]{32}-skymill-http$ &&
+       "$redis" =~ ^/nix/store/[a-z0-9]{32}-[^/]+/bin/redis-server$ ]] || exit 1
+    for executable in "$node" "$skymill" "$redis"; do
+      [[ -x "/var/mnt/nixstore/${executable#/nix/store/}" ]] || exit 1
+    done
+    exec 9>"$base/lifecycle.lock"
+    flock -x 9
+    bash "$tools/runtime.sh" status "$scope"
+    before=()
+    for role in redis nginx logma skymill probot; do
+      before+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    podman run --rm --pull=never --network none \
+      --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
+      --read-only --read-only-tmpfs=false --security-opt label=disable \
+      --cap-drop all --security-opt no-new-privileges \
+      --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
+      --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+      --rootfs "$apps/rootfs" "$node" "$tool_store/probot-worker-live.js" \
+      "$redis" "$skymill" "$node" "$probot"
+    bash "$tools/runtime.sh" status "$scope"
+    after=()
+    for role in redis nginx logma skymill probot; do
+      after+=("$(systemctl --user show "$scope-$role.service" -p InvocationID --value)")
+    done
+    [[ "${before[*]}" == "${after[*]}" ]] || {
+      echo 'AGNI_WORKER_LIVE=blocked reason=service-invocation-changed' >&2
+      exit 1
+    }
+    bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
+    echo 'AGNI_WORKER_LIVE_QUALIFICATION=passed backing=real service_invocations=unchanged worker=isolated promotion=blocked'
+    ;;
   qualify-worker-candidate)
     [[ $# == 2 ]]
     [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" ]] || exit 1

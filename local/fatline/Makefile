@@ -11,7 +11,7 @@ MACHINE ?= coreos-arm64
 export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
-.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-diagnose-runtime-network check-deployment
+.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-diagnose-runtime-network check-deployment
 
 help:
 	@printf '%s\n' \
@@ -29,6 +29,7 @@ help:
 	  'make deployment-qualify-runtime DEPLOYMENT=vm1  Live five-role ACL, HTTP, Skymill synthetic delivery checks' \
 	  'make deployment-qualify-integration DEPLOYMENT=vm1  Probot Redis ACL and Skymill bounded redelivery gate' \
 	  'make deployment-qualify-worker-candidate DEPLOYMENT=vm1  Isolated signed webhook and worker fixture; no activation' \
+	  'make deployment-qualify-worker-live DEPLOYMENT=vm1  Isolated live Redis/Skymill/Probot worker; no activation' \
 	  'make deployment-diagnose-runtime-network DEPLOYMENT=vm1  Read-only Logma/Skymill/Probot network diagnosis' \
 	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety'
 
@@ -57,6 +58,9 @@ deployment-migrate-recovery-qualify:
 
 deployment-diagnose-runtime-network:
 	@bash operations/guest-migration.sh diagnose-runtime-network
+
+deployment-qualify-worker-live:
+	@bash operations/guest-migration.sh qualify-worker-live
 
 deployment-qualify-worker-candidate:
 	@bash operations/guest-migration.sh qualify-worker-candidate

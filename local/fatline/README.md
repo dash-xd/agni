@@ -447,3 +447,26 @@ This gate is **worker-code fixture qualification only**. It does not exercise
 a worker-enabled Quadlet, actual Redis/Skymill delivery through a worker,
 real Probot event handler behavior, or GitHub App credentials/ingress. Promotion
 is deliberately blocked pending a fully isolated, live backing-store candidate.
+
+## Live-backed isolated worker candidate
+
+`deployment-qualify-worker-live` starts three real pinned processes inside
+one transient rootless Podman container with `--network none`, a read-only Nix
+store and a private tmpfs. Its Redis instance uses a separate ACL file and
+independent credentials for the worker state and Skymill; its stream, consumer
+group, execution prefix, fixture App binding, and webhook secret are private.
+The instance does not share Redis, credentials, state, network, or systemd
+units with the running five-role VM1 composition.
+
+The gate exercises real signed HTTP ingestion, invalid-signature rejection,
+Skymill outage/restart before successful publication, unique delivery
+acceptance and duplicate detection, a worker-enabled process draining the
+real Skymill Redis stream, persisted success/ACK, worker restart and replay
+deduplication. The process supervisor stops all children and removes its
+tmpfs fixture; the guest command verifies original service invocation IDs
+and bootstrap revocation after the candidate exits.
+
+**This is still a synthetic, offline GitHub fixture**. It does not use
+live GitHub App credentials, change real webhook ingress, or activate the
+worker for the existing VM1 generation. Rollback proof is scoped to the
+transient candidate, not a production traffic switch.

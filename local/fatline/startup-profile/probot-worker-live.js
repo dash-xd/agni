@@ -41,7 +41,7 @@ async function main() {
   ].join('\n') + '\n';
   function credential(name, value) {
     const file = path.join(workspace, name);
-    fs.writeFileSync(file, value + '\n', { mode: 0o600, flag: 'wx' });
+    fs.writeFileSync(file, value, { mode: 0o600, flag: 'wx' });
     return file;
   }
   const aclFile = credential('users.acl', acl.trimEnd());
