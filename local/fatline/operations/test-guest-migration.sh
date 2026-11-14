@@ -234,11 +234,12 @@ grep -Fq "TARGET='#subscription-groups-source-artifact'" "$here/operations/guest
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_GROUPS_LIVE=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_ISOLATION=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_RECOVERY=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'recoveryAttempt >= 2' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_REPLAY=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq '"$worker_gate" == subscription-groups' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq "groupB = consumerGroup + '-subscription-b'" "$here/startup-profile/probot-worker-live.js"
-grep -Fq "subscriptionId: 'subscription-a'" "$here/startup-profile/probot-worker-live.js"
-grep -Fq "subscriptionId: 'subscription-b'" "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'subscriptionId: consumerGroup' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'subscriptionId: groupB' "$here/startup-profile/probot-worker-live.js"
 
 # Each stage has a stable, auditable Make target and monotonic gate marker.
 for gate in bootstrap delivery recovery full; do
