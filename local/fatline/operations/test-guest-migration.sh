@@ -232,6 +232,8 @@ grep -Fq 'probotSubscriptionCheckout = "/workspaces/probot-runtime20261115";' "$
 grep -Fq "TARGET='#subscription-groups-contract'" "$here/operations/guest-migration.sh"
 grep -Fq "TARGET='#subscription-groups-source-artifact'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_GROUPS_LIVE=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_AUTH=passed' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'skymillPeerFile' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_ISOLATION=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_RECOVERY=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'recoveryAttempt >= 2' "$here/startup-profile/probot-worker-live.js"
