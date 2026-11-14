@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full'] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -259,6 +259,31 @@ async function main() {
     console.log('AGNI_WORKER_FENCE_HOOK=armed phase=post-acquire pre-handler');
   }
 
+  const effectMarkerFile = path.join(workspace, 'effect-once');
+  if (gate === 'effect') {
+    fs.writeFileSync(fenceHookFile, [
+      "'use strict';",
+      "const fs = require('node:fs');",
+      "const { ProbotRuntime } = require('/run/probot/src/runtime');",
+      "const originalForApp = ProbotRuntime.prototype.forApp;",
+      "ProbotRuntime.prototype.forApp = async function(...args) {",
+      "  const app = await originalForApp.apply(this, args);",
+      "  if (!app.__agniEffectWrapped) {",
+      "    const originalReceive = app.receive.bind(app);",
+      "    app.receive = async (...receiveArgs) => {",
+      "      const result = await originalReceive(...receiveArgs);",
+      "      fs.writeFileSync(" + JSON.stringify(effectMarkerFile) + ", 'effect-applied', { mode: 0o600, flag: 'wx' });",
+      "      await new Promise(() => {});",
+      "      return result;",
+      "    };",
+      "    Object.defineProperty(app, '__agniEffectWrapped', { value: true });",
+      "  }",
+      "  return app;",
+      "};",
+    ].join('\n') + '\n', { mode: 0o600, flag: 'wx' });
+    console.log('AGNI_WORKER_EFFECT_HOOK=armed phase=post-handler pre-completion');
+  }
+
   const body = Buffer.from(JSON.stringify({
     ref: 'refs/heads/fixture', installation: { id: installationId },
     repository: { full_name: 'xd-dash/worker-qualification' },
@@ -344,7 +369,7 @@ async function main() {
       throw new Error('pinned Probot module closure unavailable category=' + reason);
     }
     checkpoint('pinned-probot-module-closure');
-    startProbot(true, gate === 'fence');
+    startProbot(true, gate === 'fence' || gate === 'effect');
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
     checkpoint('bootstrap-complete');
@@ -366,6 +391,42 @@ async function main() {
     await until('Skymill recovery', status);
     const accepted = await post(signature, 'accepted');
     assert.equal(accepted.status, 202);
+
+    if (gate === 'effect') {
+      await until('observable effect before completion', async () => {
+        if (!fs.existsSync(effectMarkerFile)) return false;
+        const observed = await store.getDelivery(guid);
+        return observed && observed.executionStatus === 'running' &&
+          (await status()).Pending.Count > 0;
+      }, 90000);
+      assert.equal(fs.readFileSync(effectMarkerFile, 'utf8'), 'effect-applied');
+      console.log('AGNI_WORKER_EFFECT_APPLIED=passed once=true completion=uncommitted');
+      await stop('probot', 'SIGKILL');
+      assert.equal((await store.getDelivery(guid)).executionStatus, 'running');
+      assert.ok((await status()).Pending.Count > 0);
+      console.log('AGNI_WORKER_EFFECT_INTERRUPTED=passed worker=killed redis=retained pending=positive');
+
+      startProbot(true);
+      await waitProbot('post-effect worker restart');
+      await until('post-effect redelivery refused', async () => {
+        const observed = await store.getDelivery(guid);
+        return observed && observed.executionStatus === 'ambiguous' &&
+          observed.outcomeStatus === 'nacked';
+      }, 120000);
+      assert.equal(fs.readFileSync(effectMarkerFile, 'utf8'), 'effect-applied');
+      assert.ok((await status()).Pending.Count > 0);
+      const repeat = await post(signature, 'effect-duplicate');
+      assert.equal(repeat.status, 200);
+      assert.equal((await store.getDelivery(guid)).executionStatus, 'ambiguous');
+      assert.equal(fs.readFileSync(effectMarkerFile, 'utf8'), 'effect-applied');
+      assertChildrenHealthy();
+      console.log('AGNI_WORKER_EFFECT=passed observed=once completion=ambiguous replay=blocked pending=retained');
+      store.client.destroy();
+      activeStore = undefined;
+      console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=effect');
+      return;
+    }
 
     if (gate === 'fence') {
       await until('fence acquired before handler', async () => {
