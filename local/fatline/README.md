@@ -487,3 +487,16 @@ The worker-disabled baseline was established by an earlier qualification and
 is not restarted solely as a prerequisite to this worker gate. Child shutdown
 now waits for process exit after SIGTERM/SIGKILL; a failure to exit blocks the
 qualification rather than racing the next HTTP instance.
+
+### Staged live worker qualification (source-contract revision)
+
+Agni owns four progressively stronger gates, each launching a fresh disposable
+container: `deployment-qualify-worker-bootstrap` (pinned Redis, Skymill, worker-enabled
+Probot HTTP), `deployment-qualify-worker-delivery` (adds signed ingress and durable
+ACK), `deployment-qualify-worker-recovery` (adds intentional subprocess interruption
+and replay), and `deployment-qualify-worker-live` (the aggregate qualification).
+Every stage repeats its prerequisite gates rather than trusting a stale prior
+result; no state from one run is reused. Each phase emits elapsed time and
+process readiness evidence. The active five-service VM1 generation must retain
+identical systemd invocation IDs. This makes failures stage-specific; a bootstrap
+failure cannot be reported as a duplicate or recovery failure.

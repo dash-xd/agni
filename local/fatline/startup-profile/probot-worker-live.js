@@ -10,7 +10,8 @@ const { spawn } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
-  const [redisBin, skymillBin, nodeBin, probotRoot] = process.argv.slice(2);
+  const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full'] = process.argv.slice(2);
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -34,6 +35,13 @@ async function main() {
   const children = new Map();
   const processFailures = new Map();
   const childSignals = new Map();
+  const startedAt = process.hrtime.bigint();
+  const readySignals = new Set();
+  function checkpoint(name, status = 'passed') {
+    const elapsedMs = Number((process.hrtime.bigint() - startedAt) / 1000000n);
+    console.log('AGNI_WORKER_LIVE_GATE_PHASE=' + status + ' phase=' + name +
+      ' gate=' + gate + ' elapsed_ms=' + elapsedMs);
+  }
   const redisConnectionFailures = [];
   let activeStore;
   const baseEnv = { HOME: workspace, TMPDIR: workspace, PATH: '/bin:/usr/bin',
@@ -58,6 +66,7 @@ async function main() {
 
   function launch(name, bin, argv, env) {
     assert.ok(!children.has(name), 'candidate process already exists: ' + name);
+    checkpoint('launch-' + name, 'begin');
     const child = spawn(bin, argv, {
       env: { ...baseEnv, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -78,6 +87,10 @@ async function main() {
     for (const stream of [child.stdout, child.stderr]) {
       stream.on('data', chunk => {
         const output = String(chunk).slice(0, 4096);
+        if (name === 'probot' && output.includes('probot-runtime-router listening on')) {
+          readySignals.add(name);
+          checkpoint('probot-listening');
+        }
         const categories = [
           ['redis-acl-denied', /NOPERM/i],
           ['redis-auth-rejected', /WRONGPASS|NOAUTH|invalid username-password/i],
@@ -131,11 +144,17 @@ async function main() {
   }
   async function until(label, check, maxMs = 20000) {
     const deadline = Date.now() + maxMs;
+    let attempts = 0;
+    checkpoint(label.replace(/[^A-Za-z0-9-]+/g, '-'), 'begin');
     let last;
     while (Date.now() < deadline) {
+      attempts++;
       assertChildrenHealthy();
       try {
-        if (await check()) return;
+        if (await check()) {
+          checkpoint(label.replace(/[^A-Za-z0-9-]+/g, '-'));
+          return;
+        }
       } catch (error) { last = error; }
       await delay(150);
     }
@@ -143,7 +162,9 @@ async function main() {
       .map(([role, entries]) => role + ':' + [...entries].join(','))
       .join(';') || 'none';
     throw new Error(label + ' unavailable' +
-      (last ? ': ' + String(last.message) : '') + ' child_categories=' + signs);
+      (last ? ': ' + String(last.message) : '') +
+      ' attempts=' + attempts + ' listener_ready=' + readySignals.has('probot') +
+      ' child_categories=' + signs);
   }
   function redisStore() {
     const store = new RedisStore({ url: redisUrl, username: 'probot_state', password: redisState,
@@ -276,7 +297,12 @@ async function main() {
     startProbot(true);
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
-
+    checkpoint('bootstrap-complete');
+    if (gate === 'bootstrap') {
+      assertChildrenHealthy();
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=bootstrap');
+      return;
+    }
     const rejected = await post('sha256=' + '0'.repeat(64), 'invalid-signature');
     assert.equal(rejected.status, 401);
     assert.equal(await store.getDelivery(guid), null);
@@ -309,6 +335,12 @@ async function main() {
     const skymillStatus = await status();
     assert.equal(skymillStatus.Pending.Count, 0);
     console.log('AGNI_WORKER_LIVE_DELIVERY=passed durable_execution=succeeded skymill_ack=true pending=0');
+    checkpoint('delivery-complete');
+    if (gate === 'delivery') {
+      assertChildrenHealthy();
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=delivery');
+      return;
+    }
 
     await stop('probot', 'SIGKILL');
     startProbot(true);
@@ -318,11 +350,18 @@ async function main() {
     assert.equal((await store.getDelivery(guid)).executionStatus, 'succeeded');
     assert.equal((await status()).Pending.Count, 0);
     console.log('AGNI_WORKER_LIVE_RECOVERY=passed skymill_restarted=true worker_restarted=true replay_deduplicated=true');
+    checkpoint('recovery-complete');
+    if (gate === 'recovery') {
+      assertChildrenHealthy();
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=recovery');
+      return;
+    }
 
     assertChildrenHealthy();
     await store.close();
     activeStore = undefined;
     console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
+    console.log('AGNI_WORKER_LIVE_GATE=passed gate=full');
   } finally {
     // Shut down the client before terminating its backing Redis process.
     if (activeStore) {

@@ -442,7 +442,9 @@ case "$action" in
     echo "AGNI_RUNTIME_NETWORK=observed changes=none"
     ;;
   qualify-worker-live)
-    [[ $# == 2 ]]
+    [[ $# == 3 ]]
+    worker_gate="$3"
+    [[ "$worker_gate" == bootstrap || "$worker_gate" == delivery || "$worker_gate" == recovery || "$worker_gate" == full ]] || exit 2
     [[ -s "$apps/activated-probot-generation" && -s "$apps/profile/manifest.json" ]] || exit 1
     generation="$(cat "$apps/activated-probot-generation")"
     [[ "$generation" =~ ^[a-f0-9]{64}-([a-z0-9]{32}-candidate)$ ]] || exit 1
@@ -475,7 +477,7 @@ case "$action" in
       --mount type=bind,src=/var/mnt/nixstore,dst=/nix/store,ro \
       --tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=128m \
       --rootfs "$apps/rootfs" "$node" "$tool_store/probot-worker-live.js" \
-      "$redis" "$skymill" "$node" "$probot"
+      "$redis" "$skymill" "$node" "$probot" "$worker_gate"
     bash "$tools/runtime.sh" status "$scope"
     after=()
     for role in redis nginx logma skymill probot; do
@@ -486,7 +488,7 @@ case "$action" in
       exit 1
     }
     bash "$profile_bundle/bootstrap.sh" verify "$scope" "$profile_probe"
-    echo 'AGNI_WORKER_LIVE_QUALIFICATION=passed backing=real service_invocations=unchanged worker=isolated promotion=blocked'
+    echo "AGNI_WORKER_LIVE_QUALIFICATION=passed gate=$worker_gate backing=real service_invocations=unchanged worker=isolated promotion=blocked"
     ;;
   qualify-worker-candidate)
     [[ $# == 2 ]]

@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -146,3 +146,10 @@ grep -Fq 'AGNI_WORKER_LIVE_INGRESS_PHASE=begin' "$here/startup-profile/probot-wo
 # A cold handler must finish its first durable execution before duplicate ingress.
 grep -Fq 'AGNI_WORKER_LIVE_FIRST_DELIVERY=accepted' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'duplicate_after_ack=deduplicated' "$here/startup-profile/probot-worker-live.js"
+
+# Each stage has a stable, auditable Make target and monotonic gate marker.
+for gate in bootstrap delivery recovery full; do
+  grep -Fq "gate=$gate" "$here/startup-profile/probot-worker-live.js" || [[ "$gate" == full ]]
+done
+grep -Fq 'AGNI_WORKER_LIVE_GATE_PHASE=' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'listener_ready=' "$here/startup-profile/probot-worker-live.js"

@@ -62,7 +62,7 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
@@ -73,10 +73,15 @@ if [[ "$operation" == diagnose-runtime-network ]]; then
   exit 0
 fi
 
-if [[ "$operation" == qualify-worker-live ]]; then
-  run_step "$log_dir/worker-live.log" guest qualify-worker-live
-  grep -Fxq 'AGNI_WORKER_LIVE_QUALIFICATION=passed backing=real service_invocations=unchanged worker=isolated promotion=blocked' "$log_dir/worker-live.log" || fail worker-live-not-qualified
-  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-worker-live worker=isolated-real promotion=blocked'
+if [[ "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery ]]; then
+  worker_gate=full
+  [[ "$operation" != qualify-worker-bootstrap ]] || worker_gate=bootstrap
+  [[ "$operation" != qualify-worker-delivery ]] || worker_gate=delivery
+  [[ "$operation" != qualify-worker-recovery ]] || worker_gate=recovery
+  run_step "$log_dir/worker-$worker_gate.log" guest qualify-worker-live "$worker_gate"
+  grep -Fxq "AGNI_WORKER_LIVE_GATE=passed gate=$worker_gate" "$log_dir/worker-$worker_gate.log" || fail worker-gate-not-qualified
+  grep -Fxq "AGNI_WORKER_LIVE_QUALIFICATION=passed gate=$worker_gate backing=real service_invocations=unchanged worker=isolated promotion=blocked" "$log_dir/worker-$worker_gate.log" || fail worker-live-not-qualified
+  echo "AGNI_DEPLOYMENT=passed deployment=vm1 operation=$operation gate=$worker_gate worker=isolated-real promotion=blocked"
   exit 0
 fi
 
