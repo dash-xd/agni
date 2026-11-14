@@ -13,8 +13,9 @@
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
       probotReconcileRevision = "1a0ce1f3684c120a8a800e7e63c45f0780bdda09";
-      # Pinned, Git-blob-verified qualification snapshot; never fetch private Git at eval time.
-      probotReconcileSource = ./qualification/probot-reconcile-snapshot;
+      # Smoke ghxd seeds the exact private-source commit into Nix-Alpine.
+      # The Nix app validates it at execution time; no private fetch during evaluation.
+      probotReconcileCheckout = "/workspaces/probot-reconcile20261114";
       smokeRevision = "66950da9a5e4e5303f5dcd018f9039f9b6fc8496";
       smokeSource = builtins.fetchGit {
         url = "https://github.com/xd-dash/smoke.git";
@@ -470,11 +471,27 @@
             type = "app";
             program = "${pkgs.writeShellScript "agni-reconcile-service-contract" ''
               set -euo pipefail
-              test "$(${pkgs.git}/bin/git hash-object ${probotReconcileSource}/src/delivery-reconciliation.js)" = bd55bbd609cc7e686901b7be09a42410b3c5ce27
-              test "$(${pkgs.git}/bin/git hash-object ${probotReconcileSource}/test/delivery-reconciliation.test.js)" = 47b564283def7ea027d5ac2c60bdc2c5a3bc268e
-              echo 'AGNI_RECONCILE_SOURCE=passed blobs=verified mode=offline'
-              ${pkgs.nodejs_22}/bin/node --test \
-                ${probotReconcileSource}/test/delivery-reconciliation.test.js
+              src=${probotReconcileCheckout}
+              if [[ ! -e "$src/.git" ]]; then
+                echo 'AGNI_RECONCILE_SOURCE=blocked reason=ghxd-worktree-not-seeded' >&2
+                exit 1
+              fi
+              [[ "$(${pkgs.git}/bin/git -C "$src" rev-parse HEAD)" == "${probotReconcileRevision}" ]] || {
+                echo 'AGNI_RECONCILE_SOURCE=blocked reason=revision-mismatch' >&2
+                exit 1
+              }
+              [[ -z "$(${pkgs.git}/bin/git -C "$src" status --porcelain)" ]] || {
+                echo 'AGNI_RECONCILE_SOURCE=blocked reason=dirty-worktree' >&2
+                exit 1
+              }
+              [[ "$(${pkgs.git}/bin/git -C "$src" symbolic-ref -q HEAD || true)" == "" ]] || {
+                echo 'AGNI_RECONCILE_SOURCE=blocked reason=worktree-not-detached' >&2
+                exit 1
+              }
+              test "$(${pkgs.git}/bin/git hash-object "$src/src/delivery-reconciliation.js")" = bd55bbd609cc7e686901b7be09a42410b3c5ce27
+              test "$(${pkgs.git}/bin/git hash-object "$src/test/delivery-reconciliation.test.js")" = 47b564283def7ea027d5ac2c60bdc2c5a3bc268e
+              echo 'AGNI_RECONCILE_SOURCE=passed authority=smoke-ghxd sha=verified mode=offline'
+              ${pkgs.nodejs_22}/bin/node --test "$src/test/delivery-reconciliation.test.js"
               printf 'AGNI_RECONCILE_SERVICE_CONTRACT=passed source=%s scope=isolated production_route=absent\n' \
                 ${probotReconcileRevision}
             ''}";
