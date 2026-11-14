@@ -13,10 +13,8 @@
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
       probotReconcileRevision = "1a0ce1f3684c120a8a800e7e63c45f0780bdda09";
-      probotReconcileSource = builtins.fetchGit {
-        url = "https://github.com/xd-dash/probot-runtime.git";
-        rev = probotReconcileRevision;
-      };
+      # Pinned, Git-blob-verified qualification snapshot; never fetch private Git at eval time.
+      probotReconcileSource = ./qualification/probot-reconcile-snapshot;
       smokeRevision = "66950da9a5e4e5303f5dcd018f9039f9b6fc8496";
       smokeSource = builtins.fetchGit {
         url = "https://github.com/xd-dash/smoke.git";
@@ -472,6 +470,9 @@
             type = "app";
             program = "${pkgs.writeShellScript "agni-reconcile-service-contract" ''
               set -euo pipefail
+              test "$(${pkgs.git}/bin/git hash-object ${probotReconcileSource}/src/delivery-reconciliation.js)" = bd55bbd609cc7e686901b7be09a42410b3c5ce27
+              test "$(${pkgs.git}/bin/git hash-object ${probotReconcileSource}/test/delivery-reconciliation.test.js)" = 47b564283def7ea027d5ac2c60bdc2c5a3bc268e
+              echo 'AGNI_RECONCILE_SOURCE=passed blobs=verified mode=offline'
               ${pkgs.nodejs_22}/bin/node --test \
                 ${probotReconcileSource}/test/delivery-reconciliation.test.js
               printf 'AGNI_RECONCILE_SERVICE_CONTRACT=passed source=%s scope=isolated production_route=absent\n' \
