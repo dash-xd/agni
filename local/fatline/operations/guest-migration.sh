@@ -68,10 +68,18 @@ xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
 
 if [[ "$operation" == seed-reconcile-source ]]; then
-  run_step "$log_dir/reconcile-source-seed.log" xd_make run FLAKE="$flake" TARGET='#reconcile-source-seed'
-  grep -Fq 'AGNI_RECONCILE_SOURCE_SEED=passed authority=smoke-ghxd sha=1a0ce1f3684c120a8a800e7e63c45f0780bdda09' \
-    "$log_dir/reconcile-source-seed.log" || fail smoke-source-seed-not-qualified
-  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-reconcile-source execution=nix-alpine promotion=blocked'
+  # Smoke owns encrypted OAuth and exact-SHA sources in its dedicated GHXD volumes.
+  # The control plane injects only a non-secret source manifest.
+  xd_make stage CHECKOUT=smoke20261112
+  run_step "$log_dir/reconcile-source-seed.log" \
+    env SMOKE_GHXD_SOURCE_MANIFEST="$here/local/fatline/qualification/probot-reconcile-ghxd-sources.json" \
+    make --no-print-directory -C "$nix_xd" project-host-run \
+      MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
+      PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
+  grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$log_dir/reconcile-source-seed.log" || fail smoke-source-sync-not-qualified
+  grep -Fq 'checkout=probot-runtime20261114 sha=1a0ce1f3684c120a8a800e7e63c45f0780bdda09' \
+    "$log_dir/reconcile-source-seed.log" || fail smoke-source-identity-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-reconcile-source execution=smoke-ghxd promotion=blocked'
   exit 0
 fi
 
