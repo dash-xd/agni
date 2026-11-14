@@ -228,7 +228,7 @@ grep -Fq 'SKYMILL_CONSUMER: '\''processor-a'\''' "$here/startup-profile/probot-w
 grep -Fq 'SKYMILL_CONSUMER: '\''processor-b'\''' "$here/startup-profile/probot-worker-live.js"
 
 grep -Fq '"revision": "1788ee94235b83f2b6229b95acbc98469f3eaf85"' "$here/qualification/probot-subscription-ghxd-sources.json"
-grep -Fq 'probotSubscriptionCheckout = "/workspaces/probot-subscription20261114";' "$here/flake.nix"
+grep -Fq 'probotSubscriptionCheckout = "/workspaces/probot-runtime20261115";' "$here/flake.nix"
 grep -Fq "TARGET='#subscription-groups-contract'" "$here/operations/guest-migration.sh"
 grep -Fq "TARGET='#subscription-groups-source-artifact'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_GROUPS_LIVE=passed' "$here/startup-profile/probot-worker-live.js"
