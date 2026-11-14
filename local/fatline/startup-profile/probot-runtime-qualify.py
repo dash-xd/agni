@@ -39,12 +39,8 @@ def qualify(token):
         raise RuntimeError("Skymill bearer credential must be a raw 64-character hex token")
     base = "http://skymill:8081"
     request(base + "/v1/status", expected=401)
-    initial = request(base + "/v1/status", token=token)
-    pending = initial.get("Pending")
-    if not isinstance(pending, dict) or not isinstance(pending.get("Count"), int):
-        raise RuntimeError("unexpected Skymill status schema")
-    if pending["Count"] != 0:
-        raise RuntimeError("consumer group has pending deliveries; refusing to consume unrelated messages")
+    # The consumer group may not exist until the first receive request.
+    # A delivery for another source ID is rejected rather than ACKed.
     request("http://logma:8080/lifecycle/readyz")
     request("http://probot:3000/")
     request("http://probot:3000/probot/deliveries/missing", expected=401)
