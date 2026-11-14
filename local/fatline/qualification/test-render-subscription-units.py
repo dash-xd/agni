@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("render_subscription_units", ROOT / "render-subscription-units.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+validator_spec = importlib.util.spec_from_file_location("verify_subscription_quadlets", ROOT / "verify-subscription-quadlets.py")
+validator = importlib.util.module_from_spec(validator_spec)
+validator_spec.loader.exec_module(validator_spec)
 
 GOOD = {
     "schema": 1,
@@ -29,6 +32,28 @@ class Qualification(unittest.TestCase):
         target = Path(d.name) / "units"
         module.render(config, target)
         return {p.name: p.read_text() for p in target.iterdir()}
+
+    def test_artifact_verifier_rejects_mutation(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "units"
+            module.render(GOOD, out)
+            validator.verify(out)
+            manifest = out / "manifest.json"
+            record = json.loads(manifest.read_text())
+            record["worker"] = "enabled"
+            manifest.write_text(json.dumps(record) + "\\n")
+            with self.assertRaises(ValueError):
+                validator.verify(out)
+            record["worker"] = "disabled"
+            manifest.write_text(json.dumps(record) + "\\n")
+            unit = out / "fatline-arm-vm1-subscription-b-processor.container"
+            original = unit.read_text()
+            unit.write_text(original.replace(
+                "Environment=PROBOT_RUNTIME_WORKER_ENABLED=false",
+                "Environment=PROBOT_RUNTIME_WORKER_ENABLED=true",
+            ))
+            with self.assertRaises(ValueError):
+                validator.verify(out)
 
     def test_two_isolated_service_pairs(self):
         entries = self.render()
