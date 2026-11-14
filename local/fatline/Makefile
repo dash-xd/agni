@@ -9,7 +9,13 @@ PROVIDER ?= podman
 OWNER_SCOPE ?= nix-xd-arm
 MACHINE ?= coreos-arm64
 
+# Keep all nix.xd operation logs in one user-owned location.
+# The generic nix.xd log wrapper supplies action, machine and timestamp fields.
+NIX_XD_LOG_DIR ?= $(HOME)/.local/nix.xd/logs
+NIX_XD_LOG_COMPOSITION ?= fatline
+
 export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
+export NIX_XD_LOG_DIR NIX_XD_LOG_COMPOSITION
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
 .PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-memory deployment-qualify-worker-fence deployment-qualify-worker-effect deployment-qualify-worker-reconcile deployment-refresh-reconcile-auth deployment-seed-reconcile-source deployment-qualify-reconcile-service-contract deployment-qualify-reconcile-live deployment-seed-processor-source deployment-qualify-processor-contract deployment-qualify-processor-live deployment-qualify-independent-consumers deployment-seed-subscription-source deployment-qualify-subscription-contract deployment-qualify-subscription-groups deployment-diagnose-runtime-network check-deployment
