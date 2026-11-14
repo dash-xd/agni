@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-fence-state qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -183,3 +183,8 @@ section=s[p:q]
 assert section.index('flock -x 9') < section.index('module_tmp=')
 assert section.count('flock -x 9') == 1
 PY
+
+# An isolated state-model gate must not claim a physical handler crash.
+grep -Fq "gate === 'fence-state'" "$here/startup-profile/probot-worker-live.js"
+grep -Fq "AGNI_WORKER_FENCE_STATE=passed" "$here/startup-profile/probot-worker-live.js"
+grep -Fq "automatic_reexecution=denied" "$here/startup-profile/probot-worker-live.js"

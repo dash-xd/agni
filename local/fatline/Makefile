@@ -12,7 +12,7 @@ MACHINE ?= coreos-arm64
 export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
-.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-diagnose-runtime-network check-deployment
+.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-fence-state deployment-diagnose-runtime-network check-deployment
 
 help:
 	@printf '%s\n' \
@@ -33,6 +33,7 @@ help:
 	  'make deployment-qualify-worker-bootstrap DEPLOYMENT=vm1  Isolated Redis + Skymill + worker-enabled HTTP only' \
 	  'make deployment-qualify-worker-delivery DEPLOYMENT=vm1   Bootstrap + signed delivery + durable ACK' \
 	  'make deployment-qualify-worker-recovery DEPLOYMENT=vm1   Delivery + fault/restart/replay recovery' \
+	  'make deployment-qualify-worker-fence-state DEPLOYMENT=vm1  Pinned Redis execution-fence ambiguity contract' \
 	  'make deployment-qualify-worker-live DEPLOYMENT=vm1       Complete gated live candidate; no activation' \
 	  'make deployment-diagnose-runtime-network DEPLOYMENT=vm1  Read-only Logma/Skymill/Probot network diagnosis' \
 	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety'
@@ -71,6 +72,9 @@ deployment-qualify-worker-delivery:
 
 deployment-qualify-worker-recovery:
 	@bash operations/guest-migration.sh qualify-worker-recovery
+
+deployment-qualify-worker-fence-state:
+	@bash operations/guest-migration.sh qualify-worker-fence-state
 
 deployment-qualify-worker-live:
 	@bash operations/guest-migration.sh qualify-worker-live

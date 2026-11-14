@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full'] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'fence-state', 'delivery', 'recovery', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -326,6 +326,30 @@ async function main() {
     if (gate === 'bootstrap') {
       assertChildrenHealthy();
       console.log('AGNI_WORKER_LIVE_GATE=passed gate=bootstrap');
+      return;
+    }
+    if (gate === 'fence-state') {
+      // State-level ambiguity qualification, not a simulated handler crash.
+      const fenceId = crypto.randomUUID();
+      await store.recordDelivery({
+        deliveryId: fenceId, appId, routingKey, installationId,
+        event: 'push', receivedAt: new Date().toISOString(),
+      });
+      assert.equal(await store.acquireDeliveryExecution(fenceId), 'acquired');
+      assert.equal((await store.getDelivery(fenceId)).executionStatus, 'running');
+      checkpoint('fence-acquired');
+      await stop('probot', 'SIGKILL');
+      startProbot(true);
+      await waitProbot('Probot fence restart');
+      assert.equal(await store.acquireDeliveryExecution(fenceId), 'ambiguous');
+      assert.equal(await store.acquireDeliveryExecution(fenceId), 'ambiguous');
+      const fenced = await store.getDelivery(fenceId);
+      assert.equal(fenced.executionStatus, 'ambiguous');
+      assert.equal(fenced.executionCompletedAt, null);
+      assert.equal(fenced.outcomeStatus, null);
+      console.log('AGNI_WORKER_FENCE_STATE=passed acquired=once ambiguous=sticky automatic_reexecution=denied');
+      checkpoint('fence-state-complete');
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=fence-state');
       return;
     }
     const rejected = await post('sha256=' + '0'.repeat(64), 'invalid-signature');

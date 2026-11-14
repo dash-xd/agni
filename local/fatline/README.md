@@ -527,3 +527,41 @@ The candidate mounts this directory read-only at `/run/probot`; the host-shared
 can be removed as part of the VM1 qualification-state cleanup. No mutable
 credential data is copied. This avoids repeated Node dependency metadata walks
 through the 9P mount, without changing the deployed five-role generation.
+
+## Tenant state and loss policy
+
+The base/free tier is **volatile**: Redis runs with RDB and AOF disabled, no
+mandatory SQLite, and Skymill's Redis Streams plus Pub/Sub disappear with Redis
+memory loss. HTTP 202 means acceptance into volatile infrastructure, *not*
+durable storage. Bounded tenant quotas, noeviction policy, explicit capacity
+errors and backpressure limit avoidable loss; they do not promise persistence.
+Publisher reconciliation (including GitHub) is provider-specific and cannot
+be assumed to recover every missing event.
+
+Tenant-selectable upgrades, independent of the base tier:
+
+- **Redis persistence:** Opt-in RDB/AOF with an explicit recovery and loss-window
+  contract, subsequently qualified against real Redis restarts.
+- **Projection/processor:** A Watermill consumer from a selected Skymill stream
+  (or best-effort Pub/Sub source) commits idempotent event-ID-keyed projections
+  to a tenant SQLite file or another sink. ACK *after* commit. Events lost in
+  volatile Redis before a processor commits cannot be recovered by this tier.
+- **Committed ingress:** An optional atomic durable inbox/outbox before an
+  accepted receipt, only for tenants requiring stronger ingestion guarantees.
+  This does not become the default path.
+
+Prefer one SQLite database and one logical writer per tenant, explicit migration
+and backup policy, tenant isolation, and quotas. DuckDB is optional for analytics,
+not a concurrent transactional inbox. Cross-tenant ATTACH queries are
+administrative, access-controlled and not assumed atomic across database files.
+
+### Execution-fence state qualification
+
+`deployment-qualify-worker-fence-state` starts a fresh isolated Redis,
+Skymill and Probot candidate, records a synthetic delivery in the pinned
+Probot RedisStore and exercises `acquired -> running -> ambiguous` across a
+Probot process restart. Reacquisition must be rejected as ambiguous. This
+qualifies the **state transition only**, not a physical crash during handler
+execution, an external side effect, exactly-once processing, or preservation
+across Redis data loss. Stronger crash-injection and business-effect gates
+remain separate, and the qualified VM1 generation is not activated or changed.
