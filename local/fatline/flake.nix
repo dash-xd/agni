@@ -486,10 +486,10 @@
                   export GOCACHE="$state/go-cache" GOMODCACHE="$state/mod-cache"
                   (
                     cd ${smokeSource}
-                    go run -mod=readonly ./cmd/github-worktree seed \\
-                      --repository xd-dash/probot-runtime \\
-                      --sha "$rev" \\
-                      --destination "$src" \\
+                    go run -mod=readonly ./cmd/github-worktree seed \
+                      --repository xd-dash/probot-runtime \
+                      --sha "$rev" \
+                      --destination "$src" \
                       --object-root "$state/ghxd-objects"
                   )
                 fi
