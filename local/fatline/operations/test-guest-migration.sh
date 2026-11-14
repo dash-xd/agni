@@ -207,7 +207,7 @@ grep -Fq 'AGNI_WORKER_LIVE_GATE=passed gate=reconcile-service' "$here/startup-pr
 grep -Fq 'PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync' "$here/operations/guest-migration.sh"
 grep -Fq "TARGET='#processor-subscriber-contract'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_PROBOT_PROCESSOR_CONTRACT=passed' "$here/flake.nix"
-grep -Fq '"revision": "8eac84c8e46228c6943b08720ba487c17f63d5f9"' "$here/qualification/probot-processor-ghxd-sources.json"
+grep -Fq '"revision": "b09e8c2fd73541e5d3520ccaffab24e6bd74e702"' "$here/qualification/probot-processor-ghxd-sources.json"
 grep -Fq 'probotProcessorCheckout = "/workspaces/probot-runtime20261114";' "$here/flake.nix"
 
 grep -Fq "TARGET='#processor-source-artifact'" "$here/operations/guest-migration.sh"
