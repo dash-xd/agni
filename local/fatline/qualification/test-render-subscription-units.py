@@ -41,11 +41,11 @@ class Qualification(unittest.TestCase):
             manifest = out / "manifest.json"
             record = json.loads(manifest.read_text())
             record["worker"] = "enabled"
-            manifest.write_text(json.dumps(record) + "\\n")
+            manifest.write_text(json.dumps(record) + "\n")
             with self.assertRaises(ValueError):
                 validator.verify(out)
             record["worker"] = "disabled"
-            manifest.write_text(json.dumps(record) + "\\n")
+            manifest.write_text(json.dumps(record) + "\n")
             unit = out / "fatline-arm-vm1-subscription-b-processor.container"
             original = unit.read_text()
             unit.write_text(original.replace(
