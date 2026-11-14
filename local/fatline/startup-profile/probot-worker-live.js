@@ -255,7 +255,7 @@ async function main() {
       "  if (state === 'acquired') await new Promise(() => {});",
       "  return state;",
       "};",
-    ].join('\\n') + '\\n', { mode: 0o600, flag: 'wx' });
+    ].join('\n') + '\n', { mode: 0o600, flag: 'wx' });
     console.log('AGNI_WORKER_FENCE_HOOK=armed phase=post-acquire pre-handler');
   }
 
