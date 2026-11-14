@@ -125,7 +125,7 @@ if [[ "$operation" == seed-processor-source ]]; then
       MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
       PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
   grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$log_dir/processor-source-seed.log" || fail processor-source-sync-not-qualified
-  grep -Fq 'checkout=probot-runtime20261114 sha=96fc8561096dd9002cbba2ba2e6fbff37d67b5a2' \
+  grep -Fq 'checkout=probot-runtime20261114 sha=8eac84c8e46228c6943b08720ba487c17f63d5f9' \
     "$log_dir/processor-source-seed.log" || fail processor-source-identity-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-processor-source source=smoke-ghxd production=unchanged'
   exit 0
@@ -133,7 +133,7 @@ fi
 
 if [[ "$operation" == qualify-processor-contract ]]; then
   run_step "$log_dir/processor-contract.log" xd_make run FLAKE="$flake" TARGET='#processor-subscriber-contract'
-  grep -Fxq 'AGNI_PROBOT_PROCESSOR_CONTRACT=passed source=96fc8561096dd9002cbba2ba2e6fbff37d67b5a2 hints=optional fallback=bounded stream=authoritative' \
+  grep -Fxq 'AGNI_PROBOT_PROCESSOR_CONTRACT=passed source=8eac84c8e46228c6943b08720ba487c17f63d5f9 hints=optional fallback=bounded stream=authoritative' \
     "$log_dir/processor-contract.log" || fail processor-contract-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-processor-contract source=pinned production=unchanged'
   exit 0
@@ -143,7 +143,7 @@ if [[ "$operation" == qualify-processor-live ]]; then
   run_step "$log_dir/processor-artifact.log" xd_make run FLAKE="$flake" TARGET='#processor-source-artifact'
   source_artifact="$(agni_capture_value AGNI_PROBOT_PROCESSOR_ARTIFACT "$log_dir/processor-artifact.log")"
   [[ "$source_artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-processor20261114$ ]] || fail processor-source-artifact-not-pinned
-  grep -Fxq 'AGNI_PROBOT_PROCESSOR_ARTIFACT_QUALIFIED=passed revision=96fc8561096dd9002cbba2ba2e6fbff37d67b5a2 rooted=true' \
+  grep -Fxq 'AGNI_PROBOT_PROCESSOR_ARTIFACT_QUALIFIED=passed revision=8eac84c8e46228c6943b08720ba487c17f63d5f9 rooted=true' \
     "$log_dir/processor-artifact.log" || fail processor-artifact-not-qualified
   run_step "$log_dir/processor-live.log" guest qualify-worker-live processor-subscriber "$source_artifact"
   grep -Fxq 'AGNI_PROBOT_PROCESSOR_LIVE=passed redis=real skymill=real logma=redis-pubsub processors=2 group=shared' \
