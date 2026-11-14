@@ -118,37 +118,17 @@ if [[ "$operation" == qualify-reconcile-live ]]; then
 fi
 
 if [[ "$operation" == seed-processor-source ]]; then
+  # Smoke GHXD owns access-token refresh and authenticated source retrieval.
+  # Agni supplies only the immutable exact-SHA source selection.
   xd_make stage CHECKOUT=smoke20261112
-  processor_source_sync() {
+  run_step "$log_dir/processor-source-seed.log" \
     env SMOKE_GHXD_SOURCE_MANIFEST="$here/local/fatline/qualification/probot-processor-ghxd-sources.json" \
-      make --no-print-directory -C "$nix_xd" project-host-run \
-        MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
-        PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
-  }
-  source_log="$log_dir/processor-source-seed.log"
-  # An expired GitHub OAuth access token must be rotated by Smoke, not
-  # replaced with an ambient Git credential or another device login.
-  # Attempt the selected source once; rotate only on the known private
-  # fetch-authentication failure, then retry the same exact SHA once.
-  if processor_source_sync > "$source_log" 2>&1; then
-    cat "$source_log"
-  else
-    cat "$source_log"
-    grep -Fq 'anonymous and authenticated Git fetch both failed for xd-dash/probot-runtime at 2fd46a6a8730ea153346cbc113d7677ef5ad18cf' \
-      "$source_log" || fail processor-source-sync-failed-not-auth
-    echo 'AGNI_GHXD_AUTH_RECOVERY=begin reason=private-fetch-rejected strategy=one-refresh-one-retry'
-    run_step "$log_dir/processor-auth-refresh.log" \
-      make --no-print-directory -C "$nix_xd" project-host-run \
-        MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
-        PROJECT=smoke20261112 APPLICATION=ghxd ACTION=auth-refresh
-    grep -Fxq 'GHXD_AUTH_REFRESH=passed persistence=sops-age' "$log_dir/processor-auth-refresh.log" \
-      || fail processor-ghxd-auth-refresh-not-qualified
-    run_step "$source_log" processor_source_sync
-    echo 'AGNI_GHXD_AUTH_RECOVERY=passed rotation=smoke-sops-age retries=1'
-  fi
-  grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$source_log" || fail processor-source-sync-not-qualified
+    make --no-print-directory -C "$nix_xd" project-host-run \
+      MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
+      PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
+  grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$log_dir/processor-source-seed.log" || fail processor-source-sync-not-qualified
   grep -Fq 'checkout=probot-runtime20261114 sha=2fd46a6a8730ea153346cbc113d7677ef5ad18cf' \
-    "$source_log" || fail processor-source-identity-not-qualified
+    "$log_dir/processor-source-seed.log" || fail processor-source-identity-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-processor-source source=smoke-ghxd production=unchanged'
   exit 0
 fi
