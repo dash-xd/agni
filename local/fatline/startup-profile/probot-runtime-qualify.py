@@ -40,7 +40,10 @@ def qualify(token):
     base = "http://skymill:8081"
     request(base + "/v1/status", expected=401)
     initial = request(base + "/v1/status", token=token)
-    if initial.get("pending", {}).get("count", 0) != 0:
+    pending = initial.get("Pending")
+    if not isinstance(pending, dict) or not isinstance(pending.get("Count"), int):
+        raise RuntimeError("unexpected Skymill status schema")
+    if pending["Count"] != 0:
         raise RuntimeError("consumer group has pending deliveries; refusing to consume unrelated messages")
     request("http://logma:8080/lifecycle/readyz")
     request("http://probot:3000/")
@@ -72,7 +75,7 @@ def qualify(token):
     if ack.get("ok") is not True:
         raise RuntimeError("Skymill ACK rejected selected delivery")
     final = request(base + "/v1/status", token=token)
-    if final.get("pending", {}).get("count", 0) != 0:
+    if not isinstance(final.get("Pending"), dict) or final["Pending"].get("Count") != 0:
         raise RuntimeError("Skymill pending state not cleared after ACK")
     print("AGNI_RUNTIME_SKYMILL=passed publish_once=true delivery_id=opaque ack=true nack_api=true retry=unqualified", flush=True)
 
