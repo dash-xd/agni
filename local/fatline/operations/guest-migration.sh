@@ -62,7 +62,7 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract || "$operation" == qualify-processor-live || "$operation" == qualify-independent-consumers || "$operation" == seed-subscription-source || "$operation" == qualify-subscription-contract || "$operation" == qualify-subscription-groups || "$operation" == qualify-declarative-processors || "$operation" == qualify-declarative-generator ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract || "$operation" == qualify-processor-live || "$operation" == qualify-independent-consumers || "$operation" == seed-subscription-source || "$operation" == qualify-subscription-contract || "$operation" == qualify-subscription-groups || "$operation" == qualify-declarative-processors || "$operation" == qualify-declarative-generator || "$operation" == seed-factory-source || "$operation" == qualify-factory-contract ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
@@ -172,6 +172,28 @@ if [[ "$operation" == qualify-independent-consumers ]]; then
   grep -Fxq 'AGNI_WORKER_LIVE_QUALIFICATION=passed gate=processor-independent backing=real service_invocations=unchanged worker=isolated promotion=blocked' \
     "$log_dir/processor-independent.log" || fail processor-independent-baseline-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-independent-consumers backing=real promotion=blocked'
+  exit 0
+fi
+
+if [[ "$operation" == seed-factory-source ]]; then
+  xd_make stage CHECKOUT=smoke20261112
+  run_step "$log_dir/factory-source-seed.log" \
+    env SMOKE_GHXD_SOURCE_MANIFEST="$here/local/fatline/qualification/probot-factory-ghxd-sources.json" \
+    make --no-print-directory -C "$nix_xd" project-host-run \
+      MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
+      PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
+  grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$log_dir/factory-source-seed.log" || fail factory-ghxd-sync-not-qualified
+  grep -Fq 'checkout=probot-runtime20261116 sha=33b604edbbbce474715af916c2508acc2b8343bf' \
+    "$log_dir/factory-source-seed.log" || fail factory-source-identity-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-factory-source source=smoke-ghxd production=unchanged'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-factory-contract ]]; then
+  run_step "$log_dir/factory-contract.log" xd_make run FLAKE="$flake" TARGET='#subscription-factory-contract'
+  grep -Fxq 'AGNI_PROBOT_FACTORY_CONTRACT=passed source=33b604edbbbce474715af916c2508acc2b8343bf subscription=isolated ingress=shared production=unchanged' \
+    "$log_dir/factory-contract.log" || fail factory-contract-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-factory-contract source=pinned production=unchanged'
   exit 0
 fi
 
