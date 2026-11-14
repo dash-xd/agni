@@ -482,7 +482,12 @@
                 }
                 test "$(git hash-object "$src/src/delivery-reconciliation.js")" = bd55bbd609cc7e686901b7be09a42410b3c5ce27
                 test "$(git hash-object "$src/src/store.js")" = adbfb8e009caaea65e7dbf9bb6f64f20b570f0e1
-                artifact="$(nix-store --add "$src")"
+                scratch="$(mktemp -d)"
+                trap 'rm -rf -- "$scratch"' EXIT
+                mkdir -p "$scratch/probot-runtime20261114"
+                cp -R "$src/src" "$scratch/probot-runtime20261114/"
+                printf '%s\n' "$rev" > "$scratch/probot-runtime20261114/.source-revision"
+                artifact="$(nix-store --add "$scratch/probot-runtime20261114")"
                 [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-runtime20261114$ ]] || exit 1
                 root="$HOME/.local/state/agni/fatline/reconcile/$rev"
                 mkdir -p "$root"
