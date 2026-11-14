@@ -19,6 +19,8 @@ async function main() {
   let { RedisStore } = require(path.join(probotRoot, 'src/store'));
   let reconcileDelivery;
   let SkymillClient;
+  let runDeliveryProcessor;
+  let LogmaSubscriber;
   if (gate === 'reconcile-service') {
     assert.match(reconcileSource, /^\/nix\/store\/[a-z0-9]{32}-probot-runtime20261114$/);
     // The Nix store is read-only in this candidate. Resolve the new Probot
@@ -34,10 +36,9 @@ async function main() {
     process.env.NODE_PATH = path.join(probotRoot, 'node_modules');
     require('node:module').Module._initPaths();
     const processorRoot = reconcileSource;
-    const { runDeliveryProcessor } = require(path.join(processorRoot, 'src/processor'));
-    const { LogmaSubscriber } = require(path.join(processorRoot, 'src/logma-subscriber'));
+    ({ runDeliveryProcessor } = require(path.join(processorRoot, 'src/processor')));
+    ({ LogmaSubscriber } = require(path.join(processorRoot, 'src/logma-subscriber')));
     ({ SkymillClient } = require(path.join(processorRoot, 'src/skymill')));
-    globalThis.__agniProcessorCandidate = { runDeliveryProcessor, LogmaSubscriber };
     console.log('AGNI_PROBOT_PROCESSOR_SOURCE=passed origin=nix-store source=pinned');
   } else {
     assert.equal(reconcileSource, '', 'unexpected unqualified source argument');
@@ -419,7 +420,6 @@ async function main() {
       return;
     }
     if (gate === 'processor-subscriber') {
-      const { runDeliveryProcessor, LogmaSubscriber } = globalThis.__agniProcessorCandidate;
       const { ProbotRuntime } = require(path.join(probotRoot, 'src/runtime'));
       const { makeProbotApp } = require(path.join(probotRoot, 'src/huram-app'));
       const { createClient } = require(path.join(probotRoot, 'node_modules/redis'));
