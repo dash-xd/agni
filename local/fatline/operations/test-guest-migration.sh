@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -178,6 +178,8 @@ grep -Fq 'AGNI_RECONCILE_SERVICE_CONTRACT=passed' "$here/flake.nix"
 grep -Fq 'AGNI_RECONCILE_SOURCE=passed authority=smoke-ghxd sha=verified mode=offline' "$here/flake.nix"
 grep -Fq 'probotReconcileCheckout = "/workspaces/probot-runtime20261114";' "$here/flake.nix"
 grep -Fq 'PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync' "$here/operations/guest-migration.sh"
+grep -Fq 'PROJECT=smoke20261112 APPLICATION=ghxd ACTION=auth-refresh' "$here/operations/guest-migration.sh"
+grep -Fq 'GHXD_AUTH_REFRESH=passed persistence=sops-age' "$here/operations/guest-migration.sh"
 grep -Fq 'SMOKE_GHXD_SOURCE_MANIFEST=' "$here/operations/guest-migration.sh"
 grep -Fq '.nix-xd-source-revision' "$here/flake.nix"
 grep -Fq '"checkout": "probot-runtime20261114"' "$here/qualification/probot-reconcile-ghxd-sources.json"
