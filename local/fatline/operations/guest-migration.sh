@@ -62,7 +62,7 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
@@ -114,6 +114,28 @@ if [[ "$operation" == qualify-reconcile-live ]]; then
   grep -Fxq 'AGNI_WORKER_LIVE_QUALIFICATION=passed gate=reconcile-service backing=real service_invocations=unchanged worker=isolated promotion=blocked' \
     "$log_dir/reconcile-live.log" || fail reconcile-service-baseline-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-reconcile-live source=pinned backing=real promotion=blocked'
+  exit 0
+fi
+
+if [[ "$operation" == seed-processor-source ]]; then
+  xd_make stage CHECKOUT=smoke20261112
+  run_step "$log_dir/processor-source-seed.log" \
+    env SMOKE_GHXD_SOURCE_MANIFEST="$here/local/fatline/qualification/probot-processor-ghxd-sources.json" \
+    make --no-print-directory -C "$nix_xd" project-host-run \
+      MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
+      PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
+  grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$log_dir/processor-source-seed.log" || fail processor-source-sync-not-qualified
+  grep -Fq 'checkout=probot-runtime20261114 sha=96fc8561096dd9002cbba2ba2e6fbff37d67b5a2' \
+    "$log_dir/processor-source-seed.log" || fail processor-source-identity-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-processor-source source=smoke-ghxd production=unchanged'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-processor-contract ]]; then
+  run_step "$log_dir/processor-contract.log" xd_make run FLAKE="$flake" TARGET='#processor-subscriber-contract'
+  grep -Fxq 'AGNI_PROBOT_PROCESSOR_CONTRACT=passed source=96fc8561096dd9002cbba2ba2e6fbff37d67b5a2 hints=optional fallback=bounded stream=authoritative' \
+    "$log_dir/processor-contract.log" || fail processor-contract-not-qualified
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-processor-contract source=pinned production=unchanged'
   exit 0
 fi
 
