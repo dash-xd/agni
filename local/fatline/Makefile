@@ -12,7 +12,7 @@ MACHINE ?= coreos-arm64
 export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
-.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-memory deployment-qualify-worker-fence deployment-qualify-worker-effect deployment-qualify-worker-reconcile deployment-refresh-reconcile-auth deployment-seed-reconcile-source deployment-qualify-reconcile-service-contract deployment-qualify-reconcile-live deployment-seed-processor-source deployment-qualify-processor-contract deployment-diagnose-runtime-network check-deployment
+.PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-memory deployment-qualify-worker-fence deployment-qualify-worker-effect deployment-qualify-worker-reconcile deployment-refresh-reconcile-auth deployment-seed-reconcile-source deployment-qualify-reconcile-service-contract deployment-qualify-reconcile-live deployment-seed-processor-source deployment-qualify-processor-contract deployment-qualify-processor-live deployment-diagnose-runtime-network check-deployment
 
 help:
 	@printf '%s\n' \
@@ -43,6 +43,7 @@ help:
 	  'make deployment-qualify-reconcile-live DEPLOYMENT=vm1  Qualify app-owned reconciliation on isolated Redis/Skymill' \
 	  'make deployment-seed-processor-source               GHXD pin processor candidate source inside Nix-Alpine' \
 	  'make deployment-qualify-processor-contract           Test hinted Skymill worker and Logma subscriber contract' \
+	  'make deployment-qualify-processor-live DEPLOYMENT=vm1  Two processors on real Skymill and Logma PubSub, isolated' \
 	  'make deployment-qualify-worker-live DEPLOYMENT=vm1       Complete gated live candidate; no activation' \
 	  'make deployment-diagnose-runtime-network DEPLOYMENT=vm1  Read-only Logma/Skymill/Probot network diagnosis' \
 	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety'
@@ -111,6 +112,9 @@ deployment-seed-processor-source:
 
 deployment-qualify-processor-contract:
 	@bash operations/guest-migration.sh qualify-processor-contract
+
+deployment-qualify-processor-live:
+	@bash operations/guest-migration.sh qualify-processor-live
 
 deployment-qualify-worker-live:
 	@bash operations/guest-migration.sh qualify-worker-live
