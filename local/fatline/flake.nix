@@ -467,6 +467,38 @@
               exec ${pkgs.coreutils}/bin/cat ${self.packages.${system}.isolated-runtime-grants}
             ''}";
           };
+          reconcile-source-artifact = {
+            type = "app";
+            program = "${pkgs.writeShellApplication {
+              name = "agni-reconcile-source-artifact";
+              runtimeInputs = [ pkgs.bash pkgs.coreutils pkgs.git pkgs.nix ];
+              text = ''
+                set -Eeuo pipefail
+                src=${probotReconcileCheckout}
+                rev=${probotReconcileRevision}
+                [[ -f "$src/.nix-xd-source-revision" && "$(cat "$src/.nix-xd-source-revision")" == "$rev" ]] || {
+                  echo 'AGNI_RECONCILE_SOURCE_ARTIFACT=blocked reason=wrong-source-generation' >&2
+                  exit 1
+                }
+                test "$(git hash-object "$src/src/delivery-reconciliation.js")" = bd55bbd609cc7e686901b7be09a42410b3c5ce27
+                test "$(git hash-object "$src/src/store.js")" = adbfb8e009caaea65e7dbf9bb6f64f20b570f0e1
+                artifact="$(nix-store --add "$src")"
+                [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-runtime20261114$ ]] || exit 1
+                root="$HOME/.local/state/agni/fatline/reconcile/$rev"
+                mkdir -p "$root"
+                if [[ ! -e "$root/source" ]]; then
+                  nix-store --realise --add-root "$root/source" "$artifact" >/dev/null
+                else
+                  [[ "$(readlink -f "$root/source")" == "$artifact" ]] || {
+                    echo 'AGNI_RECONCILE_SOURCE_ARTIFACT=blocked reason=gcroot-conflict' >&2
+                    exit 1
+                  }
+                fi
+                echo "AGNI_RECONCILE_SOURCE_ARTIFACT=$artifact"
+                echo "AGNI_RECONCILE_SOURCE_ARTIFACT_QUALIFIED=passed revision=$rev rooted=true"
+              '';
+            }}/bin/agni-reconcile-source-artifact";
+          };
           reconcile-service-contract = {
             type = "app";
             program = "${pkgs.writeShellScript "agni-reconcile-service-contract" ''
