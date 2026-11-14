@@ -187,7 +187,13 @@ async function main() {
     console.log('AGNI_WORKER_LIVE_REDIS=passed instance=isolated acl=separate credentials=ephemeral');
 
     startSkymill();
-    await until('Skymill HTTP', status);
+    await until('Skymill HTTP', async () => {
+      // The consumer group may not exist before Probot's first receive.
+      const response = await fetch('http://127.0.0.1:8081/v1/status', {
+        signal: AbortSignal.timeout(1000),
+      });
+      return response.status === 401;
+    });
     startProbot();
     await until('worker-enabled Probot HTTP', async () => {
       const response = await fetch('http://127.0.0.1:3000/', { signal: AbortSignal.timeout(1000) });
