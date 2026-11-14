@@ -12,7 +12,7 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
-      probotReconcileRevision = "508f147da39e24aaad6bc5507192e6377a44a675";
+      probotReconcileRevision = "1a0ce1f3684c120a8a800e7e63c45f0780bdda09";
       probotReconcileSource = builtins.fetchGit {
         url = "https://github.com/xd-dash/probot-runtime.git";
         rev = probotReconcileRevision;
