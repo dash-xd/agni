@@ -518,30 +518,31 @@
               echo "AGNI_PROBOT_PROCESSOR_CONTRACT=passed source=$rev hints=optional fallback=bounded stream=authoritative"
             ''}";
           };
-          declarative-processors-quadlets = {
-            type = "app";
-            program = "${pkgs.writeShellScript "agni-declarative-processors-quadlets" ''
-              set -euo pipefail
-              printf '%s\n' "AGNI_DECLARATIVE_PROCESSORS_QUADLETS=${pkgs.runCommand "agni-inert-subscription-quadlets" {
-                nativeBuildInputs = [ pkgs.python3 ];
+          declarative-processors-quadlets =
+            let
+              specification = pkgs.writeText "agni-subscription-quadlet-spec.json" (builtins.toJSON {
+                schema = 1;
+                scope = "fatline-arm-vm1";
+                subscription_revision = probotSubscriptionRevision;
+                skymill_binary = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-skymill-http";
+                node_binary = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nodejs/bin/node";
+                probot_root = "/nix/store/cccccccccccccccccccccccccccccccc-probot";
+                runtime_root = "/home/wisp/.local/state/nix-xd/fatline/fatline-arm-vm1/services";
+              });
+              artifact = pkgs.runCommand "agni-inert-subscription-quadlets" {
+                nativeBuildInputs = [ pkgs.python3 pkgs.findutils pkgs.coreutils ];
               } ''
-                cat > spec.json <<'JSON'
-                ${builtins.toJSON {
-                  schema = 1;
-                  scope = "fatline-arm-vm1";
-                  subscription_revision = probotSubscriptionRevision;
-                  skymill_binary = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-skymill-http";
-                  node_binary = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nodejs/bin/node";
-                  probot_root = "/nix/store/cccccccccccccccccccccccccccccccc-probot";
-                  runtime_root = "/home/wisp/.local/state/nix-xd/fatline/fatline-arm-vm1/services";
-                }}
-                JSON
-                python3 ${./qualification}/render-subscription-units.py spec.json "$out"
+                python3 ${./qualification}/render-subscription-units.py ${specification} "$out"
                 test "$(find "$out" -name '*.container' | wc -l)" -eq 4
-              }}"
-              echo 'AGNI_DECLARATIVE_PROCESSORS_QUADLETS=passed activation=blocked source=agni-rendered'
-            ''}";
-          };
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "agni-declarative-processors-quadlets" ''
+                set -euo pipefail
+                echo "AGNI_DECLARATIVE_PROCESSORS_QUADLETS=${artifact}"
+                echo 'AGNI_DECLARATIVE_PROCESSORS_QUADLETS=passed activation=blocked source=agni-rendered'
+              ''}";
+            };
           declarative-processors-contract = {
             type = "app";
             program = "${pkgs.writeShellScript "agni-declarative-processors-contract" ''
