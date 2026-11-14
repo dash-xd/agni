@@ -457,13 +457,27 @@ async function main() {
         consumerGroup, consumer: 'processor-b', stream: 'worker-candidate.webhooks',
       });
       let running;
+      let recoveredAttempt = 0;
+      const receiveB = identityB.receive.bind(identityB);
+      identityB.receive = async options => {
+        const batch = await receiveB(options);
+        for (const d of batch.deliveries || []) {
+          if (d.message?.metadata?.github_delivery_id === pendingId) {
+            recoveredAttempt = Math.max(recoveredAttempt, Number(d.attempt || 0));
+          }
+        }
+        return batch;
+      };
+      let pendingId;
       try {
         const firstId = crypto.randomUUID();
+        pendingId = firstId;
         const receipt = await post(signature, 'independent-consumer-reclaim', firstId);
         assert.equal(receipt.status, 202);
         const deliveryA = await identityA.receive({ limit: 1 });
         assert.equal(deliveryA.deliveries?.length, 1);
         assert.equal(deliveryA.deliveries[0].message.metadata.github_delivery_id, firstId);
+        assert.equal(deliveryA.deliveries[0].attempt, 1);
         assert.equal((await status()).Pending.Count, 1);
         assert.equal((await store.getDelivery(firstId)).executionStatus || '', '',
           'A must die before acquiring the application execution fence');
@@ -500,6 +514,7 @@ async function main() {
           return state.Pending.Count === 0 && state.Consumers >= 2;
         }, 105000);
         assert.equal(executed.get(firstId), 1);
+        assert.ok(recoveredAttempt >= 2, 'PEL reclaim must increment durable delivery attempt count');
         assert.deepEqual(failures, []);
         console.log('AGNI_PROBOT_INDEPENDENT_RECLAIM=passed from=processor-a to=processor-b pending=0 effect_once=true');
 
