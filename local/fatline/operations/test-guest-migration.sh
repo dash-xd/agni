@@ -263,6 +263,12 @@ grep -Fq 'AGNI_DECLARATIVE_PROCESSORS_QUADLETS=passed' "$here/flake.nix"
 grep -Fq '  qualify-declarative-generator)' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'QUADLET_UNIT_DIRS="$candidate_dir" "$generator" --user --dryrun' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'AGNI_DECLARATIVE_GENERATOR=passed units=4' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq '"checkout": "probot-runtime20261116"' "$here/qualification/probot-factory-ghxd-sources.json"
+grep -Fq 'probotFactoryRevision = "33b604edbbbce474715af916c2508acc2b8343bf";' "$here/flake.nix"
+grep -Fq "TARGET='#subscription-factory-contract'" "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_PROBOT_FACTORY_CONTRACT=passed source=$rev' "$here/flake.nix"
+grep -Fq 'node --test "$src/test/subscription-execution.test.js" "$src/test/subscription-factory.test.js"' "$here/flake.nix"
+echo 'AGNI_PROBOT_FACTORY_STATIC=passed source=pinned ingress=shared activation=blocked'
 echo 'AGNI_DECLARATIVE_GENERATOR_STATIC=passed guest=coreos systemd=dryrun baseline=unchanged'
 
 
