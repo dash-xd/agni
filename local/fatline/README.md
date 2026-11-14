@@ -388,3 +388,8 @@ Network diagnosis now also captures Logma's process and TCP listening
 sockets, plus a bounded allowlist of diagnostic startup messages. It never
 reads service environment values or credential files and does not change
 systemd or Podman state.
+
+The diagnostic probes both `logma:8080` (declared contract) and
+`logma:18081` (the unexpected observed listener) and fetches
+`/lifecycle/readyz` on each without authentication or mutation. A
+successful TCP connection alone does not establish Logma HTTP readiness.
