@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full', reconcileSource = ''] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'processor-subscriber', 'processor-independent', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'processor-subscriber', 'processor-independent', 'subscription-groups', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -21,6 +21,7 @@ async function main() {
   let SkymillClient;
   let runDeliveryProcessor;
   let LogmaSubscriber;
+  let SubscriptionExecutionStore;
   if (gate === 'reconcile-service') {
     assert.match(reconcileSource, /^\/nix\/store\/[a-z0-9]{32}-probot-runtime20261114$/);
     // The Nix store is read-only in this candidate. Resolve the new Probot
@@ -40,6 +41,13 @@ async function main() {
     ({ LogmaSubscriber } = require(path.join(processorRoot, 'src/logma-subscriber')));
     ({ SkymillClient } = require(path.join(processorRoot, 'src/skymill')));
     console.log('AGNI_PROBOT_PROCESSOR_SOURCE=passed origin=nix-store source=pinned');
+  } else if (gate === 'subscription-groups') {
+    assert.match(reconcileSource, /^\/nix\/store\/[a-z0-9]{32}-probot-subscription20261114$/);
+    process.env.NODE_PATH = path.join(probotRoot, 'node_modules');
+    require('node:module').Module._initPaths();
+    ({ SubscriptionExecutionStore } = require(path.join(reconcileSource, 'src/subscription-execution')));
+    ({ SkymillClient } = require(path.join(reconcileSource, 'src/skymill')));
+    console.log('AGNI_PROBOT_SUBSCRIPTION_SOURCE=passed origin=nix-store source=pinned');
   } else {
     assert.equal(reconcileSource, '', 'unexpected unqualified source argument');
   }
@@ -231,18 +239,19 @@ async function main() {
       SKYMILL_ORG: 'xd-dash', SKYMILL_TENANT: scope,
       SKYMILL_APPLICATION: 'github-webhooks', SKYMILL_STREAM: 'worker-candidate.webhooks',
       SKYMILL_CONSUMER_GROUP: consumerGroup,
-      ...(gate === 'processor-independent' ? { SKYMILL_CONSUMER: 'processor-a' } : {}),
+      ...((gate === 'processor-independent' || gate === 'subscription-groups') ? { SKYMILL_CONSUMER: 'processor-a' } : {}),
       SKYMILL_HTTP_TOKEN_FILE: skymillFile,
     });
   }
-  function startSkymillPeer() {
-    assert.equal(gate, 'processor-independent');
+  function startSkymillPeer(consumer = 'processor-b') {
+    assert.ok(gate === 'processor-independent' || gate === 'subscription-groups');
     return launch('skymill-peer', skymillBin, [], {
       REDIS_ADDR: '127.0.0.1:6379', REDIS_USERNAME: 'skymill', REDIS_PASSWORD: redisSkymill,
       REDIS_DB: '0', SKYMILL_ADDR: '127.0.0.1:8082',
       SKYMILL_ORG: 'xd-dash', SKYMILL_TENANT: scope,
       SKYMILL_APPLICATION: 'github-webhooks', SKYMILL_STREAM: 'worker-candidate.webhooks',
-      SKYMILL_CONSUMER_GROUP: consumerGroup, SKYMILL_CONSUMER: 'processor-b',
+      SKYMILL_CONSUMER_GROUP: gate === 'subscription-groups' ? consumerGroup + '-subscription-b' : consumerGroup,
+      SKYMILL_CONSUMER: consumer,
       SKYMILL_HTTP_TOKEN_FILE: skymillFile,
     });
   }
@@ -393,7 +402,7 @@ async function main() {
     console.log('AGNI_WORKER_LIVE_REDIS=passed instance=isolated acl=separate credentials=ephemeral');
 
     startSkymill();
-    if (gate === 'processor-independent') {
+    if (gate === 'processor-independent' || gate === 'subscription-groups') {
       startSkymillPeer();
       await until('Skymill independent peer HTTP', async () => {
         const response = await fetch('http://127.0.0.1:8082/v1/status', {
@@ -433,13 +442,129 @@ async function main() {
       throw new Error('pinned Probot module closure unavailable category=' + reason);
     }
     checkpoint('pinned-probot-module-closure');
-    startProbot(gate !== 'processor-subscriber' && gate !== 'processor-independent', gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
+    startProbot(gate !== 'processor-subscriber' && gate !== 'processor-independent' && gate !== 'subscription-groups', gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
     checkpoint('bootstrap-complete');
     if (gate === 'bootstrap') {
       assertChildrenHealthy();
       console.log('AGNI_WORKER_LIVE_GATE=passed gate=bootstrap');
+      return;
+    }
+    if (gate === 'subscription-groups') {
+      const { ProbotRuntime } = require(path.join(probotRoot, 'src/runtime'));
+      const { makeProbotApp } = require(path.join(probotRoot, 'src/huram-app'));
+      const groupB = consumerGroup + '-subscription-b';
+      const scopeIdentity = { orgId: 'xd-dash', tenantId: scope, applicationId: 'github-webhooks' };
+      const executionA = new SubscriptionExecutionStore({
+        store, ...scopeIdentity, subscriptionId: 'subscription-a',
+      });
+      const executionB = new SubscriptionExecutionStore({
+        store, ...scopeIdentity, subscriptionId: 'subscription-b',
+      });
+      const counts = { a: new Map(), b: new Map() };
+      const makeRuntime = (state, label, url, group) => new ProbotRuntime({
+        store: state,
+        skymill: new SkymillClient({
+          baseUrl: url, token: skymillToken,
+          consumerGroup: group, stream: 'worker-candidate.webhooks',
+        }),
+        makeApp: makeProbotApp({
+          store, onPush: async context => {
+            const current = counts[label];
+            current.set(context.id, (current.get(context.id) || 0) + 1);
+          },
+        }),
+      });
+      const a = makeRuntime(executionA, 'a', 'http://127.0.0.1:8081', consumerGroup);
+      const b = makeRuntime(executionB, 'b', 'http://127.0.0.1:8082', groupB);
+      const clientB = new SkymillClient({
+        baseUrl: 'http://127.0.0.1:8082', token: skymillToken,
+        consumerGroup: groupB, stream: 'worker-candidate.webhooks',
+      });
+      const groupStatus = async url => {
+        const response = await fetch(url + '/v1/status', {
+          headers: { authorization: 'Bearer ' + skymillToken },
+          signal: AbortSignal.timeout(1000),
+        });
+        assert.equal(response.status, 200);
+        return response.json();
+      };
+      const source = crypto.randomUUID();
+      const accepted = await post(signature, 'subscription-groups-event', source);
+      assert.equal(accepted.status, 202);
+      const pendingB = await clientB.receive({ limit: 1 });
+      assert.equal(pendingB.deliveries?.length, 1);
+      assert.equal(pendingB.deliveries[0].message.metadata.github_delivery_id, source);
+      assert.equal((await groupStatus('http://127.0.0.1:8082')).Pending.Count, 1);
+      await stop('skymill-peer', 'SIGKILL');
+      const successA = await a.drain({ limit: 1 });
+      assert.equal(successA.length, 1);
+      assert.equal(successA[0].execution, 'succeeded');
+      assert.equal(counts.a.get(source), 1);
+      assert.equal(counts.b.get(source) || 0, 0);
+      assert.equal((await executionA.getDelivery(source)).outcomeStatus, 'acked');
+      assert.equal(await executionB.getDelivery(source), null);
+      assert.equal((await groupStatus('http://127.0.0.1:8081')).Pending.Count, 0);
+      console.log('AGNI_PROBOT_SUBSCRIPTION_ISOLATION=passed group_a=acked group_b=failed effect_a=1 effect_b=0');
+
+      startSkymillPeer('processor-b-recovery');
+      await until('subscription B recovery HTTP', async () => {
+        const response = await fetch('http://127.0.0.1:8082/v1/status', {
+          signal: AbortSignal.timeout(1000),
+        });
+        return response.status === 401;
+      });
+      assert.equal((await groupStatus('http://127.0.0.1:8082')).Pending.Count, 1);
+      let reclaimed = false;
+      await until('subscription B PEL recovery', async () => {
+        const result = await b.drain({ limit: 1 }).catch(error => {
+          if (error?.name === 'TimeoutError') return [];
+          throw error;
+        });
+        if (result.some(entry => entry.deliveryId === source && entry.execution === 'succeeded')) {
+          reclaimed = true;
+        }
+        return reclaimed && (await groupStatus('http://127.0.0.1:8082')).Pending.Count === 0;
+      }, 105000);
+      assert.equal(counts.b.get(source), 1);
+      assert.equal(counts.a.get(source), 1);
+      assert.equal((await executionB.getDelivery(source)).outcomeStatus, 'acked');
+      assert.equal((await executionA.getDelivery(source)).outcomeStatus, 'acked');
+      console.log('AGNI_PROBOT_SUBSCRIPTION_RECOVERY=passed group_b=reclaimed group_a=unchanged effects=one-per-group');
+
+      // A second stream record with the same delivery GUID must not reexecute
+      // either subscription. Each Redis Streams group must still settle it.
+      const replay = new SkymillClient({
+        baseUrl: 'http://127.0.0.1:8081', token: skymillToken,
+        consumerGroup, stream: 'worker-candidate.webhooks',
+      });
+      const published = await replay.publish({
+        idempotencyKey: crypto.randomUUID(), messageId: crypto.randomUUID(),
+        metadata: {
+          github_delivery_id: source, github_app_id: String(appId),
+          github_event: 'push',
+        },
+        payload: {
+          ref: 'refs/heads/fixture', installation: { id: installationId },
+          repository: { full_name: 'xd-dash/worker-qualification' },
+        },
+      });
+      assert.equal(published.duplicate, false);
+      const repeatA = await a.drain({ limit: 1 });
+      const repeatB = await b.drain({ limit: 1 });
+      assert.equal(repeatA.length, 1);
+      assert.equal(repeatB.length, 1);
+      assert.equal(repeatA[0].execution, 'already_succeeded');
+      assert.equal(repeatB[0].execution, 'already_succeeded');
+      assert.equal(counts.a.get(source), 1);
+      assert.equal(counts.b.get(source), 1);
+      assert.equal((await groupStatus('http://127.0.0.1:8081')).Pending.Count, 0);
+      assert.equal((await groupStatus('http://127.0.0.1:8082')).Pending.Count, 0);
+      assertChildrenHealthy();
+      console.log('AGNI_PROBOT_SUBSCRIPTION_REPLAY=passed group_a=deduplicated group_b=deduplicated effects=unchanged');
+      console.log('AGNI_PROBOT_SUBSCRIPTION_GROUPS_LIVE=passed groups=2 execution_scopes=2 settlement=independent');
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=subscription-groups');
       return;
     }
     if (gate === 'processor-independent') {
