@@ -284,15 +284,18 @@ async function main() {
     await until('Skymill recovery', status);
     const accepted = await post(signature, 'accepted');
     assert.equal(accepted.status, 202);
-    const duplicate = await post(signature, 'duplicate');
-    assert.equal(duplicate.status, 200);
-    console.log('AGNI_WORKER_LIVE_INGRESS=passed invalid=denied dependency_failure=denied signed=accepted duplicate=deduplicated');
-
+    // Complete the first execution before duplicate ingress. Cold Probot handler
+    // initialization through the guest's 9P-backed Nix store may block the
+    // Node.js event loop; immediate replay would conflate startup with dedupe.
+    console.log('AGNI_WORKER_LIVE_FIRST_DELIVERY=accepted awaiting=execution-and-ack');
     await until('worker execution and ACK', async () => {
       const delivery = await store.getDelivery(guid);
       return delivery && delivery.executionStatus === 'succeeded' &&
         delivery.outcomeStatus === 'acked' ? true : false;
-    }, 30000);
+    }, 90000);
+    const duplicate = await post(signature, 'duplicate');
+    assert.equal(duplicate.status, 200);
+    console.log('AGNI_WORKER_LIVE_INGRESS=passed invalid=denied dependency_failure=denied signed=accepted duplicate_after_ack=deduplicated');
     assertChildrenHealthy();
     const delivery = await store.getDelivery(guid);
     assert.equal(delivery.executionStatus, 'succeeded');

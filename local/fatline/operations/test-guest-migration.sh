@@ -139,3 +139,7 @@ grep -Fq 'startProbot(true)' "$here/startup-profile/probot-worker-live.js"
 # The ingress outer deadline exceeds Probot's pinned Skymill client deadline.
 grep -Fq 'AbortSignal.timeout(22000)' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_WORKER_LIVE_INGRESS_PHASE=begin' "$here/startup-profile/probot-worker-live.js"
+
+# A cold handler must finish its first durable execution before duplicate ingress.
+grep -Fq 'AGNI_WORKER_LIVE_FIRST_DELIVERY=accepted' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'duplicate_after_ack=deduplicated' "$here/startup-profile/probot-worker-live.js"
