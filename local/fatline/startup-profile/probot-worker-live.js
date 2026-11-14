@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full'] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -222,7 +222,7 @@ async function main() {
     if (!response.ok) throw new Error('Skymill HTTP not ready');
     return response.json();
   }
-  async function post(signature, phase) {
+  async function post(signature, phase, deliveryGuid = guid) {
     const body = Buffer.from(JSON.stringify({
       ref: 'refs/heads/fixture', installation: { id: installationId },
       repository: { full_name: 'xd-dash/worker-qualification' },
@@ -234,7 +234,7 @@ async function main() {
       method: 'POST', body, signal: AbortSignal.timeout(22000),
       headers: {
         'content-type': 'application/json', 'x-github-event': 'push',
-        'x-github-delivery': guid, 'x-hub-signature-256': signature,
+        'x-github-delivery': deliveryGuid, 'x-hub-signature-256': signature,
       },
     });
     const result = { status: response.status, body: await response.text() };
@@ -247,12 +247,41 @@ async function main() {
   }));
   const signature = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
 
-  try {
-    const redis = launch('redis', redisBin, [
+  function startRedis() {
+    return launch('redis', redisBin, [
       '--bind', '127.0.0.1', '--port', '6379', '--protected-mode', 'yes',
       '--save', '', '--appendonly', 'no', '--databases', '1', '--maxmemory', '40mb',
       '--maxmemory-policy', 'noeviction', '--aclfile', aclFile,
     ], {});
+  }
+  async function seedApplicationState(initialStore) {
+    const binding = normalizeBinding({
+      org_id: 'xd-dash', tenant_id: scope, auth_profile: 'minimal-v1',
+      auth_policy_digest: 'sha256:' + 'a'.repeat(64), revision: 1,
+    });
+    const digest = bindingDigest(binding);
+    const artifactKey = bindingArtifactKey(binding);
+    await initialStore.client.set(artifactKey, JSON.stringify(binding), { NX: true });
+    await initialStore.importCreated({
+      routingKey, targetOrg: 'xd-dash',
+      created: {
+        appId, slug: 'agni-worker-live', clientId: 'fixture-client',
+        clientSecret: 'fixture-only', privateKey, webhookSecret: secret,
+        permissions: {}, events: ['push'], owner: { login: 'xd-dash' },
+      },
+      bindingDigest: digest, bindingArtifactKey: artifactKey, binding,
+    });
+    await initialStore.putInstallation(appId, {
+      id: installationId, account: { id: 900000079, login: 'xd-dash' },
+      permissions: {}, events: ['push'], target_type: 'Organization',
+    });
+    await initialStore.activateBinding(routingKey, {
+      appId, installationId, bindingDigest: digest, qualificationDigest: 'b'.repeat(64),
+    });
+  }
+
+  try {
+    let redis = startRedis();
     await until('isolated Redis', async () => {
       assert.equal(redis.exitCode, null);
       const store = redisStore();
@@ -262,29 +291,7 @@ async function main() {
     const store = redisStore();
     activeStore = store;
     await store.connect();
-    const binding = normalizeBinding({
-      org_id: 'xd-dash', tenant_id: scope, auth_profile: 'minimal-v1',
-      auth_policy_digest: 'sha256:' + 'a'.repeat(64), revision: 1,
-    });
-    const digest = bindingDigest(binding);
-    const artifactKey = bindingArtifactKey(binding);
-    await store.client.set(artifactKey, JSON.stringify(binding), { NX: true });
-    await store.importCreated({
-      routingKey, targetOrg: 'xd-dash',
-      created: {
-        appId, slug: 'agni-worker-live', clientId: 'fixture-client',
-        clientSecret: 'fixture-only', privateKey, webhookSecret: secret,
-        permissions: {}, events: ['push'], owner: { login: 'xd-dash' },
-      },
-      bindingDigest: digest, bindingArtifactKey: artifactKey, binding,
-    });
-    await store.putInstallation(appId, {
-      id: installationId, account: { id: 900000079, login: 'xd-dash' },
-      permissions: {}, events: ['push'], target_type: 'Organization',
-    });
-    await store.activateBinding(routingKey, {
-      appId, installationId, bindingDigest: digest, qualificationDigest: 'b'.repeat(64),
-    });
+    await seedApplicationState(store);
     console.log('AGNI_WORKER_LIVE_REDIS=passed instance=isolated acl=separate credentials=ephemeral');
 
     startSkymill();
@@ -364,6 +371,68 @@ async function main() {
     if (gate === 'delivery') {
       assertChildrenHealthy();
       console.log('AGNI_WORKER_LIVE_GATE=passed gate=delivery');
+      return;
+    }
+
+
+    if (gate === 'memory') {
+      // Redis is an explicitly ephemeral delivery broker for this tier.
+      await stop('redis', 'SIGKILL');
+      let rejected = false;
+      try {
+        const unavailableRedis = await post(signature, 'redis-unavailable');
+        rejected = unavailableRedis.status >= 500;
+      } catch (error) {
+        // An interrupted ingress connection is failure, never acceptance.
+        rejected = true;
+        console.log('AGNI_WORKER_MEMORY_INGRESS=observed outcome=connection-failed');
+      }
+      assert.ok(rejected, 'Redis outage must not acknowledge a new delivery');
+      console.log('AGNI_WORKER_MEMORY_OUTAGE=passed admission=fail-closed');
+
+      // Stop reconnecting clients before starting a new Redis generation.
+      await stop('probot', 'SIGKILL');
+      await stop('skymill', 'SIGKILL');
+      store.client.destroy();
+      activeStore = undefined;
+
+      redis = startRedis();
+      await until('memory Redis restart', async () => {
+        assert.equal(redis.exitCode, null);
+        const probe = redisStore();
+        try { await probe.connect(); return true; }
+        finally { await probe.close().catch(() => {}); }
+      });
+      const recoveredStore = redisStore();
+      activeStore = recoveredStore;
+      await recoveredStore.connect();
+      assert.equal(await recoveredStore.getDelivery(guid), null,
+        'ephemeral Redis restart must not claim old completed delivery state');
+      console.log('AGNI_WORKER_MEMORY_REDIS=passed persistence=disabled previous_state=lost');
+
+      // Runtime configuration is domain state; re-create it as a fresh
+      // external bootstrap would, rather than pretending Redis retained it.
+      await seedApplicationState(recoveredStore);
+      startSkymill();
+      await until('Skymill memory recovery', status);
+      startProbot(true);
+      await waitProbot('Probot memory recovery');
+
+      const freshGuid = crypto.randomUUID();
+      const fresh = await post(signature, 'fresh-after-redis-restart', freshGuid);
+      assert.equal(fresh.status, 202);
+      await until('fresh execution and ACK', async () => {
+        const observed = await recoveredStore.getDelivery(freshGuid);
+        return observed && observed.executionStatus === 'succeeded' &&
+          observed.outcomeStatus === 'acked';
+      }, 90000);
+      assert.equal((await status()).Pending.Count, 0);
+      assertChildrenHealthy();
+      console.log('AGNI_WORKER_MEMORY_RECOVERY=passed fresh_delivery=acked old_state=not_assumed');
+      recoveredStore.client.destroy();
+      activeStore = undefined;
+      console.log('AGNI_WORKER_LIVE_CANDIDATE=passed backing=real isolated=true promotion=blocked github=offline');
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=memory');
       return;
     }
 
