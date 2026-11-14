@@ -6,7 +6,7 @@ from pathlib import Path
 
 SCOPE = "fatline-arm-vm1"
 REVISION = "1788ee94235b83f2b6229b95acbc98469f3eaf85"
-GUARD = "ConditionPathExists=/run/agni/unqualified-subscription-activation"
+GUARD = "/run/agni/unqualified-subscription-activation"
 EXPECTED = {
     "schema": 1,
     "scope": SCOPE,
@@ -58,7 +58,7 @@ def verify(directory):
             if "[Install]" in content or "[Container]" not in content or "[Service]" not in content:
                 raise ValueError(f"unsafe or incomplete Quadlet: {path.name}")
             values = fields(path)
-            if one(values, "ConditionPathExists") != "/run/agni/unqualified-subscription-activation":
+            if one(values, "ConditionPathExists") != GUARD:
                 raise ValueError("missing inert guard")
             for key, expected in (
                 ("ReadOnly", "true"), ("NoNewPrivileges", "true"),
