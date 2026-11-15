@@ -264,7 +264,7 @@ grep -Fq '  qualify-declarative-generator)' "$here/startup-profile/probot-guest-
 grep -Fq 'QUADLET_UNIT_DIRS="$candidate_dir" "$generator" --user --dryrun' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'AGNI_DECLARATIVE_GENERATOR=passed units=4' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq '"checkout": "probot-runtime20261116"' "$here/qualification/probot-factory-ghxd-sources.json"
-grep -Fq 'probotFactoryRevision = "8730909990628e1dce135af51a2c197f6bad5713";' "$here/flake.nix"
+grep -Fq 'probotFactoryRevision = "1fd8aae4e8d9a9d3596b47b915c3c02644d284ec";' "$here/flake.nix"
 grep -Fq "TARGET='#subscription-factory-contract'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_PROBOT_FACTORY_CONTRACT=passed source=$rev' "$here/flake.nix"
 grep -Fq 'subscription-factory-runtime.test.js' "$here/flake.nix"
