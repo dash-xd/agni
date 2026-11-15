@@ -607,7 +607,7 @@
                 printf '%s\n' "$rev" > "$candidate/probot-factory20261116/.source-revision"
                 artifact="$(nix-store --add "$candidate/probot-factory20261116")"
                 [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-factory20261116$ ]] || exit 1
-                store_root="$root/${artifact##*/}"
+                store_root="$root/$(basename "$artifact")"
                 if [[ ! -e "$store_root" ]]; then
                   nix-store --realise --add-root "$store_root" "$artifact" >/dev/null
                 else
