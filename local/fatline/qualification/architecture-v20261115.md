@@ -101,3 +101,26 @@ static contract check passes. Required live evidence:
 Run `make -C local/fatline check-architecture` for the static policy check,
 then `make -C local/fatline qualification QUALIFICATION=factory-live ...`
 for the next **real** Fatline runtime gate. They are distinct.
+
+## Native Smoke GHXD migration candidate
+
+`qualification QUALIFICATION=source-sync-native` is now an opt-in test that
+uses generic nix.xd `stage` and `run` to invoke
+`smoke20261115#ghxd-native` from inside Nix-Alpine. It validates the
+source manifest already staged at
+`/workspaces/<agni>/local/fatline/qualification/probot-factory-ghxd-sources.json`,
+then requires the native Smoke source-sync and workspace-generation markers.
+It is **not** a new nix.xd application-specific operation.
+
+The selected Nix-Alpine owner must have the explicit native GHXD grants from
+`nix.xd/examples/ghxd-native-grants.json` attached at its original Podman
+bootstrap. This exposes writable GHXD credentials to the trusted Nix-Alpine
+owner rather than a dedicated sibling container. To opt in, set
+`GHXD_NATIVE_GRANTS_ACK=TRUST-NIX-ALPINE-OWNER`. The acknowledgment denotes
+acceptance of that security boundary; it does not provision mounts or bypass
+permission checks. The old host operator remains a recognized exception
+until the new native gate passes on a disposable owner.
+
+This migration is separable from the last known `factory-live` candidate,
+which is still unqualified. First qualify native mounts/source synchronization,
+then the current real Redis/Skymill/Probot gate, then process supervision.
