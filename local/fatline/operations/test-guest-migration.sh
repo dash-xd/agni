@@ -274,6 +274,21 @@ grep -Fq 'subscription-factory-runtime.test.js' "$here/flake.nix"
 echo 'AGNI_PROBOT_FACTORY_STATIC=passed source=pinned ingress=shared activation=blocked'
 grep -Fq "TARGET='#subscription-factory-source-artifact'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_PROBOT_FACTORY_ARTIFACT_QUALIFIED=passed revision=$rev rooted=true' "$here/flake.nix"
+# A pinned revision is a plain SHA plus one newline, not a literal backslash-n.
+# Guard the generated app's exact printf format and content-specific GC root.
+python3 - "$here/flake.nix" <<'PY'
+from pathlib import Path
+import sys
+s = Path(sys.argv[1]).read_text()
+block = s.split("          subscription-factory-source-artifact = {", 1)[1].split(
+    "          subscription-groups-source-artifact = {", 1
+)[0]
+line = next(line for line in block.splitlines() if '.source-revision"' in line and "printf " in line)
+assert line.count(chr(92)) == 1, "factory revision printf must have one backslash"
+assert "printf '%s" + chr(92) + "n'" in line
+assert 'store_root="$root/${artifact##*/}"' in block
+PY
+
 grep -Fq 'AGNI_PROBOT_FACTORY_LIVE=passed groups=2 execution=normal-factory backing=real-redis-skymill' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_PROBOT_FACTORY_RECOVERY=passed group_b=reclaimed factory=recreated effects=one-per-group' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'createGitHubAppRuntime({' "$here/startup-profile/probot-worker-live.js"
