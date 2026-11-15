@@ -9,6 +9,7 @@ PROVIDER ?= podman
 OWNER_SCOPE ?= nix-xd-arm
 MACHINE ?= coreos-arm64
 QUALIFICATION ?=
+SMOKE_CHECKOUT ?= smoke20261115
 
 # Keep all nix.xd operation logs in one user-owned location.
 # The generic nix.xd log wrapper supplies action, machine and timestamp fields.
@@ -19,6 +20,7 @@ export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export NIX_XD_LOG_DIR NIX_XD_LOG_COMPOSITION
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
+.PHONY: architecture-qualify
 .PHONY: check-architecture qualification qualification-check
 check-architecture:
 	@python3 qualification/check-architecture.py
@@ -35,9 +37,27 @@ qualification:
 
 qualification-check: check-architecture check-deployment
 
+# Cross-repository admission check. Host Git staging is explicitly transitional;
+# the only Linux action uses the generic Nix-Alpine flake runner.
+architecture-qualify: qualification-check
+	@test -n "$(NIX_XD_DIR)" -a -f "$(NIX_XD_DIR)/Makefile" || { echo 'NIX_XD_DIR required' >&2; exit 2; }
+	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" architecture-check
+	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" architecture-audit \
+	  AGNI_DIR="$(abspath $(CURDIR)/../..)" \
+	  SMOKE_DIR="$(abspath $(NIX_XD_DIR)/../$(SMOKE_CHECKOUT))"
+	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" stage \
+	  MACHINE="$(MACHINE)" PROVIDER="$(PROVIDER)" SCOPE="$(OWNER_SCOPE)" \
+	  CHECKOUT="$(SMOKE_CHECKOUT)"
+	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" run \
+	  MACHINE="$(MACHINE)" PROVIDER="$(PROVIDER)" SCOPE="$(OWNER_SCOPE)" \
+	  FLAKE="$(SMOKE_CHECKOUT)" TARGET='#architecture-check'
+	@echo 'AGNI_ARCHITECTURE_QUALIFICATION=passed contracts=static native_runner=nix-alpine ghxd_host=migration-pending'
+
+
 help:
 	@printf '%s\n' \
-	  'make qualification-check                            Architecture and static gate checks' \
+	  'make qualification-check                            Architecture and static gate checks' \\
+	  'make architecture-qualify NIX_XD_DIR=...             Cross-repo static audit and Smoke Nix-Alpine check' \
 	  'make qualification QUALIFICATION=factory-live DEPLOYMENT=vm1  Execute selected live gate' \
 	  'make check-architecture                             Audit Agni owner and source-pinning contracts'
 	@$(MAKE) --no-print-directory legacy-help
