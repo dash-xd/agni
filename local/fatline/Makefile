@@ -70,7 +70,7 @@ architecture-qualify: qualification-check
 
 help:
 	@printf '%s\n' \
-	  'make qualification-check                            Architecture and static gate checks' \\
+	  'make qualification-check                            Architecture and static gate checks' \
 	  'make architecture-qualify NIX_XD_DIR=...             Cross-repo static audit and Smoke Nix-Alpine check' \
 	  'make qualification QUALIFICATION=source-sync-native GHXD_NATIVE_GRANTS_ACK=TRUST-NIX-ALPINE-OWNER' \
 	  'make qualification QUALIFICATION=factory-live DEPLOYMENT=vm1  Execute selected live gate' \
