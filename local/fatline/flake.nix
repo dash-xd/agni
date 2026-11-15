@@ -604,13 +604,14 @@
                 trap 'rm -rf -- "$candidate"' EXIT
                 mkdir -p "$candidate/probot-factory20261116"
                 cp -R "$source/src" "$candidate/probot-factory20261116/"
-                printf '%s\\n' "$rev" > "$candidate/probot-factory20261116/.source-revision"
+                printf '%s\n' "$rev" > "$candidate/probot-factory20261116/.source-revision"
                 artifact="$(nix-store --add "$candidate/probot-factory20261116")"
                 [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-factory20261116$ ]] || exit 1
-                if [[ ! -e "$root/source" ]]; then
-                  nix-store --realise --add-root "$root/source" "$artifact" >/dev/null
+                store_root="$root/${artifact##*/}"
+                if [[ ! -e "$store_root" ]]; then
+                  nix-store --realise --add-root "$store_root" "$artifact" >/dev/null
                 else
-                  test "$(readlink -f "$root/source")" = "$artifact"
+                  test "$(readlink -f "$store_root")" = "$artifact"
                 fi
                 echo "AGNI_PROBOT_FACTORY_ARTIFACT=$artifact"
                 echo "AGNI_PROBOT_FACTORY_ARTIFACT_QUALIFIED=passed revision=$rev rooted=true"
