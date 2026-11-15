@@ -8,6 +8,7 @@ DEPLOYMENT ?= vm1
 PROVIDER ?= podman
 OWNER_SCOPE ?= nix-xd-arm
 MACHINE ?= coreos-arm64
+QUALIFICATION ?=
 
 # Keep all nix.xd operation logs in one user-owned location.
 # The generic nix.xd log wrapper supplies action, machine and timestamp fields.
@@ -19,6 +20,22 @@ export NIX_XD_LOG_DIR NIX_XD_LOG_COMPOSITION
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
 .PHONY: help deployment-assess deployment-verify deployment-review deployment-migrate-stage deployment-migrate-verify deployment-migrate-activation-plan deployment-migrate-activation-check deployment-migrate-recovery-qualify deployment-migrate-activate deployment-migrate-activate-sandbox deployment-recover-sandbox-http deployment-qualify-runtime deployment-qualify-integration deployment-qualify-worker-candidate deployment-qualify-worker-live deployment-qualify-worker-bootstrap deployment-qualify-worker-delivery deployment-qualify-worker-recovery deployment-qualify-worker-memory deployment-qualify-worker-fence deployment-qualify-worker-effect deployment-qualify-worker-reconcile deployment-refresh-reconcile-auth deployment-seed-reconcile-source deployment-qualify-reconcile-service-contract deployment-qualify-reconcile-live deployment-seed-processor-source deployment-qualify-processor-contract deployment-qualify-processor-live deployment-qualify-independent-consumers deployment-seed-subscription-source deployment-qualify-subscription-contract deployment-qualify-subscription-groups deployment-qualify-declarative-processors deployment-qualify-declarative-generator deployment-seed-factory-source deployment-qualify-factory-contract deployment-qualify-factory-live deployment-diagnose-runtime-network check-deployment
+
+.PHONY: check-architecture qualification qualification-check
+check-architecture:
+	@python3 qualification/check-architecture.py
+
+# One operator-facing selection entry. Legacy deployment-* targets remain
+# transitional wrappers until their host-action callers have been migrated.
+qualification:
+	@case "$(QUALIFICATION)" in \
+	  factory-live) $(MAKE) --no-print-directory deployment-qualify-factory-live ;; \
+	  factory-contract) $(MAKE) --no-print-directory deployment-qualify-factory-contract ;; \
+	  declarative-generator) $(MAKE) --no-print-directory deployment-qualify-declarative-generator ;; \
+	  *) echo 'QUALIFICATION=factory-live|factory-contract|declarative-generator required' >&2; exit 2 ;; \
+	esac
+
+qualification-check: check-architecture check-deployment
 
 help:
 	@printf '%s\n' \
@@ -61,7 +78,9 @@ help:
 	  'make deployment-qualify-factory-live DEPLOYMENT=vm1  Isolated real Redis/Skymill factory execution and group reclaim' \
 	  'make deployment-qualify-worker-live DEPLOYMENT=vm1       Complete gated live candidate; no activation' \
 	  'make deployment-diagnose-runtime-network DEPLOYMENT=vm1  Read-only Logma/Skymill/Probot network diagnosis' \
-	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety'
+	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety' \\
+	  'make qualification-check                    Architecture + static qualification checks' \\
+	  'make qualification QUALIFICATION=factory-live DEPLOYMENT=vm1  Pinned isolated factory live gate'
 
 deployment-assess:
 	@bash operations/guest-migration.sh assess
