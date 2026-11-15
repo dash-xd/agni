@@ -183,7 +183,7 @@ if [[ "$operation" == seed-factory-source ]]; then
       MACHINE="$machine" PROVIDER="$provider" SCOPE="$owner_scope" \
       PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync
   grep -Fxq 'GHXD_WORKSPACE_SYNC=passed' "$log_dir/factory-source-seed.log" || fail factory-ghxd-sync-not-qualified
-  grep -Fq 'checkout=probot-runtime20261116 sha=8730909990628e1dce135af51a2c197f6bad5713' \
+  grep -Fq 'checkout=probot-runtime20261116 sha=1fd8aae4e8d9a9d3596b47b915c3c02644d284ec' \
     "$log_dir/factory-source-seed.log" || fail factory-source-identity-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=seed-factory-source source=smoke-ghxd production=unchanged'
   exit 0
@@ -191,7 +191,7 @@ fi
 
 if [[ "$operation" == qualify-factory-contract ]]; then
   run_step "$log_dir/factory-contract.log" xd_make run FLAKE="$flake" TARGET='#subscription-factory-contract'
-  grep -Fxq 'AGNI_PROBOT_FACTORY_CONTRACT=passed source=8730909990628e1dce135af51a2c197f6bad5713 subscription=isolated ingress=shared production=unchanged' \
+  grep -Fxq 'AGNI_PROBOT_FACTORY_CONTRACT=passed source=1fd8aae4e8d9a9d3596b47b915c3c02644d284ec subscription=isolated ingress=shared production=unchanged' \
     "$log_dir/factory-contract.log" || fail factory-contract-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-factory-contract source=pinned production=unchanged'
   exit 0
