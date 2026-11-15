@@ -59,7 +59,7 @@ PY
 }
 run_step() {
   local output="$1";shift
-  "$@" | tee "$output"
+  "$@" 2>&1 | tee "$output"
 }
 
 [[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract || "$operation" == qualify-processor-live || "$operation" == qualify-independent-consumers || "$operation" == seed-subscription-source || "$operation" == qualify-subscription-contract || "$operation" == qualify-subscription-groups || "$operation" == qualify-declarative-processors || "$operation" == qualify-declarative-generator || "$operation" == seed-factory-source || "$operation" == qualify-factory-contract || "$operation" == qualify-factory-live ]] || fail unsupported-operation
