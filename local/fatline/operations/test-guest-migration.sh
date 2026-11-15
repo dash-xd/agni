@@ -23,7 +23,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   exit 1
 fi
 output="$(make --no-print-directory -C "$here" help)"
-for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers seed-subscription-source qualify-subscription-contract qualify-subscription-groups qualify-declarative-processors qualify-declarative-generator refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
+for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers seed-subscription-source qualify-subscription-contract qualify-subscription-groups qualify-declarative-processors qualify-declarative-generator qualify-factory-live seed-factory-source qualify-factory-contract refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
 done
@@ -269,6 +269,14 @@ grep -Fq "TARGET='#subscription-factory-contract'" "$here/operations/guest-migra
 grep -Fq 'AGNI_PROBOT_FACTORY_CONTRACT=passed source=$rev' "$here/flake.nix"
 grep -Fq 'subscription-factory-runtime.test.js' "$here/flake.nix"
 echo 'AGNI_PROBOT_FACTORY_STATIC=passed source=pinned ingress=shared activation=blocked'
+grep -Fq "TARGET='#subscription-factory-source-artifact'" "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_PROBOT_FACTORY_ARTIFACT_QUALIFIED=passed revision=$rev rooted=true' "$here/flake.nix"
+grep -Fq 'AGNI_PROBOT_FACTORY_LIVE=passed groups=2 execution=normal-factory backing=real-redis-skymill' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_PROBOT_FACTORY_RECOVERY=passed group_b=reclaimed factory=recreated effects=one-per-group' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'createGitHubAppRuntime({' "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'resourceB.store.client.destroy();' "$here/startup-profile/probot-worker-live.js"
+grep -Fq '"$worker_gate" == factory-live' "$here/startup-profile/probot-guest-app.sh"
+echo 'AGNI_PROBOT_FACTORY_LIVE_STATIC=passed source=pinned isolation=guest baseline=preserved'
 echo 'AGNI_DECLARATIVE_GENERATOR_STATIC=passed guest=coreos systemd=dryrun baseline=unchanged'
 
 
