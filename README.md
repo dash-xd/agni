@@ -22,3 +22,10 @@ GHXD host adapter as **migration pending**. The Fatline factory-live gate
 is an isolated runtime test, not permission to activate production services.
 Do not conflate either with full native GHXD, process-restart, or systemd
 lifecycle qualification.
+
+For the optional Nix-Alpine-only GHXD candidate, first provision and qualify
+`nix.xd/examples/ghxd-native-grants.json` during disposable owner bootstrap.
+Then select `QUALIFICATION=source-sync-native` with
+`GHXD_NATIVE_GRANTS_ACK=TRUST-NIX-ALPINE-OWNER`. This broadens the trusted
+owner's access to the GHXD secret volume; keep the old GHXD host dispatcher
+until the live source-sync and credential tests pass.
