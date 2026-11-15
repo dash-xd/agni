@@ -242,8 +242,11 @@ grep -Fq 'recoveryAttempt >= 2' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_PROBOT_SUBSCRIPTION_REPLAY=passed' "$here/startup-profile/probot-worker-live.js"
 grep -Fq '"$worker_gate" == subscription-groups' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq "groupB = consumerGroup + '-subscription-b'" "$here/startup-profile/probot-worker-live.js"
-grep -Fq 'subscriptionId: consumerGroup' "$here/startup-profile/probot-worker-live.js"
-grep -Fq 'subscriptionId: groupB' "$here/startup-profile/probot-worker-live.js"
+# Both logical groups must select their own runtime identities. Do not
+# require the earlier duplicated constructor implementation.
+grep -Fq "makeRuntime('a', 'http://127.0.0.1:8081', consumerGroup" "$here/startup-profile/probot-worker-live.js"
+grep -Fq "makeRuntime('b', 'http://127.0.0.1:8082', groupB" "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'subscriptionId: group,' "$here/startup-profile/probot-worker-live.js"
 
 grep -Fq "TARGET='#declarative-processors-contract'" "$here/operations/guest-migration.sh"
 grep -Fq 'AGNI_DECLARATIVE_PROCESSORS_CONTRACT=passed' "$here/flake.nix"
