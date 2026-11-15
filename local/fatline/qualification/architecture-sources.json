@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "sources": {
+    "nix-xd": {
+      "repository": "xd-dash/nix.xd",
+      "branch": "v20261115",
+      "revision": "87dca85e942dc486a174635b21a90e70e8290068",
+      "checkout": "nix.xd20261115"
+    },
+    "smoke": {
+      "repository": "xd-dash/smoke",
+      "branch": "v20261115",
+      "revision": "6fa1202b0d5548d15bb7b937951477e43c7542ec",
+      "checkout": "smoke20261115"
+    }
+  }
+}
