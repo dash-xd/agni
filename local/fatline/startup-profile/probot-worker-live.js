@@ -454,7 +454,8 @@ async function main() {
     checkpoint('pinned-probot-module-closure');
     startProbot(gate !== 'processor-subscriber' && gate !== 'processor-independent' && gate !== 'subscription-groups' && gate !== 'factory-live', gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
     await waitProbot('worker-enabled Probot HTTP');
-    console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
+    console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=' +
+      (gate === 'factory-live' ? 'factory-candidate' : 'enabled'));
     checkpoint('bootstrap-complete');
     if (gate === 'bootstrap') {
       assertChildrenHealthy();
@@ -567,15 +568,18 @@ async function main() {
       console.log('AGNI_PROBOT_SUBSCRIPTION_ISOLATION=passed group_a=acked group_b=failed effect_a=1 effect_b=0');
 
       if (gate === 'factory-live') {
+        const originalBPrefix = executionB.deliveryStore.prefix;
+        const originalAClient = resourceA.store.client;
         resourceB.store.client.destroy();
         resourceB = await makeRuntime('b', 'http://127.0.0.1:8082', groupB, skymillPeerToken);
         executionB = resourceB.executionStore;
         b = resourceB.runtime;
         trackRecovery(b);
-        assert.equal(executionB.deliveryStore.prefix,
-          resourceA.executionStore.deliveryStore.prefix.replace(
-            resourceA.executionStore.namespace, executionB.namespace));
+        assert.equal(executionB.deliveryStore.prefix, originalBPrefix,
+          'recreated factory must retain subscription B execution namespace');
         assert.notEqual(executionA.deliveryStore.prefix, executionB.deliveryStore.prefix);
+        assert.equal(resourceA.store.client, originalAClient,
+          'subscription A connection must remain intact');
         console.log('AGNI_PROBOT_FACTORY_RESTART=passed scope=b recreated=true scope_a=unchanged');
       }
       startSkymillPeer('processor-b-recovery');
