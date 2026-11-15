@@ -22,6 +22,15 @@ scope="${OWNER_SCOPE:-nix-xd-arm}"
 nix_make() {
   make --no-print-directory -C "$nix_xd" "$@" MACHINE="$machine" PROVIDER="$provider" SCOPE="$scope"
 }
+# Validate the actual running owner before exposing GHXD credentials to it.
+grants="$nix_xd/examples/ghxd-native-grants.json"
+[[ -r "$grants" ]] || {
+  echo 'AGNI_NATIVE_SOURCE_SYNC=blocked reason=grant-manifest-missing' >&2
+  exit 1
+}
+nix_make grants-plan GRANTS_FILE="$grants"
+nix_make grants-verify GRANTS_FILE="$grants"
+echo 'AGNI_NATIVE_GRANTS=passed scope=trusted-nix-alpine access=verified'
 nix_make stage CHECKOUT="$checkout"
 nix_make stage CHECKOUT="$smoke"
 manifest="/workspaces/$checkout/local/fatline/qualification/probot-factory-ghxd-sources.json"
