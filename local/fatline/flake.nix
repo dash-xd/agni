@@ -17,7 +17,7 @@
       probotProcessorCheckout = "/workspaces/probot-runtime20261114";
       probotSubscriptionRevision = "1788ee94235b83f2b6229b95acbc98469f3eaf85";
       probotSubscriptionCheckout = "/workspaces/probot-runtime20261115";
-      probotFactoryRevision = "33b604edbbbce474715af916c2508acc2b8343bf";
+      probotFactoryRevision = "bd77a65d19605e75a9ee0cb9b2b4670af46a5cec";
       probotFactoryCheckout = "/workspaces/probot-runtime20261116";
       # Smoke ghxd seeds the exact private-source commit into Nix-Alpine.
       # The Nix app validates it at execution time; no private fetch during evaluation.
@@ -565,7 +565,7 @@
               ${pkgs.nodejs_22}/bin/node --check "$src/src/factory.js"
               ${pkgs.nodejs_22}/bin/node --check "$src/src/services.js"
               ${pkgs.nodejs_22}/bin/node --check "$src/src/subscription-execution.js"
-              ${pkgs.nodejs_22}/bin/node --test "$src/test/subscription-execution.test.js" "$src/test/subscription-factory.test.js"
+              ${pkgs.nodejs_22}/bin/node --test "$src/test/subscription-execution.test.js" "$src/test/subscription-factory.test.js" "$src/test/subscription-factory-runtime.test.js"
               echo "AGNI_PROBOT_FACTORY_CONTRACT=passed source=$rev subscription=isolated ingress=shared production=unchanged"
             ''}";
           };
