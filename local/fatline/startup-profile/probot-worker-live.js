@@ -11,7 +11,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 async function main() {
   const [redisBin, skymillBin, nodeBin, probotRoot, gate = 'full', reconcileSource = ''] = process.argv.slice(2);
-  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'processor-subscriber', 'processor-independent', 'subscription-groups', 'full'].includes(gate), 'unsupported qualification gate');
+  assert.ok(['bootstrap', 'delivery', 'recovery', 'memory', 'fence', 'effect', 'reconcile', 'reconcile-service', 'processor-subscriber', 'processor-independent', 'subscription-groups', 'factory-live', 'full'].includes(gate), 'unsupported qualification gate');
   assert.match(redisBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/redis-server$/);
   assert.match(skymillBin || '', /^\/nix\/store\/[a-z0-9]{32}-skymill-http$/);
   assert.match(nodeBin || '', /^\/nix\/store\/[a-z0-9]{32}-[^/]+\/bin\/node$/);
@@ -22,6 +22,8 @@ async function main() {
   let runDeliveryProcessor;
   let LogmaSubscriber;
   let SubscriptionExecutionStore;
+  let createGitHubAppRuntime;
+  const factoryResources = [];
   if (gate === 'reconcile-service') {
     assert.match(reconcileSource, /^\/nix\/store\/[a-z0-9]{32}-probot-runtime20261114$/);
     // The Nix store is read-only in this candidate. Resolve the new Probot
@@ -41,12 +43,17 @@ async function main() {
     ({ LogmaSubscriber } = require(path.join(processorRoot, 'src/logma-subscriber')));
     ({ SkymillClient } = require(path.join(processorRoot, 'src/skymill')));
     console.log('AGNI_PROBOT_PROCESSOR_SOURCE=passed origin=nix-store source=pinned');
-  } else if (gate === 'subscription-groups') {
-    assert.match(reconcileSource, /^\/nix\/store\/[a-z0-9]{32}-probot-subscription20261114$/);
+  } else if (gate === 'subscription-groups' || gate === 'factory-live') {
+    assert.match(reconcileSource, gate === 'factory-live'
+      ? /^\/nix\/store\/[a-z0-9]{32}-probot-factory20261116$/
+      : /^\/nix\/store\/[a-z0-9]{32}-probot-subscription20261114$/);
     process.env.NODE_PATH = path.join(probotRoot, 'node_modules');
     require('node:module').Module._initPaths();
     ({ SubscriptionExecutionStore } = require(path.join(reconcileSource, 'src/subscription-execution')));
     ({ SkymillClient } = require(path.join(reconcileSource, 'src/skymill')));
+    if (gate === 'factory-live') {
+      ({ createGitHubAppRuntime } = require(path.join(reconcileSource, 'src/factory')));
+    }
     console.log('AGNI_PROBOT_SUBSCRIPTION_SOURCE=passed origin=nix-store source=pinned');
   } else {
     assert.equal(reconcileSource, '', 'unexpected unqualified source argument');
@@ -100,7 +107,7 @@ async function main() {
   }
   const aclFile = credential('users.acl', acl.trimEnd());
   const skymillFile = credential('skymill-token', skymillToken);
-  const skymillPeerFile = gate === 'subscription-groups' ?
+  const skymillPeerFile = (gate === 'subscription-groups' || gate === 'factory-live') ?
     credential('skymill-peer-token', skymillPeerToken) : skymillFile;
   const stateFile = credential('state', redisState);
   const operatorFile = credential('operator', operatorToken);
@@ -242,18 +249,18 @@ async function main() {
       SKYMILL_ORG: 'xd-dash', SKYMILL_TENANT: scope,
       SKYMILL_APPLICATION: 'github-webhooks', SKYMILL_STREAM: 'worker-candidate.webhooks',
       SKYMILL_CONSUMER_GROUP: consumerGroup,
-      ...((gate === 'processor-independent' || gate === 'subscription-groups') ? { SKYMILL_CONSUMER: 'processor-a' } : {}),
+      ...((gate === 'processor-independent' || gate === 'subscription-groups' || gate === 'factory-live') ? { SKYMILL_CONSUMER: 'processor-a' } : {}),
       SKYMILL_HTTP_TOKEN_FILE: skymillFile,
     });
   }
   function startSkymillPeer(consumer = 'processor-b') {
-    assert.ok(gate === 'processor-independent' || gate === 'subscription-groups');
+    assert.ok(gate === 'processor-independent' || gate === 'subscription-groups' || gate === 'factory-live');
     return launch('skymill-peer', skymillBin, [], {
       REDIS_ADDR: '127.0.0.1:6379', REDIS_USERNAME: 'skymill', REDIS_PASSWORD: redisSkymill,
       REDIS_DB: '0', SKYMILL_ADDR: '127.0.0.1:8082',
       SKYMILL_ORG: 'xd-dash', SKYMILL_TENANT: scope,
       SKYMILL_APPLICATION: 'github-webhooks', SKYMILL_STREAM: 'worker-candidate.webhooks',
-      SKYMILL_CONSUMER_GROUP: gate === 'subscription-groups' ? consumerGroup + '-subscription-b' : consumerGroup,
+      SKYMILL_CONSUMER_GROUP: (gate === 'subscription-groups' || gate === 'factory-live') ? consumerGroup + '-subscription-b' : consumerGroup,
       SKYMILL_CONSUMER: consumer,
       SKYMILL_HTTP_TOKEN_FILE: skymillPeerFile,
     });
@@ -405,7 +412,7 @@ async function main() {
     console.log('AGNI_WORKER_LIVE_REDIS=passed instance=isolated acl=separate credentials=ephemeral');
 
     startSkymill();
-    if (gate === 'processor-independent' || gate === 'subscription-groups') {
+    if (gate === 'processor-independent' || gate === 'subscription-groups' || gate === 'factory-live') {
       startSkymillPeer();
       await until('Skymill independent peer HTTP', async () => {
         const response = await fetch('http://127.0.0.1:8082/v1/status', {
@@ -445,7 +452,7 @@ async function main() {
       throw new Error('pinned Probot module closure unavailable category=' + reason);
     }
     checkpoint('pinned-probot-module-closure');
-    startProbot(gate !== 'processor-subscriber' && gate !== 'processor-independent' && gate !== 'subscription-groups', gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
+    startProbot(gate !== 'processor-subscriber' && gate !== 'processor-independent' && gate !== 'subscription-groups' && gate !== 'factory-live', gate === 'fence' || gate === 'effect' || gate === 'reconcile' || gate === 'reconcile-service');
     await waitProbot('worker-enabled Probot HTTP');
     console.log('AGNI_WORKER_LIVE_STACK=passed redis=real skymill=real probot=real worker=enabled');
     checkpoint('bootstrap-complete');
@@ -454,7 +461,7 @@ async function main() {
       console.log('AGNI_WORKER_LIVE_GATE=passed gate=bootstrap');
       return;
     }
-    if (gate === 'subscription-groups') {
+    if (gate === 'subscription-groups' || gate === 'factory-live') {
       const { ProbotRuntime } = require(path.join(probotRoot, 'src/runtime'));
       const { makeProbotApp } = require(path.join(probotRoot, 'src/huram-app'));
       const groupB = consumerGroup + '-subscription-b';
@@ -1276,6 +1283,10 @@ async function main() {
     console.log('AGNI_WORKER_LIVE_GATE=passed gate=full');
   } finally {
     // Shut down the client before terminating its backing Redis process.
+    for (const resource of factoryResources) {
+      try { resource.store.client.destroy(); }
+      catch { console.error('AGNI_FACTORY_LIVE_CLIENT=close-failed'); }
+    }
     if (activeStore) {
       try { activeStore.client.destroy(); }
       catch { console.error('AGNI_WORKER_LIVE_REDIS_CLIENT=close-failed'); }
