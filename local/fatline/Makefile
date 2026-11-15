@@ -22,6 +22,11 @@ export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export NIX_XD_LOG_DIR NIX_XD_LOG_COMPOSITION
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
+.PHONY: architecture-verify-sources
+architecture-verify-sources:
+	@test -n "$(NIX_XD_DIR)" || { echo 'NIX_XD_DIR required' >&2; exit 2; }
+	@python3 qualification/verify-architecture-sources.py "$(NIX_XD_DIR)" "$(abspath $(NIX_XD_DIR)/../$(SMOKE_CHECKOUT))"
+
 .PHONY: native-source-sync
 .PHONY: architecture-qualify
 .PHONY: check-architecture qualification qualification-check
@@ -39,7 +44,7 @@ qualification:
 	  *) echo 'QUALIFICATION=source-sync-native|factory-live|factory-contract|declarative-generator required' >&2; exit 2 ;; \
 	esac
 
-native-source-sync:
+native-source-sync: architecture-verify-sources
 	@GHXD_NATIVE_GRANTS_ACK="$(GHXD_NATIVE_GRANTS_ACK)" SMOKE_CHECKOUT="$(SMOKE_CHECKOUT)" \
 	  bash operations/native-source-sync.sh
 
@@ -47,7 +52,7 @@ qualification-check: check-architecture check-deployment
 
 # Cross-repository admission check. Host Git staging is explicitly transitional;
 # the only Linux action uses the generic Nix-Alpine flake runner.
-architecture-qualify: qualification-check
+architecture-qualify: qualification-check architecture-verify-sources
 	@test -n "$(NIX_XD_DIR)" -a -f "$(NIX_XD_DIR)/Makefile" || { echo 'NIX_XD_DIR required' >&2; exit 2; }
 	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" architecture-check
 	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" architecture-audit \
