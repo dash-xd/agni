@@ -10,6 +10,7 @@ OWNER_SCOPE ?= nix-xd-arm
 MACHINE ?= coreos-arm64
 QUALIFICATION ?=
 SMOKE_CHECKOUT ?= smoke20261115
+GHXD_NATIVE_GRANTS_ACK ?=
 AGNI_CHECKOUT ?= $(notdir $(abspath $(CURDIR)/../..))
 
 # Keep all nix.xd operation logs in one user-owned location.
@@ -21,6 +22,7 @@ export NIX_XD_DIR DEPLOYMENT PROVIDER OWNER_SCOPE MACHINE
 export NIX_XD_LOG_DIR NIX_XD_LOG_COMPOSITION
 export GUEST_VM_INSTANCE GUEST_STATE_ROOT GUEST_SSH_USER GUEST_SSH_PORT GUEST_SSH_KEY GUEST_SSH_HOST
 
+.PHONY: native-source-sync
 .PHONY: architecture-qualify
 .PHONY: check-architecture qualification qualification-check
 check-architecture:
@@ -30,11 +32,16 @@ check-architecture:
 # transitional wrappers until their host-action callers have been migrated.
 qualification:
 	@case "$(QUALIFICATION)" in \
+	  source-sync-native) $(MAKE) --no-print-directory native-source-sync ;; \
 	  factory-live) $(MAKE) --no-print-directory deployment-qualify-factory-live ;; \
 	  factory-contract) $(MAKE) --no-print-directory deployment-qualify-factory-contract ;; \
 	  declarative-generator) $(MAKE) --no-print-directory deployment-qualify-declarative-generator ;; \
-	  *) echo 'QUALIFICATION=factory-live|factory-contract|declarative-generator required' >&2; exit 2 ;; \
+	  *) echo 'QUALIFICATION=source-sync-native|factory-live|factory-contract|declarative-generator required' >&2; exit 2 ;; \
 	esac
+
+native-source-sync:
+	@GHXD_NATIVE_GRANTS_ACK="$(GHXD_NATIVE_GRANTS_ACK)" SMOKE_CHECKOUT="$(SMOKE_CHECKOUT)" \
+	  bash operations/native-source-sync.sh
 
 qualification-check: check-architecture check-deployment
 
@@ -65,6 +72,7 @@ help:
 	@printf '%s\n' \
 	  'make qualification-check                            Architecture and static gate checks' \\
 	  'make architecture-qualify NIX_XD_DIR=...             Cross-repo static audit and Smoke Nix-Alpine check' \
+	  'make qualification QUALIFICATION=source-sync-native GHXD_NATIVE_GRANTS_ACK=TRUST-NIX-ALPINE-OWNER' \
 	  'make qualification QUALIFICATION=factory-live DEPLOYMENT=vm1  Execute selected live gate' \
 	  'make check-architecture                             Audit Agni owner and source-pinning contracts'
 	@$(MAKE) --no-print-directory legacy-help
