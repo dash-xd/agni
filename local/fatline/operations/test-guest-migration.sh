@@ -286,7 +286,8 @@ block = s.split("          subscription-factory-source-artifact = {", 1)[1].spli
 line = next(line for line in block.splitlines() if '.source-revision"' in line and "printf " in line)
 assert line.count(chr(92)) == 1, "factory revision printf must have one backslash"
 assert "printf '%s" + chr(92) + "n'" in line
-assert 'store_root="$root/${artifact##*/}"' in block
+assert 'store_root="$root/$(basename "$artifact")"' in block
+assert '${artifact##*/}' not in block, "unescaped Bash interpolation in Nix string"
 PY
 
 grep -Fq 'AGNI_PROBOT_FACTORY_LIVE=passed groups=2 execution=normal-factory backing=real-redis-skymill' "$here/startup-profile/probot-worker-live.js"
