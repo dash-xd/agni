@@ -31,6 +31,10 @@ native = (fatline / "operations/native-source-sync.sh").read_text()
 check("source-sync-native" in make, "native-ghxd-not-selectable")
 check("TARGET='#ghxd-native'" in native, "native-ghxd-not-running-in-nix-alpine")
 check("GHXD_NATIVE_GRANTS_ACK" in native, "unapproved-ghxd-secret-grants")
+check('nix_make grants-plan GRANTS_FILE="$grants"' in native,
+      "native-ghxd-grants-not-planned")
+check('nix_make grants-verify GRANTS_FILE="$grants"' in native,
+      "native-ghxd-must-check-live-grants")
 check("AGNI_NATIVE_SOURCE_SYNC=passed" in native, "native-ghxd-result-not-contractual")
 check("podman " not in native, "agni-reintroduced-host-podman-orchestration")
 check("guest qualify-worker-live factory-live" in host, "factory-gate-not-from-agni")
@@ -64,7 +68,14 @@ check('store_root="$root/$(basename "$artifact")"' in artifact,
       "factory-gc-root-not-content-addressed")
 check("${artifact##*/}" not in artifact, "unescaped-nix-shell-interpolation")
 
-legacy = re.findall(r"^deployment-([a-z][a-z0-9-]*):", make, re.M)
+compat = (fatline / "operations/deployment-compat.mk").read_text()
+check("deployment-qualify-factory-live:" in compat,
+      "previous-live-qualification-unavailable")
+check("deployment-qualify-factory-contract:" in compat,
+      "previous-factory-contract-unavailable")
+check("deployment-qualify-declarative-generator:" in compat,
+      "previous-generator-gate-unavailable")
+legacy = re.findall(r"^deployment-([a-z][a-z0-9-]*):", compat, re.M)
 check(all(name.startswith(("qualify-", "seed-", "migrate-", "refresh-", "recover-",
                             "assess", "verify", "review", "diagnose-")) for name in legacy),
       "unexpected-deployment-dispatch")
