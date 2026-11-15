@@ -62,7 +62,7 @@ run_step() {
   "$@" | tee "$output"
 }
 
-[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract || "$operation" == qualify-processor-live || "$operation" == qualify-independent-consumers || "$operation" == seed-subscription-source || "$operation" == qualify-subscription-contract || "$operation" == qualify-subscription-groups || "$operation" == qualify-declarative-processors || "$operation" == qualify-declarative-generator || "$operation" == seed-factory-source || "$operation" == qualify-factory-contract ]] || fail unsupported-operation
+[[ "$operation" == assess || "$operation" == verify || "$operation" == review || "$operation" == migrate-stage || "$operation" == migrate-verify || "$operation" == migrate-activation-plan || "$operation" == migrate-activation-check || "$operation" == migrate-recovery-qualify || "$operation" == migrate-activate-sandbox || "$operation" == recover-sandbox-http || "$operation" == qualify-runtime || "$operation" == diagnose-runtime-network || "$operation" == qualify-integration || "$operation" == qualify-worker-candidate || "$operation" == qualify-worker-live || "$operation" == qualify-worker-bootstrap || "$operation" == qualify-worker-delivery || "$operation" == qualify-worker-recovery || "$operation" == qualify-worker-memory || "$operation" == qualify-worker-fence || "$operation" == qualify-worker-effect || "$operation" == qualify-worker-reconcile || "$operation" == qualify-reconcile-service-contract || "$operation" == seed-reconcile-source || "$operation" == refresh-reconcile-auth || "$operation" == qualify-reconcile-live || "$operation" == seed-processor-source || "$operation" == qualify-processor-contract || "$operation" == qualify-processor-live || "$operation" == qualify-independent-consumers || "$operation" == seed-subscription-source || "$operation" == qualify-subscription-contract || "$operation" == qualify-subscription-groups || "$operation" == qualify-declarative-processors || "$operation" == qualify-declarative-generator || "$operation" == seed-factory-source || "$operation" == qualify-factory-contract || "$operation" == qualify-factory-live ]] || fail unsupported-operation
 echo "AGNI_DEPLOYMENT_SELECTED=passed deployment=$deployment scope=$profile_scope operation=$operation source=$revision"
 xd_make stage CHECKOUT="$checkout" | tee "$log_dir/stage.log"
 grep -Fq "Staged $checkout at $revision" "$log_dir/stage.log" || fail staged-source-not-pinned
@@ -194,6 +194,24 @@ if [[ "$operation" == qualify-factory-contract ]]; then
   grep -Fxq 'AGNI_PROBOT_FACTORY_CONTRACT=passed source=1fd8aae4e8d9a9d3596b47b915c3c02644d284ec subscription=isolated ingress=shared production=unchanged' \
     "$log_dir/factory-contract.log" || fail factory-contract-not-qualified
   echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-factory-contract source=pinned production=unchanged'
+  exit 0
+fi
+
+if [[ "$operation" == qualify-factory-live ]]; then
+  run_step "$log_dir/factory-artifact.log" xd_make run FLAKE="$flake" TARGET='#subscription-factory-source-artifact'
+  factory_artifact="$(agni_capture_value AGNI_PROBOT_FACTORY_ARTIFACT "$log_dir/factory-artifact.log")"
+  [[ "$factory_artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-factory20261116$ ]] || fail factory-source-artifact-not-pinned
+  grep -Fxq 'AGNI_PROBOT_FACTORY_ARTIFACT_QUALIFIED=passed revision=1fd8aae4e8d9a9d3596b47b915c3c02644d284ec rooted=true' \
+    "$log_dir/factory-artifact.log" || fail factory-source-artifact-not-qualified
+  run_step "$log_dir/factory-live.log" guest qualify-worker-live factory-live "$factory_artifact"
+  for marker in \
+    'AGNI_PROBOT_FACTORY_LIVE=passed groups=2 execution=normal-factory backing=real-redis-skymill' \
+    'AGNI_PROBOT_FACTORY_RECOVERY=passed group_b=reclaimed factory=recreated effects=one-per-group' \
+    'AGNI_WORKER_LIVE_QUALIFICATION=passed gate=factory-live backing=real service_invocations=unchanged worker=isolated promotion=blocked'
+  do
+    grep -Fxq "$marker" "$log_dir/factory-live.log" || fail factory-live-not-qualified
+  done
+  echo 'AGNI_DEPLOYMENT=passed deployment=vm1 operation=qualify-factory-live backing=real factory=normal promotion=blocked'
   exit 0
 fi
 
