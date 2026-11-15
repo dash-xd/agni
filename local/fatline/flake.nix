@@ -586,7 +586,7 @@
             type = "app";
             program = "${pkgs.writeShellApplication {
               name = "agni-subscription-factory-source-artifact";
-              runtimeInputs = [ pkgs.bash pkgs.coreutils pkgs.nix ];
+              runtimeInputs = [ pkgs.bash pkgs.coreutils pkgs.nix pkgs.nodejs_22 ];
               text = ''
                 set -Eeuo pipefail
                 rev=${probotFactoryRevision}
@@ -595,6 +595,9 @@
                 test "$(cat "$source/.nix-xd-source-revision")" = "$rev"
                 test -f "$source/src/factory.js"
                 test -f "$source/src/subscription-factory.js"
+                node --check "$source/src/factory.js"
+                node --check "$source/src/subscription-factory.js"
+                node --check "${./startup-profile/probot-worker-live.js}"
                 root="$HOME/.local/state/agni/fatline/factory/$rev"
                 mkdir -p "$root"
                 candidate="$(mktemp -d)"
