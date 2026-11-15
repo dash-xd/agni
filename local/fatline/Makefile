@@ -75,7 +75,7 @@ help:
 	  'make qualification QUALIFICATION=source-sync-native GHXD_NATIVE_GRANTS_ACK=TRUST-NIX-ALPINE-OWNER' \
 	  'make qualification QUALIFICATION=factory-live DEPLOYMENT=vm1  Execute selected live gate' \
 	  'make check-architecture                             Audit Agni owner and source-pinning contracts'
-	@$(MAKE) --no-print-directory legacy-help
+	@printf '%s\n' 'Historical deployment-* operations: make -C local/fatline legacy-help'
 
 # Compatibility targets remain here only as a migration boundary.
 include operations/deployment-compat.mk
