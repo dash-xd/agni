@@ -36,7 +36,7 @@ qualification:
 qualification-check: check-architecture check-deployment
 
 help:
-	@printf '%s\\n' \
+	@printf '%s\n' \
 	  'make qualification-check                            Architecture and static gate checks' \
 	  'make qualification QUALIFICATION=factory-live DEPLOYMENT=vm1  Execute selected live gate' \
 	  'make check-architecture                             Audit Agni owner and source-pinning contracts'
