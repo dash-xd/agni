@@ -124,3 +124,12 @@ until the new native gate passes on a disposable owner.
 This migration is separable from the last known `factory-live` candidate,
 which is still unqualified. First qualify native mounts/source synchronization,
 then the current real Redis/Skymill/Probot gate, then process supervision.
+
+## Exact architecture source lock
+
+The cross-repository architecture test is pinned by
+`local/fatline/qualification/architecture-sources.json`. Do not substitute
+the latest moving branch head after a qualification. Update the lock in a
+new CalVer candidate, then rerun `architecture-verify-sources`,
+`architecture-qualify` and the affected live gate. This guards against
+silent interface drift when entering a new chat session or workspace.
