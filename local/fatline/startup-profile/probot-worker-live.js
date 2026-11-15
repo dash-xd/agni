@@ -466,43 +466,68 @@ async function main() {
       const { makeProbotApp } = require(path.join(probotRoot, 'src/huram-app'));
       const groupB = consumerGroup + '-subscription-b';
       const scopeIdentity = { orgId: 'xd-dash', tenantId: scope, applicationId: 'github-webhooks' };
-      const executionA = new SubscriptionExecutionStore({
-        store, ...scopeIdentity, subscriptionId: consumerGroup,
-      });
-      const executionB = new SubscriptionExecutionStore({
-        store, ...scopeIdentity, subscriptionId: groupB,
-      });
       const counts = { a: new Map(), b: new Map() };
-      const makeRuntime = (state, label, url, group, token) => new ProbotRuntime({
-        store: state,
-        skymill: new SkymillClient({
-          baseUrl: url, token,
-          consumerGroup: group, stream: 'worker-candidate.webhooks',
-        }),
-        makeApp: makeProbotApp({
-          store, onPush: async context => {
-            const current = counts[label];
-            current.set(context.id, (current.get(context.id) || 0) + 1);
-          },
-        }),
-      });
-      const a = makeRuntime(executionA, 'a', 'http://127.0.0.1:8081', consumerGroup, skymillToken);
-      const b = makeRuntime(executionB, 'b', 'http://127.0.0.1:8082', groupB, skymillPeerToken);
+      const effect = label => async context => {
+        const current = counts[label];
+        current.set(context.id, (current.get(context.id) || 0) + 1);
+      };
+      const makeRuntime = async (label, url, group, token) => {
+        if (gate === 'factory-live') {
+          const resource = await createGitHubAppRuntime({
+            redisUrl, redisUsername: 'probot_state', redisPassword: redisState,
+            redisDb: 0, redisPrefix: statePrefix,
+            orgId: 'xd-dash', tenantId: scope, targetOrg: 'xd-dash',
+            baseUrl: 'http://127.0.0.1:3000',
+            skymillUrl: url, skymillToken: token,
+            skymillStream: 'worker-candidate.webhooks',
+            skymillConsumerGroup: group, skymillConsumer: 'processor-' + label,
+            subscriptionApplicationId: 'github-webhooks',
+            subscriptionId: group,
+            reconcileEvery: 0, handlers: { onPush: effect(label) },
+          });
+          factoryResources.push(resource);
+          assert.equal(resource.runtime.store, resource.executionStore);
+          assert.equal(resource.services.createDelivery instanceof Function, true);
+          assert.notEqual(resource.store, resource.executionStore);
+          return resource;
+        }
+        const execution = new SubscriptionExecutionStore({
+          store, ...scopeIdentity, subscriptionId: group,
+        });
+        const runtime = new ProbotRuntime({
+          store: execution,
+          skymill: new SkymillClient({
+            baseUrl: url, token, consumerGroup: group,
+            stream: 'worker-candidate.webhooks',
+          }),
+          makeApp: makeProbotApp({ store, onPush: effect(label) }),
+        });
+        return { store, executionStore: execution, runtime, skymill: runtime.skymill };
+      };
+      const resourceA = await makeRuntime('a', 'http://127.0.0.1:8081', consumerGroup, skymillToken);
+      let resourceB = await makeRuntime('b', 'http://127.0.0.1:8082', groupB, skymillPeerToken);
+      const executionA = resourceA.executionStore;
+      let executionB = resourceB.executionStore;
+      const a = resourceA.runtime;
+      let b = resourceB.runtime;
       const clientB = new SkymillClient({
         baseUrl: 'http://127.0.0.1:8082', token: skymillPeerToken,
         consumerGroup: groupB, stream: 'worker-candidate.webhooks',
       });
       let recoveryAttempt = 0;
-      const receiveRecovered = b.skymill.receive.bind(b.skymill);
-      b.skymill.receive = async options => {
-        const batch = await receiveRecovered(options);
-        for (const delivery of batch.deliveries || []) {
-          if (delivery.message?.metadata?.github_delivery_id === source) {
-            recoveryAttempt = Math.max(recoveryAttempt, Number(delivery.attempt || 0));
+      const trackRecovery = runtime => {
+        const receiveRecovered = runtime.skymill.receive.bind(runtime.skymill);
+        runtime.skymill.receive = async options => {
+          const batch = await receiveRecovered(options);
+          for (const delivery of batch.deliveries || []) {
+            if (delivery.message?.metadata?.github_delivery_id === source) {
+              recoveryAttempt = Math.max(recoveryAttempt, Number(delivery.attempt || 0));
+            }
           }
-        }
-        return batch;
+          return batch;
+        };
       };
+      trackRecovery(b);
       const groupStatus = async (url, token) => {
         const response = await fetch(url + '/v1/status', {
           headers: { authorization: 'Bearer ' + token },
@@ -541,6 +566,18 @@ async function main() {
       assert.equal((await groupStatus('http://127.0.0.1:8081', skymillToken)).Pending.Count, 0);
       console.log('AGNI_PROBOT_SUBSCRIPTION_ISOLATION=passed group_a=acked group_b=failed effect_a=1 effect_b=0');
 
+      if (gate === 'factory-live') {
+        resourceB.store.client.destroy();
+        resourceB = await makeRuntime('b', 'http://127.0.0.1:8082', groupB, skymillPeerToken);
+        executionB = resourceB.executionStore;
+        b = resourceB.runtime;
+        trackRecovery(b);
+        assert.equal(executionB.deliveryStore.prefix,
+          resourceA.executionStore.deliveryStore.prefix.replace(
+            resourceA.executionStore.namespace, executionB.namespace));
+        assert.notEqual(executionA.deliveryStore.prefix, executionB.deliveryStore.prefix);
+        console.log('AGNI_PROBOT_FACTORY_RESTART=passed scope=b recreated=true scope_a=unchanged');
+      }
       startSkymillPeer('processor-b-recovery');
       await until('subscription B recovery HTTP', async () => {
         const response = await fetch('http://127.0.0.1:8082/v1/status', {
@@ -597,8 +634,13 @@ async function main() {
       assert.equal((await groupStatus('http://127.0.0.1:8082', skymillPeerToken)).Pending.Count, 0);
       assertChildrenHealthy();
       console.log('AGNI_PROBOT_SUBSCRIPTION_REPLAY=passed group_a=deduplicated group_b=deduplicated effects=unchanged');
-      console.log('AGNI_PROBOT_SUBSCRIPTION_GROUPS_LIVE=passed groups=2 execution_scopes=2 settlement=independent');
-      console.log('AGNI_WORKER_LIVE_GATE=passed gate=subscription-groups');
+      if (gate === 'factory-live') {
+        console.log('AGNI_PROBOT_FACTORY_LIVE=passed groups=2 execution=normal-factory backing=real-redis-skymill');
+        console.log('AGNI_PROBOT_FACTORY_RECOVERY=passed group_b=reclaimed factory=recreated effects=one-per-group');
+      } else {
+        console.log('AGNI_PROBOT_SUBSCRIPTION_GROUPS_LIVE=passed groups=2 execution_scopes=2 settlement=independent');
+      }
+      console.log('AGNI_WORKER_LIVE_GATE=passed gate=' + gate);
       return;
     }
     if (gate === 'processor-independent') {
