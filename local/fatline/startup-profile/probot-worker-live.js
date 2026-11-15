@@ -51,9 +51,7 @@ async function main() {
     require('node:module').Module._initPaths();
     ({ SubscriptionExecutionStore } = require(path.join(reconcileSource, 'src/subscription-execution')));
     ({ SkymillClient } = require(path.join(reconcileSource, 'src/skymill')));
-    if (gate === 'factory-live') {
-      ({ createGitHubAppRuntime } = require(path.join(reconcileSource, 'src/factory')));
-    }
+
     console.log('AGNI_PROBOT_SUBSCRIPTION_SOURCE=passed origin=nix-store source=pinned');
   } else {
     assert.equal(reconcileSource, '', 'unexpected unqualified source argument');
@@ -463,6 +461,14 @@ async function main() {
       return;
     }
     if (gate === 'subscription-groups' || gate === 'factory-live') {
+      if (gate === 'factory-live') {
+        const factoryRoot = path.join(workspace, 'factory-source');
+        fs.mkdirSync(factoryRoot, { mode: 0o700 });
+        fs.cpSync(path.join(reconcileSource, 'src'), path.join(factoryRoot, 'src'), { recursive: true });
+        fs.symlinkSync(path.join(probotRoot, 'node_modules'), path.join(factoryRoot, 'node_modules'), 'dir');
+        ({ createGitHubAppRuntime } = require(path.join(factoryRoot, 'src/factory')));
+        console.log('AGNI_PROBOT_FACTORY_SOURCE=passed revision=pinned modules=qualified-read-only');
+      }
       const { ProbotRuntime } = require(path.join(probotRoot, 'src/runtime'));
       const { makeProbotApp } = require(path.join(probotRoot, 'src/huram-app'));
       const groupB = consumerGroup + '-subscription-b';
