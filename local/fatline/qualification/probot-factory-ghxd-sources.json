@@ -3,7 +3,7 @@
   "sources": {
     "probot-factory": {
       "repository": "xd-dash/probot-runtime",
-      "revision": "43716cbe96ee14e438a74b6e171e59b1f106fe3f",
+      "revision": "8730909990628e1dce135af51a2c197f6bad5713",
       "checkout": "probot-runtime20261116"
     }
   }
