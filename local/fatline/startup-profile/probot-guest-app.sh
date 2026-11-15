@@ -6,6 +6,8 @@ action=${1:?Select adopt-plan, adopt-review, adopt-stage, migrate-verify, activa
 scope=${2:?Select service scope}
 bundle_store=${3:-}
 [[ "$scope" == fatline-arm-vm1 ]] || exit 2
+trap 'rc=$?; if ((rc != 0)); then printf "AGNI_GUEST_EXIT=failed action=%s status=%s\\n" "$action" "$rc" >&2; fi' EXIT
+echo "AGNI_GUEST_ENTRY=started action=$action scope=$scope"
 [[ "$(id -u)" != 0 ]]
 [[ "$(podman info --format '{{.Host.Security.Rootless}}')" == true ]]
 [[ "$(findmnt -rn -o FSTYPE --mountpoint /var/mnt/nixstore)" == 9p ]]
@@ -522,11 +524,29 @@ case "$action" in
       source_guest="/var/mnt/nixstore/${reconcile_source#/nix/store/}"
       [[ -r "$source_guest/src/subscription-execution.js" && -r "$source_guest/src/store.js" ]] || exit 1
     elif [[ "$worker_gate" == factory-live ]]; then
-      [[ "$reconcile_source" =~ ^/nix/store/[a-z0-9]{32}-probot-factory20261116$ ]] || exit 2
+      [[ "$reconcile_source" =~ ^/nix/store/[a-z0-9]{32}-probot-factory20261116$ ]] || {
+        echo 'AGNI_FACTORY_LIVE_PREFLIGHT=blocked reason=artifact-identity' >&2
+        exit 2
+      }
       source_guest="/var/mnt/nixstore/${reconcile_source#/nix/store/}"
+      [[ -d "$source_guest" ]] || {
+        echo 'AGNI_FACTORY_LIVE_PREFLIGHT=blocked reason=store-artifact-not-visible' >&2
+        exit 1
+      }
       [[ -r "$source_guest/src/factory.js" && -r "$source_guest/src/subscription-factory.js" &&
-         -r "$source_guest/src/subscription-execution.js" && -r "$source_guest/src/store.js" ]] || exit 1
-      [[ "$(cat "$source_guest/.source-revision")" == 1fd8aae4e8d9a9d3596b47b915c3c02644d284ec ]] || exit 1
+         -r "$source_guest/src/subscription-execution.js" && -r "$source_guest/src/store.js" ]] || {
+        echo 'AGNI_FACTORY_LIVE_PREFLIGHT=blocked reason=source-files-unavailable' >&2
+        exit 1
+      }
+      [[ -r "$source_guest/.source-revision" ]] || {
+        echo 'AGNI_FACTORY_LIVE_PREFLIGHT=blocked reason=source-revision-missing' >&2
+        exit 1
+      }
+      [[ "$(cat "$source_guest/.source-revision")" == 1fd8aae4e8d9a9d3596b47b915c3c02644d284ec ]] || {
+        echo 'AGNI_FACTORY_LIVE_PREFLIGHT=blocked reason=source-revision-mismatch' >&2
+        exit 1
+      }
+      echo 'AGNI_FACTORY_LIVE_PREFLIGHT=passed source=pinned store=guest-visible'
     else
       [[ -z "$reconcile_source" ]] || exit 2
     fi
