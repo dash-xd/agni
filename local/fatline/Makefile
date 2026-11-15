@@ -10,6 +10,7 @@ OWNER_SCOPE ?= nix-xd-arm
 MACHINE ?= coreos-arm64
 QUALIFICATION ?=
 SMOKE_CHECKOUT ?= smoke20261115
+AGNI_CHECKOUT ?= $(notdir $(abspath $(CURDIR)/../..))
 
 # Keep all nix.xd operation logs in one user-owned location.
 # The generic nix.xd log wrapper supplies action, machine and timestamp fields.
@@ -45,6 +46,12 @@ architecture-qualify: qualification-check
 	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" architecture-audit \
 	  AGNI_DIR="$(abspath $(CURDIR)/../..)" \
 	  SMOKE_DIR="$(abspath $(NIX_XD_DIR)/../$(SMOKE_CHECKOUT))"
+	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" stage \
+	  MACHINE="$(MACHINE)" PROVIDER="$(PROVIDER)" SCOPE="$(OWNER_SCOPE)" \
+	  CHECKOUT="$(AGNI_CHECKOUT)"
+	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" show \
+	  MACHINE="$(MACHINE)" PROVIDER="$(PROVIDER)" SCOPE="$(OWNER_SCOPE)" \
+	  FLAKE="$(AGNI_CHECKOUT)/local/fatline"
 	@$(MAKE) --no-print-directory -C "$(NIX_XD_DIR)" stage \
 	  MACHINE="$(MACHINE)" PROVIDER="$(PROVIDER)" SCOPE="$(OWNER_SCOPE)" \
 	  CHECKOUT="$(SMOKE_CHECKOUT)"
