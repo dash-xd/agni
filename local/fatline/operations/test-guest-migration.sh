@@ -281,6 +281,10 @@ grep -Fq 'resourceB.store.client.destroy();' "$here/startup-profile/probot-worke
 grep -Fq "fs.symlinkSync(path.join(probotRoot, 'node_modules')" "$here/startup-profile/probot-worker-live.js"
 grep -Fq "fs.cpSync(path.join(reconcileSource, 'src')" "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'AGNI_PROBOT_FACTORY_SOURCE=passed revision=pinned modules=qualified-read-only' "$here/startup-profile/probot-worker-live.js"
+grep -Fq '"$@" 2>&1 | tee "$output"' "$here/operations/guest-migration.sh"
+grep -Fq 'AGNI_GUEST_ENTRY=started action=' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_FACTORY_LIVE_PREFLIGHT=passed source=pinned store=guest-visible' "$here/startup-profile/probot-guest-app.sh"
+grep -Fq 'AGNI_GUEST_EXIT=failed action=' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq '"$worker_gate" == factory-live' "$here/startup-profile/probot-guest-app.sh"
 echo 'AGNI_PROBOT_FACTORY_LIVE_STATIC=passed source=pinned isolation=guest baseline=preserved'
 echo 'AGNI_DECLARATIVE_GENERATOR_STATIC=passed guest=coreos systemd=dryrun baseline=unchanged'
