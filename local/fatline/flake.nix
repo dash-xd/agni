@@ -582,6 +582,38 @@
               echo "AGNI_PROBOT_SUBSCRIPTION_CONTRACT=passed source=$rev scope=org-tenant-application-subscription"
             ''}";
           };
+          subscription-factory-source-artifact = {
+            type = "app";
+            program = "${pkgs.writeShellApplication {
+              name = "agni-subscription-factory-source-artifact";
+              runtimeInputs = [ pkgs.bash pkgs.coreutils pkgs.nix ];
+              text = ''
+                set -Eeuo pipefail
+                rev=${probotFactoryRevision}
+                source=${probotFactoryCheckout}
+                test -f "$source/.nix-xd-source-revision"
+                test "$(cat "$source/.nix-xd-source-revision")" = "$rev"
+                test -f "$source/src/factory.js"
+                test -f "$source/src/subscription-factory.js"
+                root="$HOME/.local/state/agni/fatline/factory/$rev"
+                mkdir -p "$root"
+                candidate="$(mktemp -d)"
+                trap 'rm -rf -- "$candidate"' EXIT
+                mkdir -p "$candidate/probot-factory20261116"
+                cp -R "$source/src" "$candidate/probot-factory20261116/"
+                printf '%s\\n' "$rev" > "$candidate/probot-factory20261116/.source-revision"
+                artifact="$(nix-store --add "$candidate/probot-factory20261116")"
+                [[ "$artifact" =~ ^/nix/store/[a-z0-9]{32}-probot-factory20261116$ ]] || exit 1
+                if [[ ! -e "$root/source" ]]; then
+                  nix-store --realise --add-root "$root/source" "$artifact" >/dev/null
+                else
+                  test "$(readlink -f "$root/source")" = "$artifact"
+                fi
+                echo "AGNI_PROBOT_FACTORY_ARTIFACT=$artifact"
+                echo "AGNI_PROBOT_FACTORY_ARTIFACT_QUALIFIED=passed revision=$rev rooted=true"
+              '';
+            }}/bin/agni-subscription-factory-source-artifact";
+          };
           subscription-groups-source-artifact = {
             type = "app";
             program = "${pkgs.writeShellApplication {
