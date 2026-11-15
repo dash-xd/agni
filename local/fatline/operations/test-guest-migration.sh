@@ -275,6 +275,9 @@ grep -Fq 'AGNI_PROBOT_FACTORY_LIVE=passed groups=2 execution=normal-factory back
 grep -Fq 'AGNI_PROBOT_FACTORY_RECOVERY=passed group_b=reclaimed factory=recreated effects=one-per-group' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'createGitHubAppRuntime({' "$here/startup-profile/probot-worker-live.js"
 grep -Fq 'resourceB.store.client.destroy();' "$here/startup-profile/probot-worker-live.js"
+grep -Fq "fs.symlinkSync(path.join(probotRoot, 'node_modules')" "$here/startup-profile/probot-worker-live.js"
+grep -Fq "fs.cpSync(path.join(reconcileSource, 'src')" "$here/startup-profile/probot-worker-live.js"
+grep -Fq 'AGNI_PROBOT_FACTORY_SOURCE=passed revision=pinned modules=qualified-read-only' "$here/startup-profile/probot-worker-live.js"
 grep -Fq '"$worker_gate" == factory-live' "$here/startup-profile/probot-guest-app.sh"
 echo 'AGNI_PROBOT_FACTORY_LIVE_STATIC=passed source=pinned isolation=guest baseline=preserved'
 echo 'AGNI_DECLARATIVE_GENERATOR_STATIC=passed guest=coreos systemd=dryrun baseline=unchanged'
