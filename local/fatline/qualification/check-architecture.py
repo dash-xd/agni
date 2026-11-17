@@ -87,4 +87,13 @@ legacy = re.findall(r"^deployment-([a-z][a-z0-9-]*):", compat, re.M)
 check(all(name.startswith(("qualify-", "seed-", "migrate-", "refresh-", "recover-",
                             "assess", "verify", "review", "diagnose-")) for name in legacy),
       "unexpected-deployment-dispatch")
+canonical = (fatline / "qualification/CANONICAL-ARCHITECTURE.md").read_text()
+agents = (fatline.parents[1] / "AGENTS.md").read_text()
+for phrase in ("Deny old idioms", "Ordered gates", "source-sync-native",
+               "factory-live", "systemd/Quadlet lifecycle", "boot ID"):
+    check(phrase in canonical, "missing-canonical-contract-" + phrase.replace(" ", "-"))
+check("qualification/CANONICAL-ARCHITECTURE.md" in agents,
+      "agent-contract-not-linked")
+check("Do not add new" in agents and "quarantined exceptions" in agents,
+      "legacy-route-not-banned")
 print("AGNI_ARCHITECTURE_CHECK=passed composition=agni transport=nix-xd tools=smoke legacy_host=declared production=unchanged")
