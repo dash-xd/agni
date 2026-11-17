@@ -10,7 +10,7 @@
     "smoke": {
       "repository": "xd-dash/smoke",
       "branch": "v20261116-architecture-contract",
-      "revision": "2ba6f167cd8526b6c9921f7b5aa6cd515eaa5a8b",
+      "revision": "f8b74b62c532dbc78fae837abc85a423567e0550",
       "checkout": "smoke20261116"
     }
   }
