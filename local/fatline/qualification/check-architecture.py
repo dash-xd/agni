@@ -70,7 +70,7 @@ artifact = flake.split("subscription-factory-source-artifact = {", 1)[1].split(
     "subscription-groups-source-artifact = {", 1
 )[0]
 revision_record = next((line for line in artifact.splitlines()
-                        if "printf " in line and '".source-revision"' in line), "")
+                        if "printf " in line and ".source-revision" in line), "")
 check(revision_record.count(chr(92)) == 1, "factory-revision-not-newline")
 check('store_root="$root/$(basename "$artifact")"' in artifact,
       "factory-gc-root-not-content-addressed")
