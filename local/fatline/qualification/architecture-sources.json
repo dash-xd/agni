@@ -4,7 +4,7 @@
     "nix-xd": {
       "repository": "xd-dash/nix.xd",
       "branch": "v20261116-architecture-contract",
-      "revision": "52a21ade54f837a3db62c8f1c8f86bae9c57a3ae",
+      "revision": "9b1cfef4bdba2cd48e51e3ae3a4df70734a3c763",
       "checkout": "nix.xd20261116"
     },
     "smoke": {
