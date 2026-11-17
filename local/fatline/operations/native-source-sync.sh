@@ -5,11 +5,11 @@ set -Eeuo pipefail
   echo 'AGNI_NATIVE_SOURCE_SYNC=blocked reason=explicit-grant-trust-ack-required' >&2
   exit 2
 }
-nix_xd="${NIX_XD_DIR:?Specify the v20261115 nix.xd checkout}"
+nix_xd="${NIX_XD_DIR:?Specify the source-locked nix.xd checkout}"
 [[ -f "$nix_xd/Makefile" ]] || exit 2
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
 checkout="$(basename "$here")"
-smoke="${SMOKE_CHECKOUT:-smoke20261115}"
+smoke="${SMOKE_CHECKOUT:-smoke20261116}"
 [[ "$checkout" =~ ^[A-Za-z0-9_.-]+$ && "$smoke" =~ ^[A-Za-z0-9_.-]+$ ]] || exit 2
 [[ "$here" == "$(cd "$nix_xd/.." && pwd -P)/$checkout" ]] || exit 2
 [[ -z "$(git -C "$here" status --porcelain --untracked-files=no)" ]] || {
