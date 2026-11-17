@@ -3,15 +3,15 @@
   "sources": {
     "nix-xd": {
       "repository": "xd-dash/nix.xd",
-      "branch": "v20261115",
-      "revision": "87dca85e942dc486a174635b21a90e70e8290068",
-      "checkout": "nix.xd20261115"
+      "branch": "v20261116-architecture-contract",
+      "revision": "52a21ade54f837a3db62c8f1c8f86bae9c57a3ae",
+      "checkout": "nix.xd20261116"
     },
     "smoke": {
       "repository": "xd-dash/smoke",
-      "branch": "v20261115",
-      "revision": "6fa1202b0d5548d15bb7b937951477e43c7542ec",
-      "checkout": "smoke20261115"
+      "branch": "v20261116-architecture-contract",
+      "revision": "2ba6f167cd8526b6c9921f7b5aa6cd515eaa5a8b",
+      "checkout": "smoke20261116"
     }
   }
 }
