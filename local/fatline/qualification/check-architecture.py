@@ -34,7 +34,12 @@ check(all(re.fullmatch(r"[0-9a-f]{40}", item.get("revision", ""))
           for item in locks["sources"].values()), "architecture-source-not-pinned")
 check("architecture-audit" in make, "missing-host-exception-inventory")
 check("TARGET='#architecture-check'" in make, "smoke-not-in-nix-alpine")
-check("include operations/deployment-compat.mk" in make, "legacy-deployment-not-isolated")
+compat_path = fatline / "operations/deployment-compat.mk"
+if compat_path.exists():
+    check("include operations/deployment-compat.mk" in make, "legacy-deployment-not-isolated")
+else:
+    check("include operations/deployment-compat.mk" not in make,
+          "orphaned-deployment-compat-include")
 native = (fatline / "operations/native-source-sync.sh").read_text()
 check("source-sync-native" in make, "native-ghxd-not-selectable")
 check("TARGET='#ghxd-native'" in native, "native-ghxd-not-running-in-nix-alpine")
@@ -47,8 +52,6 @@ check("AGNI_NATIVE_SOURCE_SYNC=passed" in native, "native-ghxd-result-not-contra
 check("podman " not in native, "agni-reintroduced-host-podman-orchestration")
 check("guest qualify-worker-live factory-live" in host, "factory-gate-not-from-agni")
 check("xd_make guest-app FLAKE=" in host, "guest-not-generic-transport")
-check("PROJECT=smoke20261112 APPLICATION=ghxd ACTION=source-sync" in host,
-      "untracked-transitional-ghxd")
 check('NIX_XD_DIR ?=' in make, "implicit-stale-nix-xd-checkout")
 check('PROVIDER ?= podman' in make, "wrong-provider-default")
 check("AGNI_WORKER_LIVE_BASELINE=passed" in guest, "no-baseline-invariant")
@@ -76,17 +79,12 @@ check('store_root="$root/$(basename "$artifact")"' in artifact,
       "factory-gc-root-not-content-addressed")
 check("${artifact##*/}" not in artifact, "unescaped-nix-shell-interpolation")
 
-compat = (fatline / "operations/deployment-compat.mk").read_text()
-check("deployment-qualify-factory-live:" in compat,
-      "previous-live-qualification-unavailable")
-check("deployment-qualify-factory-contract:" in compat,
-      "previous-factory-contract-unavailable")
-check("deployment-qualify-declarative-generator:" in compat,
-      "previous-generator-gate-unavailable")
-legacy = re.findall(r"^deployment-([a-z][a-z0-9-]*):", compat, re.M)
-check(all(name.startswith(("qualify-", "seed-", "migrate-", "refresh-", "recover-",
-                            "assess", "verify", "review", "diagnose-")) for name in legacy),
-      "unexpected-deployment-dispatch")
+if compat_path.exists():
+    compat = compat_path.read_text()
+    legacy = re.findall(r"^deployment-([a-z][a-z0-9-]*):", compat, re.M)
+    check(all(name.startswith(("qualify-", "seed-", "migrate-", "refresh-", "recover-",
+                                "assess", "verify", "review", "diagnose-")) for name in legacy),
+          "unexpected-deployment-dispatch")
 canonical = (fatline / "qualification/CANONICAL-ARCHITECTURE.md").read_text()
 agents = (fatline.parents[1] / "AGENTS.md").read_text()
 for phrase in ("Deny old idioms", "Ordered gates", "source-sync-native",

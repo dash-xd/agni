@@ -9,7 +9,7 @@ PROVIDER ?= podman
 OWNER_SCOPE ?= nix-xd-arm
 MACHINE ?= coreos-arm64
 QUALIFICATION ?=
-SMOKE_CHECKOUT ?= smoke20261116
+SMOKE_CHECKOUT ?= smoke20261127
 GHXD_NATIVE_GRANTS_ACK ?=
 AGNI_CHECKOUT ?= $(notdir $(abspath $(CURDIR)/../..))
 

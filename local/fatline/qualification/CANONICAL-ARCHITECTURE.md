@@ -43,8 +43,8 @@ CalVer for branches, immutable SHA for execution. Log nix.xd actions under `~/.l
 
 ```sh
 make -C local/fatline qualification-check
-make -C local/fatline architecture-qualify NIX_XD_DIR=/absolute/path/to/nix.xd SMOKE_CHECKOUT=smoke20261115 PROVIDER=podman MACHINE=coreos-arm64
-make -C local/fatline qualification QUALIFICATION=source-sync-native GHXD_NATIVE_GRANTS_ACK=TRUST-NIX-ALPINE-OWNER NIX_XD_DIR=/absolute/path/to/nix.xd SMOKE_CHECKOUT=smoke20261115 PROVIDER=podman MACHINE=coreos-arm64
+make -C local/fatline architecture-qualify NIX_XD_DIR=/absolute/path/to/nix.xd20261127 SMOKE_CHECKOUT=smoke20261127 PROVIDER=podman MACHINE=coreos-arm64
+make -C local/fatline qualification QUALIFICATION=source-sync-native GHXD_NATIVE_GRANTS_ACK=TRUST-NIX-ALPINE-OWNER NIX_XD_DIR=/absolute/path/to/nix.xd20261127 SMOKE_CHECKOUT=smoke20261127 PROVIDER=podman MACHINE=coreos-arm64
 make -C local/fatline qualification QUALIFICATION=factory-live DEPLOYMENT=vm1 NIX_XD_DIR=/absolute/path/to/nix.xd PROVIDER=podman MACHINE=coreos-arm64
 ```
 

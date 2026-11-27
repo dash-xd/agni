@@ -9,7 +9,7 @@ nix_xd="${NIX_XD_DIR:?Specify the source-locked nix.xd checkout}"
 [[ -f "$nix_xd/Makefile" ]] || exit 2
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
 checkout="$(basename "$here")"
-smoke="${SMOKE_CHECKOUT:-smoke20261116}"
+smoke="${SMOKE_CHECKOUT:-smoke20261127}"
 [[ "$checkout" =~ ^[A-Za-z0-9_.-]+$ && "$smoke" =~ ^[A-Za-z0-9_.-]+$ ]] || exit 2
 [[ "$here" == "$(cd "$nix_xd/.." && pwd -P)/$checkout" ]] || exit 2
 [[ -z "$(git -C "$here" status --porcelain --untracked-files=no)" ]] || {

@@ -44,8 +44,8 @@ legacy-help:
 	  'make deployment-qualify-factory-live DEPLOYMENT=vm1  Isolated real Redis/Skymill factory execution and group reclaim' \
 	  'make deployment-qualify-worker-live DEPLOYMENT=vm1       Complete gated live candidate; no activation' \
 	  'make deployment-diagnose-runtime-network DEPLOYMENT=vm1  Read-only Logma/Skymill/Probot network diagnosis' \
-	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety' \\
-	  'make qualification-check                    Architecture + static qualification checks' \\
+	  'make check-deployment                       Check host workflow syntax, interface, and operator shell safety' \
+	  'make qualification-check                    Architecture + static qualification checks' \
 	  'make qualification QUALIFICATION=factory-live DEPLOYMENT=vm1  Pinned isolated factory live gate'
 
 
