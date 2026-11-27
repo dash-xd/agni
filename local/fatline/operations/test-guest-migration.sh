@@ -22,7 +22,7 @@ if agni_capture_value FIELD "$capture_fixture" >/dev/null; then
   echo 'Accepted empty output field' >&2
   exit 1
 fi
-output="$(make --no-print-directory -C "$here" help)"
+output="$(make --no-print-directory -C "$here" legacy-help)"
 for operation in assess verify review migrate-stage migrate-verify migrate-activation-plan migrate-activation-check migrate-recovery-qualify migrate-activate migrate-activate-sandbox recover-sandbox-http qualify-runtime qualify-integration qualify-worker-candidate qualify-worker-bootstrap qualify-worker-delivery qualify-worker-recovery qualify-worker-memory qualify-worker-fence qualify-worker-effect qualify-worker-reconcile qualify-reconcile-live seed-processor-source qualify-processor-contract qualify-processor-live qualify-independent-consumers seed-subscription-source qualify-subscription-contract qualify-subscription-groups qualify-declarative-processors qualify-declarative-generator qualify-factory-live seed-factory-source qualify-factory-contract refresh-reconcile-auth seed-reconcile-source qualify-reconcile-service-contract qualify-worker-live diagnose-runtime-network; do
   grep -Fq "deployment-$operation" <<< "$output"
   make -s -n -C "$here" "deployment-$operation" >/dev/null
@@ -41,12 +41,13 @@ blocked="$(make --no-print-directory -s -C "$here" deployment-migrate-activate D
 status=$?
 set -e
 [[ $status != 0 && "$blocked" == *'AGNI_ACTIVATION=blocked'* ]]
-# The sandbox cutover also requires a specific, explicit acknowledgement.
+# Workspace admission fails closed before the sandbox acknowledgement check.
 set +e
-sandbox_blocked="$(make --no-print-directory -s -C "$here" deployment-migrate-activate-sandbox DEPLOYMENT=vm1 2>&1)"
+sandbox_blocked="$(make --no-print-directory -s -C "$here" deployment-migrate-activate-sandbox DEPLOYMENT=vm1 NIX_XD_DIR="$here" 2>&1)"
 sandbox_status=$?
 set -e
-[[ $sandbox_status != 0 && "$sandbox_blocked" == *'explicit-ephemeral-redis-ack-required'* ]]
+[[ $sandbox_status != 0 && "$sandbox_blocked" == *'workspace-checkout-mismatch'* ]]
+grep -Fq 'fail explicit-ephemeral-redis-ack-required' "$here/operations/guest-migration.sh"
 grep -Fq '    activation_check' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'install-probot "$scope" "$target/rendered"' "$here/startup-profile/probot-guest-app.sh"
 grep -Fq 'bootstrap.sh" verify "$scope" "$profile_probe"' "$here/startup-profile/probot-guest-app.sh"
