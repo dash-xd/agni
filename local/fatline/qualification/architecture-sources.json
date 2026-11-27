@@ -4,7 +4,7 @@
     "nix-xd": {
       "repository": "xd-dash/nix.xd",
       "branch": "v20261127-architecture-cleanup",
-      "revision": "0cd5244604869fac02dc3dbe2c5ca62d76da5218",
+      "revision": "0acd0eb706cc28933a105d22debef32b092d6315",
       "checkout": "nix.xd20261127"
     },
     "smoke": {
